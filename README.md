@@ -1,12 +1,11 @@
 # Jupyter Mosaic
-==============
 
 Jupyter Mosaic is an extension for Jupyter notebook and Jupyter lab that allows cells to be dragged around and resized to tile in a subdividable grid layout.
 
-| ![Screenshot 2](./screenshots/screen2.png) | ![Screenshot 1](./screenshots/screen1.png) |
+![Screenshot 2](./screenshots/screen2.png =300x)
+![Screenshot 1](./screenshots/screen1.png =300x)
 
 ## Installation
-===============
  * [Jupyter notebook](#jupyter-notebook)
  * [Jupyter lab](#jupyter-lab)
 
@@ -15,29 +14,29 @@ Jupyter Mosaic is an extension for Jupyter notebook and Jupyter lab that allows 
 
 1. Run the following command to install jupyter nbextensions tool, which allows custom notebook extensions to be installed
 
-    ```bash
-        pip install jupyter_contrib_nbextensions
-    ```
+```bash
+pip install jupyter_contrib_nbextensions
+```
 
 2. Clone this repository into `$CONDA_PREFIX/lib/python[version]/site-packages/jupyter_contrib_nbextensions/nbextensions/`, replacing the parts in brackets as necessary
 
-    ```bash
-        cd $CONDA_PREFIX/lib/python[version]/site-packages/jupyter_contrib_nbextensions/nbextensions/
-        git clone https://github.com/robertstrauss/jupytermosaic
-    ```
+```bash
+cd $CONDA_PREFIX/lib/python[version]/site-packages/jupyter_contrib_nbextensions/nbextensions/
+git clone https://github.com/robertstrauss/jupytermosaic
+```
 
 3. Finally, install the extension into the home jupyter directory with:
 
-    ```bash
-        jupyter contrib nbextensions install --user
-    ```
+```bash
+jupyter contrib nbextensions install --user
+```
 
 
 4. Start or restart jupyter notebook
 
-    ```bash
-        jupyter notebook
-    ```
+```bash
+jupyter notebook
+```
 
 5. Open the jupyter notebook in a browser and select the 'Nbextensions' tab
 
