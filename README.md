@@ -2,8 +2,8 @@
 
 Jupyter Mosaic is an extension for Jupyter notebook and Jupyter lab that allows cells to be dragged around and resized to tile in a subdividable grid layout.
 
-![Screenshot 2](./screenshots/screen2.png =300x)
-![Screenshot 1](./screenshots/screen1.png =300x)
+<img src="./screenshots/screen2.png" width=300/>
+<img src="./screenshots/screen1.png" width=300/>
 
 ## Installation
  * [Jupyter notebook](#jupyter-notebook)
