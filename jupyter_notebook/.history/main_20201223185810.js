@@ -162,7 +162,12 @@ function startDrag(cell, ievent) {
 
         // save the new position of each cell into the cell's metadata
         for ( let i in cellobjs ) {
-            saveMosaicPosition(cellobjs[i]);
+            const mosaic = [];
+            const groups = cellobjs[i].element.parents('.mosaicgroup');
+            for (let i = 0; i < groups.length; i++) {
+                mosaic.unshift(groups[i].getAttribute('data-mosaicnumber'));
+            }
+            cellobjs[i].metadata.mosaic = mosaic;
         }
     };
 }
@@ -246,6 +251,7 @@ for (let i in celllist){
     const cell = celllist[i];
 
     let group = recursecreatemosaic(cell, $('#notebook-container'), 0);
+    // console.log('appending', group);
     cell.element.appendTo(group); // put cell in innermost group
 
     addDragger(cell);
@@ -265,24 +271,18 @@ function addDragger(cell) {
 }
 
 
-function saveMosaicPosition(cell) {
-    // write cell position in mosaic to metadata
-    const mosaic = [];
-    const groups = cell.element.parents('.mosaicgroup');
-    for (let i = 0; i < groups.length; i++) {
-        mosaic.unshift(groups[i].getAttribute('data-mosaicnumber'));
-    }
-    cell.metadata.mosaic = mosaic;
-}
-
-
-
 
 
 events.on('create.Cell', (event,data)=>{
     addDragger(data.cell);
 
-    saveMosaicPosition(data.cell);
+    // write cell position in mosaic to metadata
+    const mosaic = [];
+    const groups = data.cell.element.parents('.mosaicgroup');
+    for (let i = 0; i < groups.length; i++) {
+        mosaic.unshift(groups[i].getAttribute('data-mosaicnumber'));
+    }
+    data.cell.metadata.mosaic = mosaic;
 });
 
 

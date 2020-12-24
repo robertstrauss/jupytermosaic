@@ -246,6 +246,7 @@ for (let i in celllist){
     const cell = celllist[i];
 
     let group = recursecreatemosaic(cell, $('#notebook-container'), 0);
+    // console.log('appending', group);
     cell.element.appendTo(group); // put cell in innermost group
 
     addDragger(cell);
@@ -275,14 +276,10 @@ function saveMosaicPosition(cell) {
     cell.metadata.mosaic = mosaic;
 }
 
-
-
-
-
 events.on('create.Cell', (event,data)=>{
     addDragger(data.cell);
 
-    saveMosaicPosition(data.cell);
+    saveMosaicPosition(cell);
 });
 
 

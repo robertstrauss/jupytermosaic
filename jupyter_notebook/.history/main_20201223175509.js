@@ -3,7 +3,7 @@ define([
     'base/js/events',
     'require'
     ], function (Jupyter, events, requirejs) {
-console.log('events', events);
+
 
 // add stylesheet
 $('<link rel="stylesheet" type="text/css"/>').attr('href', requirejs.toUrl('./style.css')).appendTo('head');
@@ -162,7 +162,12 @@ function startDrag(cell, ievent) {
 
         // save the new position of each cell into the cell's metadata
         for ( let i in cellobjs ) {
-            saveMosaicPosition(cellobjs[i]);
+            const mosaic = [];
+            const groups = cellobjs[i].element.parents('.mosaicgroup');
+            for (let i = 0; i < groups.length; i++) {
+                mosaic.unshift(groups[i].getAttribute('data-mosaicnumber'));
+            }
+            cellobjs[i].metadata.mosaic = mosaic;
         }
     };
 }
@@ -225,18 +230,7 @@ function createnewgroupin(group) {
 
 
 
-function recursecreatemosaic(cell, group, index) {
-    if ( cell.metadata.mosaic == undefined || cell.metadata.mosaic[index] == undefined ) {
-        return group;
-    }
-    let newgroup = group.children(`.mosaicgroup[data-mosaicnumber=${cell.metadata.mosaic[index]}]`);
-    if (newgroup.length < 1) { // create the group if it doesn't exist yet
-        newgroup = createnewgroupin(group);
-        newgroup.attr('data-mosaicnumber', cell.metadata.mosaic[index]);
-        group.append(newgroup);
-    }
-    return recursecreatemosaic(cell, newgroup, index+1);
-}
+
 
 
 // load mosaic structure from metadata
@@ -245,17 +239,27 @@ const celllist = Jupyter.notebook.get_cells();
 for (let i in celllist){
     const cell = celllist[i];
 
-    let group = recursecreatemosaic(cell, $('#notebook-container'), 0);
+    function recursecreatemosaic(group, index) {
+        if ( cell.metadata.mosaic == undefined || cell.metadata.mosaic[index] == undefined ) {
+            return group;
+        }
+        let newgroup = group.children(`.mosaicgroup[data-mosaicnumber=${cell.metadata.mosaic[index]}]`);
+        if (newgroup.length < 1) { // create the group if it doesn't exist yet
+            newgroup = createnewgroupin(group);
+            newgroup.attr('data-mosaicnumber', cell.metadata.mosaic[index]);
+            group.append(newgroup);
+        }
+        return recursecreatemosaic(newgroup, index+1);
+    }
+
+
+    let group = recursecreatemosaic($('#notebook-container'), 0);
+    // console.log('appending', group);
     cell.element.appendTo(group); // put cell in innermost group
 
-    addDragger(cell);
-}
-
-
-
-function addDragger(cell) {
     // add dragging functionality
     cell.element.mousedown(function (event){
+        console.log(event.target);
         // has to be clicked with left mouse button, no shift or control key, and on the input label
         if ( event.button == 0 && ! event.shiftKey && ! event.ctrlKey && $(event.target).closest('.input_prompt').length > 0 ) {
             // if not in code area, start dragging functionality
@@ -265,25 +269,7 @@ function addDragger(cell) {
 }
 
 
-function saveMosaicPosition(cell) {
-    // write cell position in mosaic to metadata
-    const mosaic = [];
-    const groups = cell.element.parents('.mosaicgroup');
-    for (let i = 0; i < groups.length; i++) {
-        mosaic.unshift(groups[i].getAttribute('data-mosaicnumber'));
-    }
-    cell.metadata.mosaic = mosaic;
-}
 
-
-
-
-
-events.on('create.Cell', (event,data)=>{
-    addDragger(data.cell);
-
-    saveMosaicPosition(data.cell);
-});
 
 
 
