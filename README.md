@@ -22,6 +22,14 @@ jupyter nbextensions enable jupytermosaic/jupyter_notebook/main --user
 ```
 You may need to restart the Jupyter notebook server if it was already running.
 
+It can be disabled by running this in the directory you cloned the repo at:
+```bash
+jupyter nbextensions disable jupytermosaic/jupyter_notebook/main --user
+```
+Or uninstalled similarly:
+```bash
+jupyter nbextensions uninstall jupytermosaic/jupyter_notebook --user
+```
 
 ### Jupyter lab
 TODO - Jupyter mosaic does not currently work on Jupyter lab.
