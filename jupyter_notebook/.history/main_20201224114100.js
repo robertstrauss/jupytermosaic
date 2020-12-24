@@ -274,8 +274,6 @@ function addHover(cell) {
             if ( nextcell != undefined ) {
                 nextcell.element.addClass('nextcell');
             }
-
-            cell.element.closest('.mosaicgroup').addClass('focusgroup');
         });
         cell.element.mouseleave(function (event) {
             let prevcell = Jupyter.notebook.get_prev_cell(cell);
@@ -286,8 +284,6 @@ function addHover(cell) {
             if ( nextcell != undefined ) {
                 nextcell.element.removeClass('nextcell');
             }
-            cell.element.closest('.mosaicgroup').removeClass('focusgroup');
-
         });
     // }
 }
@@ -323,7 +319,7 @@ function saveMosaicPosition(cell) {
 
 events.on('create.Cell', (event,data)=>{
     addDragger(data.cell);
-    addHover(data.cell);
+
     saveMosaicPosition(data.cell);
 });
 

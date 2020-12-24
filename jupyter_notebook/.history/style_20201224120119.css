@@ -160,7 +160,7 @@ div.cell {
 .prevcell::after {
     background-color: rgba(0,122,122,0.5);
 }
-/** adds a slight darkening to the background of the group that is hovered over to visualize rows and colums */
+
 .focusgroup {
     transition: 1s;
     background-color: rgba(0,0,0,0.05);

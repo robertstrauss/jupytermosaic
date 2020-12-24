@@ -323,7 +323,7 @@ function saveMosaicPosition(cell) {
 
 events.on('create.Cell', (event,data)=>{
     addDragger(data.cell);
-    addHover(data.cell);
+
     saveMosaicPosition(data.cell);
 });
 

@@ -41,14 +41,14 @@
 /** rows are rows, and don't need to leave extra space on the sides for dropping */
 .mosaicrow {
     flex-direction: row;
-    /* margin-left: 0 !important;
-    margin-right: 0 !important; */
+    margin-left: 0 !important;
+    margin-right: 0 !important;
 }
 /** cols are columnss, and don't need to leave extra space on the top and bottom for dropping */
 .mosaiccol {
     flex-direction: column;
-    /* margin-top: 0 !important;
-    margin-bottom: 0 !important; */
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
 }
 
 /** takes away white middle column so cells are floating in the grey area */
@@ -141,28 +141,25 @@ div.cell {
     z-index: 2;
 }
 
-/**
- * nextcell and prevcell classes are added to the next and previous cells (in execution order)
- * when a cell is hovered over to make it clear which will execute next and which before */
-.nextcell::after, .prevcell::after {
-    position: absolute;
-    --dot-size: 7px;
-    top: calc(var(--dot-size)*-1);
-    left: calc(var(--dot-size)*-1);
-    width: var(--dot-size);
-    height: var(--dot-size);
-    border: none;
-    border-radius: var(--dot-size);
+.nextcell {
+    box-shadow: 0px 3px 20px 10px black;
 }
 .nextcell::after {
+    position: absolute;
+    top: 1px;
+    left: 1px;
     background-color: rgba(255,0,0,0.5);
+    width: 1px;
+    height: 1px;
+    border-radius: 100%;
 }
+
 .prevcell::after {
-    background-color: rgba(0,122,122,0.5);
-}
-/** adds a slight darkening to the background of the group that is hovered over to visualize rows and colums */
-.focusgroup {
-    transition: 1s;
-    background-color: rgba(0,0,0,0.05);
-    border-radius: 10px;
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    background-color: rgba(0,255,255,0.5);
+    width: 1px;
+    height: 1px;
+    border-radius: 100%;
 }

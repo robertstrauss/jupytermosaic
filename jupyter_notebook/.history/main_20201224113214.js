@@ -267,27 +267,15 @@ function addHover(cell) {
     // if ( cell2 !== undefined ) {
         cell.element.mouseenter(function (event) {
             let prevcell = Jupyter.notebook.get_prev_cell(cell);
-            if ( prevcell != undefined ) {
-                prevcell.element.addClass('prevcell');
-            }
             let nextcell = Jupyter.notebook.get_next_cell(cell);
-            if ( nextcell != undefined ) {
-                nextcell.element.addClass('nextcell');
-            }
-
-            cell.element.closest('.mosaicgroup').addClass('focusgroup');
+            nextcell.element.addClass('nextcell');
+            prevcell.element.addClass('prevcell');
         });
         cell.element.mouseleave(function (event) {
             let prevcell = Jupyter.notebook.get_prev_cell(cell);
-            if ( prevcell != undefined ) {
-                prevcell.element.removeClass('prevcell');
-            }
             let nextcell = Jupyter.notebook.get_next_cell(cell);
-            if ( nextcell != undefined ) {
-                nextcell.element.removeClass('nextcell');
-            }
-            cell.element.closest('.mosaicgroup').removeClass('focusgroup');
-
+            nextcell.element.removeClass('nextcell');
+            nextcell.element.removeClass('prevcell');
         });
     // }
 }
@@ -323,7 +311,7 @@ function saveMosaicPosition(cell) {
 
 events.on('create.Cell', (event,data)=>{
     addDragger(data.cell);
-    addHover(data.cell);
+
     saveMosaicPosition(data.cell);
 });
 

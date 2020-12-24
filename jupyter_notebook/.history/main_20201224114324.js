@@ -286,7 +286,7 @@ function addHover(cell) {
             if ( nextcell != undefined ) {
                 nextcell.element.removeClass('nextcell');
             }
-            cell.element.closest('.mosaicgroup').removeClass('focusgroup');
+            cell.element.closest('.mosaicgroup').addClass('focusgroup');
 
         });
     // }
@@ -323,7 +323,7 @@ function saveMosaicPosition(cell) {
 
 events.on('create.Cell', (event,data)=>{
     addDragger(data.cell);
-    addHover(data.cell);
+
     saveMosaicPosition(data.cell);
 });
 
