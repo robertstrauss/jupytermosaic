@@ -1,6 +1,7 @@
 # Jupyter Mosaic
 
 Arange Jupyter notebook cells in any way two-dimensionally.
+Let your Jupyter notebook tell the story and be self-documenting in itself, like a poster presentation.
 
 Jupyter Mosaic is an extension for Jupyter notebook and Jupyter lab that allows cells to be dragged around and resized to tile in a subdividable grid layout.
 
