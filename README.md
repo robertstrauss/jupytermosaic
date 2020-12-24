@@ -1,12 +1,12 @@
 # Jupyter Mosaic
 
-Arange Jupyter notebook cells in any way two-dimensionally.
+Arrange Jupyter notebook cells in any way two-dimensionally.
 Let your Jupyter notebook tell the story and be self-documenting in itself, like a poster presentation.
 
 Jupyter Mosaic is an extension for Jupyter notebook and Jupyter lab that allows cells to be dragged around and resized to tile in a subdividable grid layout.
 
 The layout you define by dragging cells into place is saved in the metadata of the notebook, so anyone with the extension can view the layout as you made it.
-This does not change any of the core functionality of jupyter, just the UI. If you decide to disable or remove it, your notebook will still function normally as a jupyter notebook, just without the draggable mosaic layout. When opened as a regular jupyter notebook again, the cells will be ordered to be as simmilar to your mosaic layout as possible, so code will execute in the same order.
+This does not change any of the core functionality of jupyter, just the UI.
 
 <img src="./screenshots/screen3.png" />
 <img src="./screenshots/screen2.png" />
@@ -25,6 +25,10 @@ jupyter nbextensions enable jupytermosaic/jupyter_notebook/main --user
 ```
 You may need to restart the Jupyter notebook server if it was already running.
 
+
+If you decide to disable or remove it, your notebook will still function normally as a jupyter notebook, just without the draggable mosaic layout. 
+
+
 It can be disabled by running this in the directory you cloned the repo at:
 ```bash
 jupyter nbextensions disable jupytermosaic/jupyter_notebook/main --user
@@ -36,6 +40,21 @@ jupyter nbextensions uninstall jupytermosaic/jupyter_notebook --user
 
 ### Jupyter lab
 TODO - Jupyter mosaic does not currently work on Jupyter lab.
+
+
+
+## Grid Structrue and Execution Order
+A regular Jupyter notebook is a series of cells, each occupying the entire width of the notebook.
+In Jupyter Mosaic, the notebook is divided into rows, each of which may contain multiple cells and columns, which may be again divided into rows recursively, and so on and so on.
+Each row is executed left-to-right. Each column is executed top-to-bottom.
+When a column is inside a row, the column is executed entirely before continuing to the right, and vice versa.
+
+This structure is more difficult to explain with words than it is to understand, so some diagrams are provided.
+
+<img/>
+
+This execution order is also how the cells are linearized when the notebook is opened without the Jupyter Mosaic extension.
+
 
 ## How to cite
 Robert Strauss, 2020, https://github.com/robertstrauss/jupytermosaic
