@@ -6,7 +6,7 @@ Let your Jupyter notebook tell the story and be self-documenting in itself, like
 Jupyter Mosaic is an extension for Jupyter notebook and Jupyter lab that allows cells to be dragged around and resized to tile in a subdividable grid layout.
 
 The layout you define by dragging cells into place is saved in the metadata of the notebook, so anyone with the extension can view the layout as you made it.
-This does not change any of the core functionality of jupyter, just the UI. If you decide to disable or remove it, your notebook will still function normally as a jupyter notebook, just without the draggable mosaic layout. When opened as a regular jupyter notebook again, the cells will be ordered to be as simmilar to your mosaic layout as possible, so code will execute in the same order.
+This does not change any of the core functionality of jupyter, just the UI.
 
 <img src="./screenshots/screen3.png" />
 <img src="./screenshots/screen2.png" />
@@ -24,6 +24,10 @@ jupyter nbextensions install jupytermosaic/jupyter_notebook --user
 jupyter nbextensions enable jupytermosaic/jupyter_notebook/main --user
 ```
 You may need to restart the Jupyter notebook server if it was already running.
+
+
+If you decide to disable or remove it, your notebook will still function normally as a jupyter notebook, just without the draggable mosaic layout. When opened as a regular jupyter notebook again, the cells will be ordered to be as simmilar to your mosaic layout as possible, so code will execute in the same order.
+
 
 It can be disabled by running this in the directory you cloned the repo at:
 ```bash
