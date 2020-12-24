@@ -7,6 +7,7 @@ Jupyter Mosaic is an extension for Jupyter notebook and Jupyter lab that allows 
 
 The layout you define by dragging cells into place is saved in the metadata of the notebook, so anyone with the extension can view the layout as you made it.
 This does not change any of the core functionality of jupyter, just the UI.
+If you decide to disable or remove it, your notebook will still function normally as a jupyter notebook, just without the draggable mosaic layout. 
 
 <img src="./screenshots/screen3.png" />
 <img src="./screenshots/screen2.png" />
@@ -25,9 +26,7 @@ jupyter nbextensions enable jupytermosaic/jupyter_notebook/main --user
 ```
 You may need to restart the Jupyter notebook server if it was already running.
 
-
-If you decide to disable or remove it, your notebook will still function normally as a jupyter notebook, just without the draggable mosaic layout. 
-
+#### Uninstall
 
 It can be disabled by running this in the directory you cloned the repo at:
 ```bash
