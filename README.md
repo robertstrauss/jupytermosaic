@@ -49,7 +49,9 @@ In Jupyter Mosaic, the notebook is divided into rows, each of which may contain 
 Each row is executed left-to-right. Each column is executed top-to-bottom.
 When a column is inside a row, the column is executed entirely before continuing to the right, and vice versa.
 
-Visual indicators of the next and previous cells in execution order and the row/column the cell is in are provided as a red dot in the corner of the next cell and a blue dot in the previous cell, and a slightly darker background in the current row/column.
+Hovering the mouse over a cell provides a visual indicator of which cell will be executed after this cell and which before (red/blue dot in the corner means after/before respectively). Additionally, the row or column the cell is in is highlighted with a slightly darker background.
+
+<img src="screenshots/executionindicators.png" />
 
 This structure is more difficult to explain with words than it is to understand, so some diagrams are provided.
 
