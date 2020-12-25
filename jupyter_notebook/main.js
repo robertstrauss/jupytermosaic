@@ -3,7 +3,6 @@ define([
     'base/js/events',
     'require'
     ], function (Jupyter, events, requirejs) {
-console.log('events', events);
 
 // add stylesheet
 $('<link rel="stylesheet" type="text/css"/>').attr('href', requirejs.toUrl('./style.css')).appendTo('head');
@@ -179,16 +178,21 @@ const MutationObserver = window.MutationObserver || window.WebKitMutationObserve
 const mosaiccollapseobserver = new MutationObserver(function(mutations, mosaiccollapseobserver) {
     for ( let mutation of mutations ) {
         if ( mutation.removedNodes.length > 0 ) {
-            if ( $(mutation.target).children('.cell, .mosaicgroup').length <= 1) {
-                console.log('removing', mutation.target);
-                $(mutation.target).children('.mosaicgroup').children().unwrap();
-                $(mutation.target).children('.cell').unwrap();
-            }
+            removeIfRedundant(mutation.target);
         }
     }
 });
 
 
+
+function removeIfRedundant(group) {
+    if ( $(group).children('.cell, .mosaicgroup').length <= 1) {
+        console.log('removing', group);
+        $(group).children('.mosaicgroup').children().unwrap();
+        $(group).children().unwrap();
+        // TODO: should call saveMosaicPosition to save the fixed redundancy
+    }
+}
 
 
 /**
@@ -248,17 +252,24 @@ function recursecreatemosaic(cell, group, index) {
 }
 
 
-// load mosaic structure from metadata
-$('#notebook-container').addClass('mosaiccol');
-const celllist = Jupyter.notebook.get_cells();
-for (let i in celllist){
-    const cell = celllist[i];
+function loadMosaic() {
+    // load mosaic structure from metadata
+    $('#notebook-container').addClass('mosaiccol');
+    const celllist = Jupyter.notebook.get_cells();
+    for (let i in celllist){
+        const cell = celllist[i];
 
-    let group = recursecreatemosaic(cell, $('#notebook-container'), 0);
-    cell.element.appendTo(group); // put cell in innermost group
+        let group = recursecreatemosaic(cell, $('#notebook-container'), 0);
+        cell.element.appendTo(group); // put cell in innermost group
 
-    addDragger(cell);
-    addHover(cell);
+        addDragger(cell);
+        addHover(cell);
+    }
+
+    // get rid of redundant wrapped mosaicgroups
+    $('.mosaicgroup').each(function(){
+        removeIfRedundant($(this));
+    })
 }
 
 
@@ -321,16 +332,26 @@ function saveMosaicPosition(cell) {
 
 
 
-events.on('create.Cell', (event,data)=>{
+events.on('create.Cell', function (event,data) {
     addDragger(data.cell);
     addHover(data.cell);
     saveMosaicPosition(data.cell);
 });
 
 
+// events.on('notebook_loaded.Notebook', function(event, data){
+//     console.log('event listener called!', event, data);
+// });
 
 
+events.on('kernel_ready.Kernel', function(event, data){
+    // console.log('kernel event listener called!', event, data);
+    loadMosaic();
+});
 
+// events.on('app intialize', function(event, data){
+//     console.log('app initialized event called!', event, data);
+// })
 
 
 });

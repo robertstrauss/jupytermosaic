@@ -162,7 +162,7 @@ div.cell {
 }
 /** adds a slight darkening to the background of the group that is hovered over to visualize rows and colums */
 .focusgroup {
-    transition: 1s;
+    transition: 0.5s;
     background-color: rgba(0,0,0,0.05);
     border-radius: 10px;
 }
