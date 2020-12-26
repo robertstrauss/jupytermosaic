@@ -93,7 +93,11 @@ div.cell {
 /** puts the output prompt's overlay big and on the top rather than side just like the output prompt itself */
 .out_prompt_overlay {
     width: 100%;
-    height: 2.8rem;
+    height: 2.8rem !important;
+}
+/** makes sure the output is clickable */
+.output_wrapper {
+    z-index: 2 !important;
 }
 
 /**
