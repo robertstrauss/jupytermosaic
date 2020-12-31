@@ -35,7 +35,7 @@ function startDrag(cell, ievent) {
     elem.addClass('mosaicdragging');
 
     // calculate what edge the mouse is at and highlight that
-    let droppable, dropx, dropy, parentgroup, side, aligned;
+    let droppable, dropx, dropy, parentgroup, side, aligned, dropheight, dropwidth, mindist;
     document.onmousemove = function (event) {
         event.preventDefault();
 
@@ -54,25 +54,47 @@ function startDrag(cell, ievent) {
         dropx = (event.clientX - droppable.offset().left); // x pos of mouse relative to element
         dropy = (event.clientY - droppable.offset().top);  // y pos of mouse relative to element
 
-        // if the mouse is within the left margin
-        if ( dropx <  0 ) { //Math.abs(dropx) < dropmargin ) {
-            side = 'left';
+        dropwidth  = droppable.outerWidth();
+        dropheight = droppable.outerHeight();
+
+        // for mosaicgroups, drop areas are on margins (psuedoelements, so x and y will be outside element)
+        if ( droppable.hasClass('mosaicgroup') ) {
+            // if the mouse is within the left margin
+            if ( dropx <  0 ) { //Math.abs(dropx) < dropmargin ) {
+                side = 'left';
+            }
+            // if the mouse is within the right margin
+            else if ( dropx > dropwidth ) { //Math.abs(droppable.outerWidth()-dropx) < dropmargin ) {
+                side = 'right';
+            }
+            // if the mouse is within the top margin
+            else if ( dropy < 0 ) { //Math.abs(dropy) < dropmargin ) {
+                side = 'top';
+            }
+            // if the mouse is within the bottom margin 
+            else if ( dropy > dropheight ) { //Math.abs(droppable.outerHeight()-dropy) < dropmargin ) {
+                side = 'bottom';
+            }
+            // somewhere else
+            else {
+                return; // cancel drag
+            }
         }
-        // if the mouse is within the right margin
-        else if ( dropx > droppable.outerWidth() ) { //Math.abs(droppable.outerWidth()-dropx) < dropmargin ) {
-            side = 'right';
-        }
-        // if the mouse is within the top margin
-        else if ( dropy < 0 ) { //Math.abs(dropy) < dropmargin ) {
-            side = 'top';
-        }
-        // if the mouse is within the bottom margin 
-        else if ( dropy > droppable.outerHeight() ) { //Math.abs(droppable.outerHeight()-dropy) < dropmargin ) {
-            side = 'bottom';
-        }
-        // somewhere else
-        else {
-            return; // cancel drag
+        // for cells, the nearest side
+        else if ( droppable.hasClass('cell') ) {
+            // find the side its closest too
+            mindist = Math.min(dropx, dropy, dropwidth-dropx, dropheight-dropy);
+            if ( dropx === mindist ) {
+                side = 'left';
+            } else if ( dropy === mindist ) {
+                side = 'top';
+            } else if ( dropwidth-dropx === mindist ) {
+                side = 'right';
+            } else if ( dropheight-dropy === mindist ) {
+                side = 'bottom';
+            } else {
+                return; // cancel drag
+            }
         }
         
         // highlight edge
