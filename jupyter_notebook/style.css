@@ -189,7 +189,7 @@
     width: var(--dot-size);
     height: var(--dot-size);
     border: none;
-    /* border-radius: var(--dot-size); */
+    border-radius: var(--dot-size);
 }
 .nextcell::after {
     background-color: rgba(255,0,0,0.5);
