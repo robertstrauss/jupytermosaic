@@ -276,22 +276,26 @@ function recursecreatemosaic(cell, group, index) {
 
 function loadMosaic() {
     // load mosaic structure from metadata
-    $('#notebook-container').addClass('mosaiccol');
     const celllist = Jupyter.notebook.get_cells();
+    const root = $('<div>');
+    root.addClass('mosaiccol');
     for (let i in celllist){
         const cell = celllist[i];
 
-        let group = recursecreatemosaic(cell, $('#notebook-container'), 0);
+        const group = recursecreatemosaic(cell, root, 0);
         cell.element.appendTo(group); // put cell in innermost group
 
         addDragger(cell);
         addHover(cell);
     }
 
+    console.log(root);
+    $('#notebook-container').empty().append(root);
+
     // get rid of redundant wrapped mosaicgroups
     $('.mosaicgroup').each(function(){
         removeIfRedundant($(this));
-    })
+    });
 }
 
 
