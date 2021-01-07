@@ -104,6 +104,11 @@ function startDrag(cell, ievent) {
 
 
 
+
+
+
+
+
     // reset dragging, css, move cells, and save metadata
     document.onmouseup =  function (event) {
 
@@ -122,10 +127,10 @@ function startDrag(cell, ievent) {
 
         // move element to within the parent element
         parentgroup = droppable.parent().closest('.mosaicgroup');
-        // if ( parentgroup.length < 1 ) {
-        //     parentgroup = $('#notebook-container');
-        //     parentgroup.addClass('mosaiccol');
-        // }
+        if ( parentgroup.length < 1 ) {
+            parentgroup = $('#notebook-container');
+            parentgroup.addClass('mosaiccol');
+        }
 
         // check if the drop direction is aligned with the parent's direction
         if ( parentgroup.hasClass('mosaiccol') ) {
@@ -293,8 +298,7 @@ function loadMosaic() {
         addHover(cell);
     }
 
-    console.log(root);
-    $('#notebook-container').empty().append(root);
+    $('#notebook-container').append(root.children())
 
     // get rid of redundant wrapped mosaicgroups
     $('.mosaicgroup').each(function(){
