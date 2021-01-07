@@ -122,10 +122,10 @@ function startDrag(cell, ievent) {
 
         // move element to within the parent element
         parentgroup = droppable.parent().closest('.mosaicgroup');
-        if ( parentgroup.length < 1 ) {
-            parentgroup = $('#notebook-container');
-            parentgroup.addClass('mosaiccol');
-        }
+        // if ( parentgroup.length < 1 ) {
+        //     parentgroup = $('#notebook-container');
+        //     parentgroup.addClass('mosaiccol');
+        // }
 
         // check if the drop direction is aligned with the parent's direction
         if ( parentgroup.hasClass('mosaiccol') ) {
@@ -181,6 +181,8 @@ function startDrag(cell, ievent) {
 
         }
 
+        removeIfRedundant(parentgroup);
+
         // save the new position of each cell into the cell's metadata
         for ( let i in cellobjs ) {
             saveMosaicPosition(cellobjs[i]);
@@ -208,6 +210,7 @@ const mosaiccollapseobserver = new MutationObserver(function(mutations, mosaicco
 
 
 function removeIfRedundant(group) {
+    console.log(group, $(group).children('.cell, .mosaicgroup'))
     if ( $(group).children('.cell, .mosaicgroup').length <= 1) {
         console.log('removing', group);
         $(group).children('.mosaicgroup').children().unwrap();
@@ -279,6 +282,7 @@ function loadMosaic() {
     const celllist = Jupyter.notebook.get_cells();
     const root = $('<div>');
     root.addClass('mosaiccol');
+    root.addClass('mosaicgroup');
     for (let i in celllist){
         const cell = celllist[i];
 
