@@ -281,8 +281,8 @@ function loadMosaic() {
     // load mosaic structure from metadata
     const celllist = Jupyter.notebook.get_cells();
     const root = $('<div>');
-    root.addClass('mosaiccol');
-    root.addClass('mosaicgroup');
+    // root.addClass('mosaiccol');
+    // root.addClass('mosaicgroup');
     for (let i in celllist){
         const cell = celllist[i];
 
