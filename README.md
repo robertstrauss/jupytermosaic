@@ -12,6 +12,8 @@ Without the extension, your notebook will still function normally as a jupyter n
 
 This does not change any of the core functionality of jupyter, just the UI.
 
+<img src="./screenshots/mosaiclayoutstylechange.png"/>
+Two different styles are offered, and can be switched between with a dropdown menu.
 
 <img src="./screenshots/screen3.png" />
 <img src="./screenshots/screen2.png" />
