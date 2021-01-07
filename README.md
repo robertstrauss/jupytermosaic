@@ -27,8 +27,8 @@ We recommend updating conda/jupyter before beginning, because we have found olde
 Clone the repository then install and enable the extension:
 ```bash
 git clone https://github.com/robertstrauss/jupytermosaic.git
-jupyter nbextension install jupytermosaic/jupyter_notebook --user
-jupyter nbextension enable jupytermosaic/jupyter_notebook/main --user
+jupyter nbextension install jupytermosaic/mosaic_notebook --user
+jupyter nbextension enable jupytermosaic/mosaic_notebook/main --user
 ```
 You may need to restart the Jupyter notebook server if it was already running.
 
@@ -36,11 +36,11 @@ You may need to restart the Jupyter notebook server if it was already running.
 
 It can be disabled by running this in the directory you cloned the repo at:
 ```bash
-jupyter nbextension disable jupytermosaic/jupyter_notebook/main --user
+jupyter nbextension disable jupytermosaic/mosaic_notebook/main --user
 ```
 Or uninstalled similarly:
 ```bash
-jupyter nbextension uninstall jupytermosaic/jupyter_notebook --user
+jupyter nbextension uninstall jupytermosaic/mosaic_notebook --user
 ```
 
 ### Jupyter lab
