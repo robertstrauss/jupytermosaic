@@ -381,11 +381,40 @@ events.on('create.Cell', function (event,data) {
 events.on('kernel_ready.Kernel', function(event, data){
     // console.log('kernel event listener called!', event, data);
     loadMosaic();
+    addStyleSelect();
 });
 
 // events.on('app intialize', function(event, data){
 //     console.log('app initialized event called!', event, data);
 // })
+
+
+function addStyleSelect(){
+    let styleselect = $('#mosaicstyleselect');
+
+
+    if ( styleselect.length < 1 ) {
+        styleselect = $('<select>').attr('id', 'mosaicstyleselect');
+    
+        styleselect.addClass('form-control');
+        styleselect.addClass('select-xs');
+    
+        styleselect.append($('<option>').attr('value', 'floating').html('Floating cells'));
+        styleselect.append($('<option>').attr('value', 'flat').html('Flat layout'));
+
+        $('#maintoolbar-container').append(styleselect);
+
+        styleselect.change(function (event) {
+            localStorage.setItem('mosaicstyle', this.value);
+
+            $('#notebook-container').attr('data-mosaicstyle', this.value);
+        })
+    }
+
+
+    styleselect.val(localStorage.getItem('mosaicstyle')).change();
+}
+
 
 
 });

@@ -49,20 +49,29 @@
     flex-direction: column;
 }
 
+
+
+
+
+/** floating vs flat layout style */
 /** takes away white middle column so cells are floating in the grey area */
-/* #notebook-container {
+#notebook-container[data-mosaicstyle=floating] {
     background: transparent;
     box-shadow: none;
-} */
+}
 /** makes cells floating things with round corners */
-/* div.cell {
+#notebook-container[data-mosaicstyle=floating] .cell {
     background: white;
     box-shadow: 0px 3px 10px 1px rgba(0,0,0,0.5);
     border-radius: 10px !important;
-} */
-/* div.cell {
-    outline: 1px solid black;
-} */
+
+    margin: var(--gap-width);
+}
+
+
+
+
+
 
 
 /** make the input prompt (In [ ]) and output prompt (Out [ ]) above the input and output rather than beside */
