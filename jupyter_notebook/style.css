@@ -126,13 +126,22 @@
     content: "";
     position: absolute;
     background: transparent;
-    top: calc(var(--gap-width)*-1);
-    left: calc(var(--gap-width)*-1);
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     border: calc(var(--gap-width)*1) solid transparent;
-    box-sizing: content-box;
+    box-sizing: border-box;
     z-index: 1;
+}
+/** puts borders outside of element for groups, and for cells when the layout style is floating cells */
+.mosaicgroup::after, #notebook-container[data-mosaicstyle=floating] .cell::after {
+    box-sizing: content-box;
+    top: calc(var(--gap-width)*-1);
+    left: calc(var(--gap-width)*-1);
+
+    z-index: -1;
+    pointer-events: all;
 }
 /** cell highlight boxes don't get mouse events because things are dropped on the cell, only the groups need their own margins */
 .cell::after {
