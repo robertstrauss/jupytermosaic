@@ -1,8 +1,10 @@
 # Jupyter Mosaic
 
 [Description](#description)
+
 [Installation](#installation)
-[How To Use](#grid-structure-and-execution-order)
+
+[Grid Explanation](#grid-structure-and-execution-order)
 
 <img src="./screenshots/screen3.png" />
 
@@ -56,7 +58,7 @@ TODO - Jupyter mosaic does not currently work on Jupyter lab.
 
 
 
-# Grid Structrue and Execution Order
+# Grid Structure and Execution Order
 A regular Jupyter notebook is a series of cells, each occupying the entire width of the notebook.
 In Jupyter Mosaic, the notebook is divided into rows, each of which may contain multiple cells and columns, which may be again divided into rows recursively, and so on and so on.
 Each row is executed left-to-right. Each column is executed top-to-bottom.
