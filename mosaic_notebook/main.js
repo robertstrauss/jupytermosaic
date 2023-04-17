@@ -382,6 +382,7 @@ events.on('kernel_ready.Kernel', function(event, data){
     // console.log('kernel event listener called!', event, data);
     loadMosaic();
     addStyleSelect();
+    addOffSwitch();
 });
 
 // events.on('app intialize', function(event, data){
@@ -405,6 +406,7 @@ function addStyleSelect(){
         $('#maintoolbar-container').append(styleselect);
 
         styleselect.change(function (event) {
+            this.value = this.value || 'floating';
             localStorage.setItem('mosaicstyle', this.value);
 
             $('#notebook-container').attr('data-mosaicstyle', this.value);
@@ -416,5 +418,31 @@ function addStyleSelect(){
 }
 
 
+
+function addOffSwitch(){
+    let offswitch = $('#mosaicoffswitch');
+
+    // create the off switch if it doesn't exist
+    if ( offswitch.length < 1 ) {
+        offswitch = $('<input>').attr('type', 'checkbox').attr('id', 'mosaicoffswitch');
+
+        offswitch.change(function (event) {
+
+            localStorage.setItem('mosaicactive', this.checked);
+
+            if (this.checked == true) {
+                $('.mosaicgroupinactive').addClass('mosaicgroup').removeClass('mosaicgroupinactive');
+            } else {
+                $('.mosaicgroup').addClass('mosaicgroupinactive').removeClass('mosaicgroup');
+            }
+        });
+
+        offswitchblock = $('<span>').html('Use Mosaic: ').append(offswitch);
+        $('#maintoolbar-container').append(offswitchblock);
+    }
+
+    // update the current value
+    offswitch.attr('checked', (localStorage.getItem('mosaicactive'))).change();
+}
 
 });
