@@ -35,19 +35,20 @@ function startDrag(cell, ievent) {
     elem.addClass('mosaicdragging');
 
     // calculate what edge the mouse is at and highlight that
+    let highlight = $('#mosaicdrophighlight');
+    if (highlight.length < 1) {
+        highlight = $('<div>').attr('id', 'mosaicdrophighlight');
+        $('body').append(highlight);
+    }
     let droppable, dropx, dropy, parentgroup, side, aligned, dropheight, dropwidth, mindist;
     document.onmousemove = function (event) {
         event.preventDefault();
-
-        if ( droppable != undefined ) {
-            // clear highlighting from previous move
-            droppable.removeAttr('data-hoverside')
-        }
 
         // which cell mouse is on
         droppable = $(event.target).closest('.cell, .mosaicgroup');
         if ( droppable.length < 1 || droppable.is(elem) ) {
             droppable = null;
+            highlight.removeAttr('data-hoverside');
             return;
         }
 
@@ -58,30 +59,30 @@ function startDrag(cell, ievent) {
         dropheight = droppable.outerHeight();
 
         // for mosaicgroups, drop areas are on margins (psuedoelements, so x and y will be outside element)
-        if ( droppable.hasClass('mosaicgroup') ) {
-            // if the mouse is within the left margin
-            if ( dropx <  0 ) { //Math.abs(dropx) < dropmargin ) {
-                side = 'left';
-            }
-            // if the mouse is within the right margin
-            else if ( dropx > dropwidth ) { //Math.abs(droppable.outerWidth()-dropx) < dropmargin ) {
-                side = 'right';
-            }
-            // if the mouse is within the top margin
-            else if ( dropy < 0 ) { //Math.abs(dropy) < dropmargin ) {
-                side = 'top';
-            }
-            // if the mouse is within the bottom margin 
-            else if ( dropy > dropheight ) { //Math.abs(droppable.outerHeight()-dropy) < dropmargin ) {
-                side = 'bottom';
-            }
-            // somewhere else
-            else {
-                return; // cancel drag
-            }
-        }
+        // if ( droppable.hasClass('mosaicgroup') ) {
+        //     // if the mouse is within the left margin
+        //     if ( dropx <  0 ) { //Math.abs(dropx) < dropmargin ) {
+        //         side = 'left';
+        //     }
+        //     // if the mouse is within the right margin
+        //     else if ( dropx > dropwidth ) { //Math.abs(droppable.outerWidth()-dropx) < dropmargin ) {
+        //         side = 'right';
+        //     }
+        //     // if the mouse is within the top margin
+        //     else if ( dropy < 0 ) { //Math.abs(dropy) < dropmargin ) {
+        //         side = 'top';
+        //     }
+        //     // if the mouse is within the bottom margin 
+        //     else if ( dropy > dropheight ) { //Math.abs(droppable.outerHeight()-dropy) < dropmargin ) {
+        //         side = 'bottom';
+        //     }
+        //     // somewhere else
+        //     else {
+        //         return; // cancel drag
+        //     }
+        // }
         // for cells, the nearest side
-        else if ( droppable.hasClass('cell') ) {
+        // else if ( droppable.hasClass('cell') ) {
             // find the side its closest too
             mindist = Math.min(dropx, dropy, dropwidth-dropx, dropheight-dropy);
             if ( dropx === mindist ) {
@@ -95,14 +96,18 @@ function startDrag(cell, ievent) {
             } else {
                 return; // cancel drag
             }
-        }
+        // }
         
+        highlight.insertAfter(droppable);
+        highlight.css({
+            'top': droppable.position().top,
+            'left': droppable.position().left,
+            'width': droppable.outerWidth(true),
+            'height': droppable.outerHeight(true)
+        })
         // highlight edge
-        droppable.attr('data-hoverside', side);
+        highlight.attr('data-hoverside', side);
     };
-
-
-
 
 
 
@@ -114,6 +119,7 @@ function startDrag(cell, ievent) {
 
         // change css back
         elem.removeClass('mosaicdragging');
+        highlight.removeAttr('data-hoverside');
 
         // remove event listeners
         document.onmousemove = null;
@@ -123,7 +129,6 @@ function startDrag(cell, ievent) {
             return;
         }
 
-        droppable.removeAttr('data-hoverside');
 
         // move element to within the parent element
         parentgroup = droppable.parent().closest('.mosaicgroup');
@@ -215,10 +220,10 @@ const mosaiccollapseobserver = new MutationObserver(function(mutations, mosaicco
 
 
 function removeIfRedundant(group) {
-    console.log(group, $(group).children('.cell, .mosaicgroup'))
-    if ( $(group).children('.cell, .mosaicgroup').length <= 1) {
+    // console.log(group, $(group).children('.cell, .mosaicgroup'), $(group).add($(group).children('.cellscrollable')).children('.mosaicgroup, .cell'))
+    if ( $(group).children('.mosaicgroup, .cell').length <= 1 && $(group).children('.mosaicscrollable').children('.mosaicgroup, .cell').length <= 1) {
         console.log('removing', group);
-        $(group).children('.mosaicgroup').children().unwrap();
+        $(group).find('.mosaicgroup').children().unwrap();
         $(group).children().unwrap();
         // TODO: should call saveMosaicPosition to save the fixed redundancy
     }
@@ -240,6 +245,34 @@ function createnewgroupin(group) {
     // if ( group.find('.cell, .mosaicgrid').length <= 0 ) return group;
     // create a new subgroup with the mosaicnumber
     const subgroup = $('<div>').addClass('mosaicgroup').attr('data-mosaicnumber', mosaicnumber);
+    
+    // add a handle to toggle the scrollability
+    // const handle = $('<div>').addClass('mosaicgrouphandle').attr('title', 'double click to toggle scrolling');
+    subgroup.dblclick(function (event) {
+        if (event.target == this) {  // only fire if clicking directly on the group, not something inside
+            // const mygroup = $(this).closest('.mosaicgroup');
+            let cellscroll = $(this).closest('.mosaicscrollable');
+            console.log('scroll', cellscroll)
+            if (cellscroll.length == 0) {
+                cellscroll = $('<div>').attr('class', 'mosaicscrollable');
+                // cellscroll.append(mygroup.children());
+                console.log('made scroll', cellscroll)
+                $(this).wrap(cellscroll);
+            } else {
+                $(this).unwrap('.mosaicscrollable');
+            }
+        }
+    });
+    // instructions on hover
+    subgroup.attr('title', 'double click to toggle scrolling');
+    // subgroup.mouseenter(function (event) {
+    //     $(this).addClass('focusgroup');
+    // });
+    // subgroup.mouseleave(function (event) {
+    //     $(this).removeClass('focusgroup');
+    // });
+    // subgroup.append(handle);
+
     // subgroup has opposite direction of group
     if ( group.hasClass('mosaicrow') )      subgroup.addClass('mosaiccol');
     else if ( group.hasClass('mosaiccol') ) subgroup.addClass('mosaicrow');
@@ -298,7 +331,7 @@ function loadMosaic() {
         addHover(cell);
     }
 
-    $('#notebook-container').append(root.children())
+    $('#notebook-container').addClass('mosaicgroup').addClass('mosaiccol').append(root.children())
 
     // get rid of redundant wrapped mosaicgroups
     $('.mosaicgroup').each(function(){

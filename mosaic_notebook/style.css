@@ -5,19 +5,25 @@
     --gap-width: 10px;
 }
 
+.text_cell_render {
+    /*fix the scrollbars from cells being smaller*/
+    overflow:  auto;
+    z-index:  3;
+}
+
 /** 
  * makes the contianer of the cells wider, so there's more room,
  * and sets it to negative z-index so it doesn't capture all the mouse events
  */
 #notebook-container {
     width: 95%;
-    z-index: -5
 }
 
 /** mosaicgroups are flex so all the cells are squeezed into a row or column */
 .mosaicgroup {
     display: flex;
     position: relative;
+    /*z-index:  -2 !important;*/
 }
 /** hide empty groups so they don't make blank gaps if they somehow get left there */
 .mosaicgroup:empty {
@@ -28,13 +34,15 @@
  * z-index is to make them capture the mouse events so they know when something is dragging over them
  */
 .cell, .mosaicgroup {
-    min-width: 0;
+    /*min-width: 0;*/
     width: unset !important;
-    flex: 1 1 0px;
+    flex: 1 1 0;
     z-index: 2;
 }
 .mosaicgroup {
-    margin: var(--gap-width);
+    margin: 0;
+    z-index: 0;
+    gap: var(--gap-width);
 }
 /** when hovering over a mosaicgroup it changed its background slightly so the execution order can be seen */
 /* .mosaicgroup:hover {
@@ -43,12 +51,67 @@
 /** rows are rows, and don't need to leave extra space on the sides for dropping */
 .mosaicrow {
     flex-direction: row;
+    /*min-height: 20rem;*/
 }
 /** cols are columnss, and don't need to leave extra space on the top and bottom for dropping */
 .mosaiccol {
     flex-direction: column;
+    /*min-width: 20rem;*/
 }
 
+/*
+.mosaicgroup {
+    padding-top: 0.5rem;
+}*/
+/*.mosaicgroup::before {
+    position: absolute;
+    top:  -1rem;
+    left: 0;
+    right: 0;
+    height: 2rem;
+    z-index: 3;
+    pointer-events: all;
+}
+.mosaicgroup:before{
+    color: rgba(0,0,0,0);
+    content: 'toggle scroll';
+    text-align: center;
+    font-size: 1rem;
+}
+.mosaicgroup:hover:last::before {
+    color: rgba(0,0,0,0.5);
+    transition: 0.4s;
+}*/
+
+
+/*
+.mosaicgrouphandle {
+    height: 2rem;
+}*/
+.mosaicscrollable > .mosaicgroup {
+    position: relative;
+    display: flex;
+    flex: 1 0 min-content;
+    flex-direction: inherit;
+    gap: var(--gap-width);
+}
+.mosaicscrollable > .mosaicgroup > .cell {
+    flex: 0 0 max-content;
+}
+.mosaicscrollable > .mosaicrow {
+    overflow-x: auto;
+    overflow-y: auto;
+    flex-basis: min-content;
+}
+.mosaicscrollable > .mosaiccol {
+    overflow-x: auto;
+    overflow-y: auto;
+    flex-basis: min-content;
+}
+.mosaicscrollable > .mosaicgroup .mosaicgroup {
+    overflow: initial;
+    flex: 0 0 min-content;
+}
 
 
 
@@ -64,8 +127,6 @@
     background: white;
     box-shadow: 0px 3px 10px 1px rgba(0,0,0,0.5);
     border-radius: 10px !important;
-
-    margin: var(--gap-width);
 }
 
 
@@ -116,73 +177,49 @@
 }
 
 /**
- * the after psuedo elements of cells and mosaicgroups are for captuing mouseevents outside the element itself,
- * so when the mouse is dragging a cell near one of them it can detect it.
- * they also are used to highlight where the cell will go when dropped by changing the border color.
+ * used to highlight where the cell will go when dropped by changing the border color.
  */
-.cell::after, .mosaicgroup::after {
-    display: inline-block;
-    flex: 0 0 auto;
-    content: "";
+#mosaicdrophighlight {
     position: absolute;
     background: transparent;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    box-sizing: border-box;
+    z-index: 3; /* has to be in front to see it */
+    display: inline-block;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: transparent;
     border: calc(var(--gap-width)*1) solid transparent;
     box-sizing: border-box;
-    z-index: 1;
-}
-/** puts borders outside of element for groups, and for cells when the layout style is floating cells */
-.mosaicgroup::after, #notebook-container[data-mosaicstyle=floating] .cell::after {
-    box-sizing: content-box;
-    top: calc(var(--gap-width)*-1);
-    left: calc(var(--gap-width)*-1);
-
-    z-index: -1;
-    pointer-events: all;
-}
-/** cell highlight boxes don't get mouse events because things are dropped on the cell, only the groups need their own margins */
-.cell::after {
     pointer-events: none;
 }
+
+
 /** when the mouse is hovering by the top highlight the top edge to show where the cell will go when dropped */
-[data-hoverside=top]::after {
-    border-top-color: lightblue;
+#mosaicdrophighlight[data-hoverside=top] {
+    border-top-color: lightblue !important;
 }
 /** when the mouse is hovering by the left highlight the left edge to show where the cell will go when dropped */
-[data-hoverside=left]::after {
-    border-left-color: lightblue;
+#mosaicdrophighlight[data-hoverside=left] {
+    border-left-color: lightblue !important;
 }
 /** when the mouse is hovering by the bottom highlight the bottom edge to show where the cell will go when dropped */
-[data-hoverside=bottom]::after {
-    border-bottom-color: lightblue;
+#mosaicdrophighlight[data-hoverside=bottom] {
+    border-bottom-color: lightblue !important;
 }
 /** when the mouse is hovering by the right highlight the right edge to show where the cell will go when dropped */
-[data-hoverside=right]::after {
-    border-right-color: lightblue;
+#mosaicdrophighlight[data-hoverside=right] {
+    border-right-color: lightblue !important;
 }
 
 
 /** don't need space on top and bottom for column */
-.mosaiccol {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
+.mosaicgroup, .cell {
+    margin: 0 !important;
+    border: none;
 }
 .mosaiccol::after {
-    border-top: none;
-    border-bottom: none;
     top: 0;
 }
-/** don't need space on left and right for row */
-.mosaicrow {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-}
 .mosaicrow::after {
-    border-left: none;
-    border-right: none;
     left: 0;
 }
 
@@ -216,8 +253,14 @@
     background-color: rgba(0,122,122,0.5);
 }
 /** adds a slight darkening to the background of the group that is hovered over to visualize rows and colums */
+.mosaicgroup {
+ /*   border-width: 1px;
+    border-style:  solid;
+    border-color: transparent;*/
+}
 .focusgroup {
     transition: 0.5s;
     background-color: rgba(0,0,0,0.03);
+    /*border-color: rgba(0,0,0,0.1);*/
     /* border-radius: 10px; */
 }
