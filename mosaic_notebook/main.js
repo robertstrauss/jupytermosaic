@@ -305,6 +305,9 @@ function recursecreatemosaic(cell, group, index) {
     if ( cell.metadata.mosaic == undefined || cell.metadata.mosaic[index] == undefined ) {
         return group;
     }
+    // if ( cell.metadata.mosaic[i] == 'scroll' ) {
+    //     let newgroup = group.children()
+    // }
     let newgroup = group.children(`.mosaicgroup[data-mosaicnumber=${cell.metadata.mosaic[index]}]`);
     if (newgroup.length < 1) { // create the group if it doesn't exist yet
         newgroup = createnewgroupin(group);
@@ -388,9 +391,13 @@ function addDragger(cell) {
 function saveMosaicPosition(cell) {
     // write cell position in mosaic to metadata
     const mosaic = [];
-    const groups = cell.element.parents('.mosaicgroup');
+    const groups = cell.element.parents('.mosaicgroup, .mosaicscrollable').not('#notebook-container');
     for (let i = 0; i < groups.length; i++) {
-        mosaic.unshift(groups[i].getAttribute('data-mosaicnumber'));
+        if ($(groups[i]).hasClass('mosaicscrollable')) {
+            // mosaic.unshift('scroll');
+        } else if ($(groups[i]).hasClass('mosaicgroup')) {
+            mosaic.unshift(groups[i].getAttribute('data-mosaicnumber'));
+        }
     }
     cell.metadata.mosaic = mosaic;
 }
