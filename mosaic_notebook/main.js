@@ -221,7 +221,7 @@ const mosaiccollapseobserver = new MutationObserver(function(mutations, mosaicco
 
 function removeIfRedundant(group) {
     // console.log(group, $(group).children('.cell, .mosaicgroup'), $(group).add($(group).children('.cellscrollable')).children('.mosaicgroup, .cell'))
-    if ( $(group).children('.mosaicgroup, .cell').length <= 1 && $(group).children('.mosaicscrollable').children('.mosaicgroup, .cell').length <= 1) {
+    if ( $(group).children('.mosaicgroup, .cell').length <= 1 && $(group).children('.mosaicscrollable').children('.mosaicgroup, .cell').length <= 1 && !$(group).attr('id') == 'notebook-container') {
         console.log('removing', group);
         $(group).find('.mosaicgroup').children().unwrap();
         $(group).children().unwrap();
