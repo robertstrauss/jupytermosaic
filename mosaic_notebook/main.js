@@ -332,6 +332,7 @@ function loadMosaic() {
     }
 
     $('#notebook-container').addClass('mosaicgroup').addClass('mosaiccol').append(root.children())
+    // 
 
     // get rid of redundant wrapped mosaicgroups
     $('.mosaicgroup').each(function(){
@@ -388,7 +389,7 @@ function addDragger(cell) {
 function saveMosaicPosition(cell) {
     // write cell position in mosaic to metadata
     const mosaic = [];
-    const groups = cell.element.parents('.mosaicgroup');
+    const groups = cell.element.parents('.mosaicgroup:not(#notebook-container)');
     for (let i = 0; i < groups.length; i++) {
         mosaic.unshift(groups[i].getAttribute('data-mosaicnumber'));
     }
