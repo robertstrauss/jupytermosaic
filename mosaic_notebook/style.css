@@ -20,7 +20,7 @@
 }
 
 /** mosaicgroups are flex so all the cells are squeezed into a row or column */
-.mosaicgroup {
+.mosaicgroup, #notebook-container {
     display: flex;
     position: relative;
     /*z-index:  -2 !important;*/
@@ -33,13 +33,13 @@
  * makes cells and mosaic groups the same size, with gaps between them, and not overflow 
  * z-index is to make them capture the mouse events so they know when something is dragging over them
  */
-.cell, .mosaicgroup {
+.cell, .mosaicgroup, #notebook-container {
     /*min-width: 0;*/
     width: unset !important;
     flex: 1 1 0;
     z-index: 2;
 }
-.mosaicgroup {
+.mosaicgroup, #notebook-container {
     margin: 0;
     z-index: 0;
     gap: var(--gap-width);
@@ -51,12 +51,12 @@
 /** rows are rows, and don't need to leave extra space on the sides for dropping */
 .mosaicrow {
     flex-direction: row;
-    /*min-height: 20rem;*/
+    /**min-height: 20rem;**/
 }
 /** cols are columnss, and don't need to leave extra space on the top and bottom for dropping */
-.mosaiccol {
+.mosaiccol, #notebook-container {
     flex-direction: column;
-    /*min-width: 20rem;*/
+    min-width: 20rem;
 }
 
 /*
@@ -212,7 +212,7 @@
 
 
 /** don't need space on top and bottom for column */
-.mosaicgroup, .cell {
+.mosaicgroup, .cell, #notebook-container {
     margin: 0 !important;
     border: none;
 }

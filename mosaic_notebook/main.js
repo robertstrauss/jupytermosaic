@@ -46,6 +46,9 @@ function startDrag(cell, ievent) {
 
         // which cell mouse is on
         droppable = $(event.target).closest('.cell, .mosaicgroup');
+        if ( $(event.target).hasClass('end_space') ) {
+            droppable = $('#notebook-container').children().last();
+        }
         if ( droppable.length < 1 || droppable.is(elem) ) {
             droppable = null;
             highlight.removeAttr('data-hoverside');
@@ -331,7 +334,7 @@ function loadMosaic() {
         addHover(cell);
     }
 
-    $('#notebook-container').addClass('mosaicgroup').addClass('mosaiccol').append(root.children())
+    $('#notebook-container').append(root.children())
     // 
 
     // get rid of redundant wrapped mosaicgroups
