@@ -1,0 +1,16 @@
+double click to make scroller inside scroller doesn't work
+	scroller inside scroller has wrong direction
+
+cell dropped slightly weirldy teleports to end of notebook
+
+can't select multiple cells sometimes
+
+drop highlight in wrong place in scrolling groups
+
+mysterious gap space in bototm of horizontal scroller
+
+scrolling doesn't work with mouse on figure
+
+can't drag markdown
+
+group scrolling toggle setting isn't saved
