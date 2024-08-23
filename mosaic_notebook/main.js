@@ -46,6 +46,9 @@ function startDrag(cell, ievent) {
 
         // which cell mouse is on
         droppable = $(event.target).closest('.cell, .mosaicgroup');
+        if ( $(event.target).hasClass('end_space') ) {
+            droppable = $('#notebook-container').children().last();
+        }
         if ( droppable.length < 1 || droppable.is(elem) ) {
             droppable = null;
             highlight.removeAttr('data-hoverside');
@@ -221,7 +224,7 @@ const mosaiccollapseobserver = new MutationObserver(function(mutations, mosaicco
 
 function removeIfRedundant(group) {
     // console.log(group, $(group).children('.cell, .mosaicgroup'), $(group).add($(group).children('.cellscrollable')).children('.mosaicgroup, .cell'))
-    if ( $(group).children('.mosaicgroup, .cell').length <= 1 && $(group).children('.mosaicscrollable').children('.mosaicgroup, .cell').length <= 1) {
+    if ( $(group).children('.mosaicgroup, .cell').length <= 1 && $(group).children('.mosaicscrollable').children('.mosaicgroup, .cell').length <= 1 && !$(group).attr('id') == 'notebook-container') {
         console.log('removing', group);
         $(group).find('.mosaicgroup').children().unwrap();
         $(group).children().unwrap();
@@ -334,7 +337,8 @@ function loadMosaic() {
         addHover(cell);
     }
 
-    $('#notebook-container').addClass('mosaicgroup').addClass('mosaiccol').append(root.children())
+    $('#notebook-container').append(root.children())
+    // 
 
     // get rid of redundant wrapped mosaicgroups
     $('.mosaicgroup').each(function(){
