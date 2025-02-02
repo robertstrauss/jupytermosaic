@@ -1,5 +1,11 @@
 # Jupyter Mosaic
 
+## HELP WANTED!
+I'm looking for a collaborator to help me develop and update the jupyter-lab version of jupyter mosaic. Since it seems jupyter intends to phase out jupyter notebooks in favor of lab, and for those who prefer labs anyways, it would be good to get a lab version of the extension working. The extension interface has completely changed so I'm working on doing this from scratch, which is going slowly due to the new and in my opinion more difficult to develop interface for jupyterlab extensions.
+
+contact me: robert.strauss@protonmail.com
+Preferred: those with knowledge of typescript or, better yet, understanding of the jupyterlab codebase (or extension interface)
+
 [Description](#description)
 
 [Installation](#installation)
