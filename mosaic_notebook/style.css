@@ -96,7 +96,7 @@
     display: flex;
     /* flex: 1 0 100%; */
     flex-grow: 1;
-    flex-shrink 0;
+    flex-shrink: 0;
     flex-direction: inherit;
     gap: var(--gap-width);
 }
