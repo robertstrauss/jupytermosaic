@@ -40,6 +40,7 @@ We recommend updating conda/jupyter before beginning, because we have found olde
 
 Clone the repository then install and enable the extension:
 ```bash
+pip install jupyter_contrib_nbextensions
 git clone https://github.com/robertstrauss/jupytermosaic.git && cd ./jupytermosaic
 jupyter nbextension install ./mosaic_notebook --user
 jupyter nbextension enable mosaic_notebook/main --user
