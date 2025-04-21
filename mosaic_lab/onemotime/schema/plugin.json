@@ -1,0 +1,8 @@
+{
+  "jupyter.lab.shortcuts": [],
+  "title": "mosaic-lab",
+  "description": "mosaic-lab settings.",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}
