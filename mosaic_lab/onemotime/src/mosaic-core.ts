@@ -18,6 +18,7 @@ function createnewgroupin(group: JQuery<HTMLElement>): JQuery<HTMLElement> {
     const subgroup: JQuery<HTMLElement> = $('<div>')
         .addClass('mosaicgroup')
         .attr('data-mosaicnumber', mosaicnumber.toString());
+    group.append(subgroup);
 
     // Add a double-click handler to toggle scrollability
     subgroup.dblclick(function (this: HTMLElement, event: JQuery.DoubleClickEvent) {
@@ -100,7 +101,6 @@ export function recursecreatemosaic(
 ): JQuery<HTMLElement> {
     const mosaic = (cell.model.sharedModel.metadata.mosaic as Array<number>);
 
-    console.log('mosaic!', mosaic);
     if (mosaic === undefined || mosaic[index] === undefined) {
         return $(group); // wrap DOM element if needed
     }
@@ -113,7 +113,7 @@ export function recursecreatemosaic(
     if (newgroup.length < 1) {
         newgroup = createnewgroupin($group);
         newgroup.attr('data-mosaicnumber', mosaic[index]?.toString());
-        $group.append(newgroup);
+        //$group.append(newgroup);
     }
 
     return recursecreatemosaic(cell, newgroup, index + 1);
@@ -122,4 +122,15 @@ export function recursecreatemosaic(
 
 
 
-
+export function findorcreatemosaicgroupin(group: JQuery<HTMLElement> | HTMLElement, mosaicpath: Array<string | number>) {
+  let lastgroup = $(group);
+  let ng;
+  mosaicpath.forEach(mosaicnum => {
+    ng = lastgroup.children(`[data-mosaicnumber="${mosaicnum}"]`).first()
+    if (ng.length < 1) {
+      ng = createnewgroupin(lastgroup);
+    }
+    lastgroup = ng;
+  });
+  return lastgroup;
+}
