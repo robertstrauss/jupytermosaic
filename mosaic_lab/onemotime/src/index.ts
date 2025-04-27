@@ -35,7 +35,7 @@ function loadMosaic(notebookPanel: NotebookPanel){
       // So I need to monkey patch this 
       const vn = (notebookPanel.content as any)._viewport;
       const vm = (notebookPanel.content as any)._viewModel;
-
+      const wl = notebookPanel.content.layout.parent;
 
       Object.defineProperty(vn, 'children', {
         get: function () {
@@ -49,42 +49,36 @@ function loadMosaic(notebookPanel: NotebookPanel){
         }
       });
       // Similarly need to patch the remove and insert methods to apply to the cell's parent
-      
       notebookPanel.content.viewportNode.removeChild = function (node) {
-        // Remove from its cellgroup, not the root
-        //node.parentNode?.removeChild(node);
+        node.parentNode?.removeChild(node);
         console.log('remove', node);
-        //throw new Error('fuck yuou');
         return node;
       };
 
     
       
-      const vpn = notebookPanel.content.viewportNode;
-      //Object.defineProperty(vpn, 'orig_insertBefore', vpn.insertBefore);
+      // const vpn = notebookPanel.content.viewportNode;
       
-      vpn.insertBefore = function (node1, node2) {
+      vn.insertBefore = function (node1: HTMLElement, node2 : HTMLElement) {
         if (node2) {
-          let ix1 = (node1 as any as HTMLElement).dataset.windowedListIndex;
-          let ix2 = (node2 as any as HTMLElement).dataset.windowedListIndex;
-          console.log('ins b4', ix1, ix2);
-          if (ix1 == undefined || ix2 == undefined || ix1 > ix2) {
-            throw new Error('wtf are you doing juypyte');
-          }
           const mp1 = (node1 as any as HTMLElement).dataset.mosaicpath;
           const mp2 = (node2 as any as HTMLElement).dataset.mosaicpath;
           console.log('mp1, mp2', mp1, mp2);
           if (mp1 !== undefined && mp2 !== undefined) {
-            const path1 = mp1.split('-');
-            const path2 = mp2.split('-');
+            const path1 = mp1.split('-').filter(substr => substr.length > 0);
+            const path2 = mp2.split('-').filter(substr => substr.length > 0);
             let divergelevel = (path1.findIndex((mosaicnum, i) => (path2.length <= i || path2[i] !== mosaicnum)));
             if (divergelevel < 0 || divergelevel == undefined) {
-              divergelevel = path1.length-1;
+              divergelevel = path1.length;
             }
             
             console.log('paths diverge at', divergelevel);
             
-            const lowestcommongroup = findorcreatemosaicgroupin(vpn, path1.slice(0,divergelevel)).get(0) as HTMLElement;
+            const lowestcommongroup = findorcreatemosaicgroupin(root, path1.slice(0,divergelevel)).get(0) as HTMLElement;
+            // construct everything past the branch point and put the node at the end as a leaf
+            const node1wrapper  = findorcreatemosaicgroupin(lowestcommongroup, path1.slice(divergelevel)).get(0) as HTMLElement;
+            node1wrapper.appendChild(node1);
+
             let branch1 : Node;
             let branch2 : Node;
             if (path1.length > divergelevel) {
@@ -99,14 +93,10 @@ function loadMosaic(notebookPanel: NotebookPanel){
             }
             
             lowestcommongroup.insertBefore(branch1, branch2);
-
-            // construct everything past the branch point and put the node at the end as a leaf
-            const node1wrapper  = findorcreatemosaicgroupin(lowestcommongroup, path1.slice(divergelevel)).get(0) as HTMLElement;
-            node1wrapper.appendChild(node1);
           }
           else {
-            if (node2.parentNode == vpn) {
-              
+            if (node2.parentNode == vn) {
+              // don't trigger, would be circular
             } else if (node2.parentNode) {
               node2.parentNode.insertBefore(node1, node2);
             }
@@ -126,13 +116,13 @@ function loadMosaic(notebookPanel: NotebookPanel){
         if (orig) {
           console.log('computed r2r', orig);
           const cells = Array.from(vn.getElementsByClassName('jp-Cell'));
+          cells.forEach(a => (a as HTMLElement).style.border = 'none');
           cells.slice(orig[0], orig[1]).forEach(a => (a as HTMLElement).style.border = '3px solid green');
           cells.slice(orig[2], orig[3]).forEach(a => (a as HTMLElement).style.border = '3px solid red');
-          console.log(notebookPanel.content.widgets.slice(orig[0], orig[1]).map((cell, ixCell) => [vm.cellsEstimatedHeight.get(cell.model.id), vm._widgetSizers[ixCell].size, vm._widgetSizers[ixCell].offset]));
+          // console.log(notebookPanel.content.widgets.slice(orig[0], orig[1]).map((cell, ixCell) => [vm.cellsEstimatedHeight.get(cell.model.id), vm._widgetSizers[ixCell].size, vm._widgetSizers[ixCell].offset]));
+          console.log('off', vm._widgetSizers[orig[0]].offset, vm._widgetSizers[orig[1]].offset);
         }
         return orig;
-        // some more intelligent way of calculating the visible range of cells
-        //return [0, 99, 0, 99];
       }
 
       notebookPanel.content.widgets.forEach((cell : Cell, ixCell: number) => {
@@ -143,78 +133,91 @@ function loadMosaic(notebookPanel: NotebookPanel){
           if (!cell.node.dataset.mosaicpath) {
             cell.node.dataset.mosaicpath = (cell.model.sharedModel.metadata.mosaic as Array<number>)?.join('-');
           }
-//          const orig = (cell as any).onAfterAttach.bind(cell);
-//          (cell as any).onAfterAttach = (msg:any) => {
-//            const md = cell.model.sharedModel.metadata.mosaic;
-//            if (md) {
-//              console.log('mosaic metadata', md);
-//              const bottomgroup = recursecreatemosaic(cell, root, 0);
-//              bottomgroup.append(cell.node);
-//            }
-//            orig(msg);
-//          }
-          
+          console.log(ixCell, cell.model.sharedModel.metadata.mosaic, cell.node.dataset.mosaicpath);
           
         });
+      });
+
+      
+      (wl as any)._itemsResizeObserver.disconnect();
+
+      // Create a new ResizeObserver
+      const newResizeObserver = new ResizeObserver((entries) => {
+        entries.forEach((entry) => {
+          const outerrow = entry.target as HTMLElement;
+
+          // Get the last cell in the outerrow (representative in height of the whole row)
+          const firstCell = outerrow.querySelector('.jp-Cell:last-child') as HTMLElement;
+
+          if (firstCell && firstCell.dataset.windowedListIndex) {
+            // Update the outerrow's dataset.windowedListIndex
+            outerrow.dataset.windowedListIndex = firstCell.dataset.windowedListIndex;
+          }
+
+          // Optional: Log for debugging
+          console.log(
+            `Resize observed for outerrow: ${outerrow}, updated windowedListIndex: ${outerrow.dataset.windowedListIndex}`
+          );
+
+        });
+        vm._onItemResize(entries);
       });
 
       // need to do height calculations after whole mosaic has been put in DOM
       notebookPanel.content.widgets.forEach((cell : Cell, ixCell: number) => {
         cell.ready.then(() => {
           const lastwidget = vm._widgetSizers[ixCell-1] || {offset: 0, size: 0};
-          //vm._widgetSizers[ixCell].offset = bottomgroup.getBoundingClientRect().top - root.getBoundingClientRect().top;
           vm._widgetSizers[ixCell].offset = lastwidget.offset + lastwidget.size;
 
-          const outerrow = (cell.node.closest('#mosaic-root > .mosaicrow'));
+          const outerrow = (cell.node.closest('#mosaic-root > .mosaicrow') as HTMLElement);
           if (outerrow){
-            // the first node in any row of the main column serves as the representative 
+            // the last (important) node in any row of the main column serves as the representative 
             // of all its siblings, stating its height as the height of the whole row.
             //        (which may actually be the height of a larger node in the row)
             // other nodes, being in the same row, don't contribute to the distance of scrolling,
             // so their estimated height is set to 0.
             let size = 0;
-            if (cell.node == outerrow.getElementsByClassName('jp-Cell')[0]){
+            if (cell.node == outerrow.querySelector('.jp-Cell:last-child')){
               // amount widget displaces following cells vertically, for viewport scroll
               // is determined by the height of its outermost row
               //size = outerrow.closest('#mosaic-root > .mosaicrow')?.clientHeight || 0;
+              outerrow.dataset.windowedListIndex = cell.dataset.windowedListIndex;
               size = outerrow.clientHeight;
             }
-            console.log(ixCell, 'setting widget offset and size', vm._widgetSizers[ixCell].offset, size);
             vm.cellsEstimatedHeight.set(cell.model.id, size);
             vm._widgetSizers[ixCell].size = size;
-//            Object.defineProperty(vm, 'cellsEsimatedHeight', {
-//              get: function() {
-//                throw new Error('nope');
-//              }
-//            });
-            console.log('saved size', vm._widgetSizers[ixCell].size);
+
+            newResizeObserver.observe(outerrow);
+            // (wl as any)._itemsResizeObserver.unobserve(cell.node);
+            // (wl as any)._itemsResizeObserver.observe(outerrow);
+
+            // vm.setWidgetSize = function() {
+            //   throw new Error('no');
+            // }
+
+            // Object.defineProperty(vm._widgetSizers[ixCell], 'size', {
+            //   set: function(value) {
+            //     console.log('setting size', ixCell, value);
+            //     throw new Error('no');
+            //   },
+            //   get: function() {
+            //     return size;
+            //   },
+            //   enumerable: true, configurable: true
+            // });
           }
       });
     });
       
-    (notebookPanel.content.layout.parent as any)._itemsResizeObserver.disconnect();
+    (wl as any)._itemsResizeObserver.disconnect();
+    (wl as any)._itemsResizeObserver = newResizeObserver;
     
 //    Object.defineProperty((notebookPanel.content as any)._viewport.style, 'transform', {
 //      set: function() {
 //        throw new Error('no');
 //      }
 //    });
-     root.style.position = 'relative';
     notebookPanel.content.update();
-
-    setTimeout(() => {
-    const toAdd = [];
-    for (let i = 0; i<= 26; i++) {
-      toAdd.push(vm.widgetRenderer(i));
-    }
-    console.log('widgcount', vm._widgetCount, vm.widgetCount);
-    console.log('itemlist', vm._itemsList, vm._itemsList.length);
-    console.log('toadd', toAdd);
-    console.log('range2rend', vm.getRangeToRender());
-    for (let i = 0; i <= 26; i++) {
-      console.log('included?', i, notebookPanel.content.layout.widgets[i], toAdd.includes(notebookPanel.content.layout.widgets[i]));
-    }
-    }, 2000);
     
   });
 }

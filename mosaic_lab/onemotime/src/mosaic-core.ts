@@ -80,9 +80,9 @@ const mosaiccollapseobserver = new MutationObserverClass((
 function removeIfRedundant(group: Node | HTMLElement | JQuery<HTMLElement>): void {
     const $group = $(group);
 
-    const directContent = $group.children('.mosaicgroup, .cell');
-    const scrollableContent = $group.children('.mosaicscrollable').children('.mosaicgroup, .cell');
-    const isNotebookContainer = $group.attr('id') === 'notebook-container';
+    const directContent = $group.children('.mosaicgroup, .jp-Cell');
+    const scrollableContent = $group.children('.mosaicscrollable').children('.mosaicgroup, .jp-Cell');
+    const isNotebookContainer = $group.attr('id') === 'mosaic-root';
 
     if (directContent.length <= 1 && scrollableContent.length <= 1 && !isNotebookContainer) {
         console.log('removing', group);
@@ -100,12 +100,12 @@ export function recursecreatemosaic(
     index: number
 ): JQuery<HTMLElement> {
     const mosaic = (cell.model.sharedModel.metadata.mosaic as Array<number>);
+    const $group = $(group); // normalize to jQuery
 
     if (mosaic === undefined || mosaic[index] === undefined) {
-        return $(group); // wrap DOM element if needed
+        return $group; // wrap DOM element if needed
     }
 
-    const $group = $(group); // normalize to jQuery
 
     let newgroup: JQuery<HTMLElement> = $group.children(`.mosaicgroup[data-mosaicnumber=${mosaic[index]}]`);
 
@@ -123,14 +123,16 @@ export function recursecreatemosaic(
 
 
 export function findorcreatemosaicgroupin(group: JQuery<HTMLElement> | HTMLElement, mosaicpath: Array<string | number>) {
-  let lastgroup = $(group);
-  let ng;
-  mosaicpath.forEach(mosaicnum => {
-    ng = lastgroup.children(`[data-mosaicnumber="${mosaicnum}"]`).first()
-    if (ng.length < 1) {
-      ng = createnewgroupin(lastgroup);
-    }
-    lastgroup = ng;
-  });
-  return lastgroup;
+    let lastgroup = $(group);
+    let ng;
+    mosaicpath.forEach(mosaicnum => {
+        if (mosaicnum !== '') {
+            ng = lastgroup.children(`[data-mosaicnumber="${mosaicnum}"]`).first()
+            if (ng.length < 1) {
+                ng = createnewgroupin(lastgroup);
+            }
+            lastgroup = ng;
+        }
+    });
+    return lastgroup;
 }
