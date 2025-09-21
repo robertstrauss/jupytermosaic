@@ -32,6 +32,11 @@ pip uninstall mosaic_lab
 
 Note: You will need NodeJS to build the extension package.
 
+```shell
+conda create -n jupyterlab-ext --override-channels --strict-channel-priority -c conda-forge -c nodefaults jupyterlab=4 nodejs=20 git copier=9 jinja2-time
+conda activate jupyterlab-ext
+```
+
 The `jlpm` command is JupyterLab's pinned version of
 [yarn](https://yarnpkg.com/) that is installed with JupyterLab. You may use
 `yarn` or `npm` in lieu of `jlpm` below.

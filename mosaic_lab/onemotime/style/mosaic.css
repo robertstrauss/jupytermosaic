@@ -5,22 +5,22 @@
     --gap-width: 10px;
 }
 
-.text_cell_render {
-    /*fix the scrollbars from cells being smaller*/
+/* .text_cell_render {
+    /* fix the scrollbars from cells being smaller
     overflow:  auto;
     z-index:  3;
-}
+} */
 
 /** 
  * makes the contianer of the cells wider, so there's more room,
  * and sets it to negative z-index so it doesn't capture all the mouse events
  */
-#notebook-container {
+.jp-Notebook {
     width: 95%;
 }
 
 /** mosaicgroups are flex so all the cells are squeezed into a row or column */
-.mosaicgroup, #notebook-container {
+.mosaicgroup, .jp-Notebook {
     display: flex;
     position: relative;
     flex-basis: 100%; /* keeps from crushing scrollable divs to nothing */
@@ -35,14 +35,14 @@
  * makes cells and mosaic groups the same size, with gaps between them, and not overflow 
  * z-index is to make them capture the mouse events so they know when something is dragging over them
  */
-.cell, .mosaicgroup, #notebook-container {
+.jp-Cell, .mosaicgroup { /*, .jp-Notebook {*/
     /*min-width: 0;*/
     width: unset !important;
     flex-grow: 1;
     flex-shrink: 1;
     z-index: 2;
 }
-.mosaicgroup, #notebook-container {
+.mosaicgroup, .jp-Notebook {
     margin: 0;
     z-index: 0;
     gap: var(--gap-width);
@@ -57,7 +57,7 @@
     /**min-height: 20rem;**/
 }
 /** cols are columnss, and don't need to leave extra space on the top and bottom for dropping */
-.mosaiccol, #notebook-container {
+.mosaiccol, .jp-Notebook {
     flex-direction: column;
     min-width: 20rem;
 }
@@ -100,7 +100,7 @@
     flex-direction: inherit;
     gap: var(--gap-width);
 }
-.mosaicscrollable > .mosaicgroup > .cell {
+.mosaicscrollable > .mosaicgroup > .jp-Cell {
     flex: 0 0 max-content;
 }
 .mosaicscrollable > .mosaicrow {
@@ -123,12 +123,12 @@
 
 /** floating vs flat layout style */
 /** takes away white middle column so cells are floating in the grey area */
-#notebook-container[data-mosaicstyle=floating] {
+.jp-Notebook[data-mosaicstyle=floating] {
     background: transparent;
     box-shadow: none;
 }
 /** makes cells floating things with round corners */
-#notebook-container[data-mosaicstyle=floating] .cell {
+.jp-Notebook[data-mosaicstyle=floating] .jp-Cell {
     background: white;
     box-shadow: 0px 3px 10px 1px rgba(0,0,0,0.5);
     border-radius: 10px !important;
@@ -141,25 +141,25 @@
 
 
 /** make the input prompt (In [ ]) and output prompt (Out [ ]) above the input and output rather than beside */
-.cell > .input, .output > .output_area {
+/* .jp-Cell > .jp-Cell-inputWrapper, .jp-OutputArea {
     flex-direction: column !important;
-}
+} */
 /** 
  * make the output view full width of the cell 
  * (it usually leaves room for the output prompt, but we are putting that on top instead)
  */
-.output_subarea {
+.jp-OutputArea-child {
     max-width: 100% !important;
 }
 /** makes the input prompt or blank area of markdown cells clickable with z-index, so it can be dragged there, and full size */
-.input_prompt {
+/* .jp-InputPrompt {
     position: absolute;
     width: 100%;
     height: 100%;
     z-index: 2;
-}
+} */
 /** styles the input prompt of code cells only, making it bigger and on the top rather than side */
-.prompt_container > .input_prompt {
+.prompt_container > .jp-InputPrompt {
     text-align: left;
     position: relative;
     height: 2.8rem;
@@ -167,17 +167,17 @@
 }
 
 /** puts the output prompt's overlay big and on the top rather than side just like the output prompt itself */
-.out_prompt_overlay {
+/* .jp-OutputArea-promptOverlay {
     width: 100%;
     height: 100%;
     max-height: 2.8rem !important;
 }
-/** puts Out [ ] on the left */
-.output_prompt {
+/** puts Out [ ] on the left /
+.jp-OutputArea-promptOverlay {
     text-align: left;
-}
+} */
 /** makes sure the output is clickable */
-.output_wrapper {
+.jp-OutputArea {
     z-index: 2 !important;
 }
 
@@ -218,7 +218,7 @@
 
 
 /** don't need space on top and bottom for column */
-.mosaicgroup, .cell, #notebook-container {
+.mosaicgroup, .jp-Cell, .jp-Notebook {
     margin: 0 !important;
     border: none;
 }
