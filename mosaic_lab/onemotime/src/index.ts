@@ -135,16 +135,16 @@ function loadMosaic(notebookPanel: NotebookPanel){
       vm.getRangeToRender = function(){
         const orig = vm.origr2r();
         if (orig) {
-          console.log('computed r2r', orig);
-          const cells = Array.from(vn.getElementsByClassName('jp-Cell'));
-          cells.forEach(a => (a as HTMLElement).style.border = 'none');
-          cells.slice(orig[0], orig[1]).forEach(a => (a as HTMLElement).style.border = '3px solid red');
-          cells.slice(orig[2], orig[3]).forEach(a => (a as HTMLElement).style.border = '3px solid green');
-          cells.slice(orig[2], orig[3]).forEach(a => (a as HTMLElement).style.boxSizing = 'border-box');
+          // console.log('computed r2r', orig);
+          // const cells = Array.from(vn.getElementsByClassName('jp-Cell'));
+          // cells.forEach(a => (a as HTMLElement).style.border = 'none');
+          // cells.slice(orig[0], orig[1]).forEach(a => (a as HTMLElement).style.border = '3px solid red');
+          // cells.slice(orig[2], orig[3]).forEach(a => (a as HTMLElement).style.border = '3px solid green');
+          // cells.slice(orig[2], orig[3]).forEach(a => (a as HTMLElement).style.boxSizing = 'border-box');
 
-          for (let indx = orig[2]; indx < orig[3]; indx++) {
-            console.log(indx, vm._widgetSizers[indx]);
-          }
+          // for (let indx = orig[2]; indx < orig[3]; indx++) {
+          //   console.log(indx, vm._widgetSizers[indx]);
+          // }
           // console.log(notebookPanel.content.widgets.slice(orig[0], orig[1]).map((cell, ixCell) => [vm.cellsEstimatedHeight.get(cell.model.id), vm._widgetSizers[ixCell].size, vm._widgetSizers[ixCell].offset]));
         }
         return orig;
@@ -210,116 +210,43 @@ function loadMosaic(notebookPanel: NotebookPanel){
       }//);
 
       
+      function adjustWidgetSizesForRow(outerrow: HTMLElement) {
+        // the last (important) node in any row of the main column serves as the representative 
+        // of all its siblings, stating its height as the height of the whole row.
+        //        (which may actually be the height of a larger node in the row)
+        // other nodes, being in the same row, don't contribute to the distance of scrolling,
+        // so their estimated height is set to 0.
 
-      // Create a new ResizeObserver
-      const newResizeObserver = new ResizeObserver((entries) => {
-        (wl as any)._onItemResize(entries);
-
-        console.log("RESIZE OBSERVER", entries);
-        vm.height = root.getBoundingClientRect().height;
-        entries.forEach((entry) => {
-          const outerrow = entry.target as HTMLElement;
-          vm.setWidgetSize(Array.from(outerrow.querySelectorAll('.jp-Cell')).map(node => {
+        // all non-first-elment in row get size 0, as they don't contribute to vertical displacement
+        vm.setWidgetSize(Array.from(outerrow.querySelectorAll('.jp-Cell')).map(node => {
             return {index: parseInt((node as HTMLElement).dataset.windowedListIndex || '0'), size: 0};
           }));
 
-          // Get the first cell in the outerrow (representative in height of the whole row)
-          const firstCell = outerrow.querySelectorAll('.jp-Cell')[0] as HTMLElement;
+        // Get the first cell in the outerrow (representative in height of the whole row)
+        const firstCell = outerrow.querySelectorAll('.jp-Cell')[0] as HTMLElement;
 
-          if (firstCell && firstCell.dataset.windowedListIndex) {
-            // Update the outerrow's dataset.windowedListIndex
-            outerrow.dataset.windowedListIndex = firstCell.dataset.windowedListIndex;
-            vm.setWidgetSize([{index: parseInt(firstCell.dataset.windowedListIndex), size: outerrow.clientHeight}])
-          }
+        if (firstCell && firstCell.dataset.windowedListIndex) {
+          // Update the outerrow's dataset.windowedListIndex
+          outerrow.dataset.windowedListIndex = firstCell.dataset.windowedListIndex;
+          vm.setWidgetSize([{index: parseInt(firstCell.dataset.windowedListIndex), size: outerrow.clientHeight}])
+        }
+      }
 
+      // Create a new ResizeObserver
+      const newResizeObserver = new ResizeObserver((entries) => {
+        (wl as any)._onItemResize(entries); // call original handler FIRST, then fix whatever it did
+
+        vm.height = root.getBoundingClientRect().height;
+        entries.forEach((entry) => {
+          const outerrow = entry.target as HTMLElement;
+          adjustWidgetSizesForRow(outerrow);
         });
-
-        // for (let entry of entries) {
-        //   console.log(entry);
-        //   for (let cellnode of Array.from(entry.target.querySelectorAll('.jp-Cell'))) {
-        //     console.log(cellnode);
-        //     const indx = parseInt((cellnode as HTMLElement).dataset.windowedListIndex || '0');
-        //     console.log(indx, vm._widgetSizers[indx]);
-        //   }
-        // }
       });
 
-      // (wl as any)._itemsResizeObserver.disconnect();
-      // (wl as any)._itemsResizeObserver = newResizeObserver;
-      // newResizeObserver.observe(root);
-
-      // const indicator = document.createElement('div');
-      // indicator.style.position = 'absolute';
-      // indicator.style.backgroundColor = 'purple';
-      // indicator.style.opacity = '0.9';
-      // indicator.style.width = '300px';
-      // indicator.style.height = '10px';
-      // indicator.style.zIndex = '1000';
-      // indicator.style.pointerEvents = 'none';
-      // vn.appendChild(indicator);
-      // console.warn("INDICATOR", indicator);
-
-      // vm._getStartIndexForOffset = function(offset: number): number {
-      //   const cell = this._findNearestItem(offset);
-      //   const metadata = cell.metadata.mosaic || cell.model.sharedModel.metadata.mosaic;
-      //   const row = document.querySelector(`#mosaic-root > .mosaicrow[data-mosaicnum="${metadata['mosaic'][0]}"]`);
-      //   if (!row) {
-      //     return cell.index;
-      //   } else {
-      //     return (row.querySelectorAll('.jp-Cell')[0] as HTMLElement)?.dataset?.windowedListIndex || cell.index;
-      //   }
-      // }
-      // vm._getStopIndexForStartIndex = function(
-      //   startIndex: number,
-      //   scrollOffset: number
-      // ): number {
-      //   // const size = this._height;
-      //   const size = vn.parentElement.parentElement.clientHeight;
-      //   console.warn('size', size, vm.height);
-      //   console.log('est total', vm.getEstimatedTotalSize());
-      //   const itemMetadata = this._getItemMetadata(startIndex);
-      //   const maxOffset = scrollOffset + size;
-    
-      //   let offset = itemMetadata.offset + itemMetadata.size;
-      //   let stopIndex = startIndex;
-      //   console.log('end', maxOffset);
-      //   // indicator.style.top = maxOffset + 'px';
-
-      //   while (stopIndex < this.widgetCount - 1 && offset < maxOffset) {
-      //     stopIndex++;
-      //     // EDITED FROM JUPYTER SOURCE (.size -> .rowsize)
-      //     // console.log('adding to offset', this._getItemMetadata(stopIndex).size);
-      //     offset += this._getItemMetadata(stopIndex).size;
-      //     console.log('stopIndex', stopIndex, 'offset', offset, 'item size', this._getItemMetadata(stopIndex).size);
-      //     const stopnode = document.querySelector('.jp-Cell[data-windowed-list-index="' + stopIndex + '"]') as HTMLElement;
-      //     console.log(stopnode, stopnode?.closest('#mosaic-root > .mosaicrow'), stopnode?.closest('#mosaic-root > .mosaicrow')?.getBoundingClientRect().height);
-      //     // console.log('offset', offset);
-      //     // console.log(stopIndex, 'physical size',
-      //     //    document.querySelector('.jp-Cell[data-windowed-list-index="' + stopIndex + '"]')?.closest('#mosaic-root > .mosaicrow')?.getBoundingClientRect().height
-      //     //  );
-      //     // END EDITED
-      //   }
-
-        
-      //   document.querySelectorAll('#mosaic-root > .mosaicrow').forEach((row) => {
-      //     (row as HTMLElement).style.border = 'none';
-      //   });
-      //   const row = document.querySelector('.jp-Cell[data-windowed-list-index="' + stopIndex + '"]')?.closest('#mosaic-root > .mosaicrow') as HTMLElement;
-      //   if (row) {
-      //     row.style.border = '1px solid orange';
-      //   }
-      //   const srow = document.querySelector('.jp-Cell[data-windowed-list-index="' + startIndex + '"]')?.closest('#mosaic-root > .mosaicrow') as HTMLElement;
-      //   if (srow) {
-      //     srow.style.border = '1px solid green';
-      //   }
-    
-      //   return stopIndex;
-      // }
 
       wl.origonscroll = wl.onScroll;
       wl.onScroll = function(event: Event) {
         const orig = wl.origonscroll(event);
-        console.log('onScroll', event, orig);
         //indicator.style.top = (event.target as HTMLElement).scrollTop + 'px';
         return orig;
       }
@@ -348,28 +275,14 @@ function loadMosaic(notebookPanel: NotebookPanel){
 
           let outerrow = (cell.node.closest('#mosaic-root > .mosaicrow') as HTMLElement);
           if (outerrow){
-            // the last (important) node in any row of the main column serves as the representative 
-            // of all its siblings, stating its height as the height of the whole row.
-            //        (which may actually be the height of a larger node in the row)
-            // other nodes, being in the same row, don't contribute to the distance of scrolling,
-            // so their estimated height is set to 0.
-            let size = 0;
             let rowcells = outerrow.querySelectorAll('.jp-Cell');
             if (cell.node == rowcells[rowcells.length - 1]) {
-              // amount widget displaces following cells vertically, for viewport scroll
-              // is determined by the height of its outermost row
-              //size = outerrow.closest('#mosaic-root > .mosaicrow')?.clientHeight || 0;
+              // if anything queries the outerrows index, give it the index of this last cell
               outerrow.dataset.windowedListIndex = cell.dataset.windowedListIndex;
-              size = outerrow.clientHeight;
             }
-            vm.cellsEstimatedHeight.set(cell.model.id, size);
-            // vm._widgetSizers[ixCell].size = size;
-            // const orig = vm._widgetSizers[ixCell].offset;
-            // vm._widgetSizers[ixCell].size = {get: () => cell.node.closest('#mosaic-root > .mosaicrow')?.clientHeight || cell.node.clientHeight,
-            //     set: (v: number) => {/* nah */} } as any;
-            vm._widgetSizers[ixCell].size = size;
 
             newResizeObserver.observe(outerrow);
+            adjustWidgetSizesForRow(outerrow); // trigger size recalculation once
           }
       });
     });
