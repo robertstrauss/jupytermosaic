@@ -40,6 +40,7 @@
     width: unset !important;
     flex-grow: 1;
     flex-shrink: 1;
+    flex-basis: content;
     z-index: 2;
 }
 .mosaicgroup, .jp-Notebook {
@@ -59,7 +60,7 @@
 /** cols are columnss, and don't need to leave extra space on the top and bottom for dropping */
 .mosaiccol, .jp-Notebook {
     flex-direction: column;
-    min-width: 20rem;
+    /* min-width: 20rem; */
 }
 
 /*
@@ -269,4 +270,42 @@
     background-color: rgba(0,0,0,0.03);
     /*border-color: rgba(0,0,0,0.1);*/
     /* border-radius: 10px; */
+}
+
+
+
+.jp-Notebook-cell.jp-mod-dropTarget[data-drop-side="top"] ,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-drop-side="top"] {
+    border: none;
+  border-top-color: var(--jp-private-notebook-selected-color);
+  border-top-style: solid;
+  border-top-width: 2px;
+}
+
+.jp-Notebook-cell.jp-mod-dropTarget[data-drop-side="bottom"] ,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-drop-side="bottom"] {
+    border: none;
+  border-bottom-color: var(--jp-private-notebook-selected-color);
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+}
+
+.jp-Notebook-cell.jp-mod-dropTarget[data-drop-side="left"] ,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-drop-side="left"] {
+    border: none;
+  border-left-color: var(--jp-private-notebook-selected-color);
+  border-left-style: solid;
+  border-left-width: 2px;
+}
+
+.jp-Notebook-cell.jp-mod-dropTarget[data-drop-side="right"] ,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-drop-side="right"] {
+    border: none;
+  border-right-color: var(--jp-private-notebook-selected-color);
+  border-right-style: solid;
+  border-right-width: 2px;
 }
