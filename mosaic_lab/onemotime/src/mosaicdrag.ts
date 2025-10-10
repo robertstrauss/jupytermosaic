@@ -3,13 +3,13 @@ import { DROP_TARGET_CLASS } from '@jupyterlab/notebook/src/constants'
 import { Drag } from '@lumino/dragdrop'
 import { Cell, MarkdownCell } from '@jupyterlab/cells'
 import { ArrayExt, findIndex } from '@lumino/algorithm'
-import { MosaicGroup } from './MosaicGroup';
+import { Mosaic } from './MosaicGroup';
 
-import { MosaicNotebookViewModel } from './MosaicViewModel';
+// import { MosaicNotebookViewModel } from './MosaicViewModel';
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
-export function mosaicDrop(self: Notebook, viewModel: MosaicNotebookViewModel, event: Drag.Event) {
+export function mosaicDrop(self: Notebook, event: Drag.Event) {
     if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
       return;
     }
@@ -58,26 +58,29 @@ export function mosaicDrop(self: Notebook, viewModel: MosaicNotebookViewModel, e
 
 
       /** < MODIFIED: MOSAIC > **/
-      const sibling = self.widgets[toIndex];
-      const mosaicpath = sibling.model.metadata.mosaic as Array<string>;
-      const group = viewModel.treeGet(mosaicpath);
+      const dropCell = self.widgets[toIndex];
+      const mosaicpath = dropCell.model.metadata.mosaic as Array<string>;
+      const group = (self as any as Mosaic).treeGet(mosaicpath) as Mosaic;
+    //   const groupIdx = group.indexOf(dropCell.model.id); // index within this sub list
 
       const side = closestSide(event, target);
       const collike = (side == 'bottom' || side == 'top');
       const rowlike = (side == 'left' || side == 'right');
-      const beforelike = side == 'top' || side == 'left';
+    //   const beforelike = side == 'top' || side == 'left';
       const afterlike = side == 'top' || side == 'left';
       if ( (group.direction == 'row' && collike)
         || (group.direction == 'col' && rowlike)) {
             // dropping against group axis, need to create subgroup
-            if (beforelike) group.newGroup([...toMove, target]);
-            if (afterlike) group.newGroup([target, ...toMove]);
-            for (let id of toMove.map(c => c.model.id)) delete group.viewModel.subTree['cell-'+id];
-      } else if ( group.direction == 'row' && rowlike)
-
-      if ( (group.direction == 'row' && rowlike)
-        || (group.direction == 'col' && collike)) {
-            if (beforelike) 
+            // splice with delete=1 to replace dropped on cell with new group including itself
+            // if (beforelike) group.splice(groupIdx, 1, ...toMove, dropCell);
+            // if (afterlike) group.splice(groupIdx, 1, dropCell, ...toMove);
+            for (const movecell of [dropCell, ...toMove]) movecell.model.metadata.mosaic = [...mosaicpath, Mosaic.newUGID()]
+      } else if ( (group.direction == 'row' && rowlike)
+               || (group.direction == 'col' && collike)) {
+            // dropping along group axis, just insert it into the list
+            // if (beforelike) group.splice(groupIdx, 0, ...toMove);
+            // if (afterlike) group.splice(groupIdx+1, 0, ...toMove);
+            for (const movecell of toMove) movecell.model.metadata.mosaic = mosaicpath;
       }
 
       if (afterlike) {
