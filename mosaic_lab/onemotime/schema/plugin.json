@@ -3,6 +3,13 @@
   "title": "mosaic-lab",
   "description": "mosaic-lab settings.",
   "type": "object",
-  "properties": {},
+  "properties": {
+    "enableMosaic": {
+      "type": "boolean",
+      "title": "Enable Mosaic Notebook",
+      "default": true,
+      "description": "Use subdividable mosaic layout or view default linear jupyter notebook (how others without mosaic will see the notebook)"
+    }
+  },
   "additionalProperties": false
 }

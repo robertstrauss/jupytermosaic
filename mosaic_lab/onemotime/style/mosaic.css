@@ -1,123 +1,44 @@
-/** 
- * defines the gap width variable, which is the size of the margins between cells where cells can be dropped to place them
- */
-:root {
-    --gap-width: 10px;
-}
-
-/* .text_cell_render {
-    /* fix the scrollbars from cells being smaller
-    overflow:  auto;
-    z-index:  3;
-} */
-
-/** 
- * makes the contianer of the cells wider, so there's more room,
- * and sets it to negative z-index so it doesn't capture all the mouse events
- */
-.jp-Notebook {
-    width: 95%;
-}
 
 /** mosaicgroups are flex so all the cells are squeezed into a row or column */
-.mosaicgroup, .jp-Notebook {
+.mosaicgroup-inner, .jp-Notebook {
     display: flex;
     position: relative;
     flex-basis: 100%; /* keeps from crushing scrollable divs to nothing */
     overflow: auto;
     /*z-index:  -2 !important;*/
 }
-/** hide empty groups so they don't make blank gaps if they somehow get left there */
-.mosaicgroup:empty {
-    display: none;
-}
+
 /** 
  * makes cells and mosaic groups the same size, with gaps between them, and not overflow 
  * z-index is to make them capture the mouse events so they know when something is dragging over them
  */
-.jp-Cell, .mosaicgroup { /*, .jp-Notebook {*/
+.jp-Cell, .mosaicgroup-outer { /*, .jp-Notebook {*/
     /*min-width: 0;*/
-    width: unset !important;
+    /* width: unset !important; */
     flex-grow: 1;
     flex-shrink: 1;
     flex-basis: content;
-    z-index: 2;
+    /* z-index: 2; */
 }
-.mosaicgroup, .jp-Notebook {
+/* .mosaicgroup, .jp-Notebook {
     margin: 0;
     z-index: 0;
-    gap: var(--gap-width);
-}
+    /* gap: var(--gap-width); /
+} */
 /** when hovering over a mosaicgroup it changed its background slightly so the execution order can be seen */
 /* .mosaicgroup:hover {
     background-color: rgba(0,0,0,0.2);
 } */
-/** rows are rows, and don't need to leave extra space on the sides for dropping */
+
 .mosaicrow {
     flex-direction: row;
     /**min-height: 20rem;**/
 }
-/** cols are columnss, and don't need to leave extra space on the top and bottom for dropping */
 .mosaiccol, .jp-Notebook {
     flex-direction: column;
     /* min-width: 20rem; */
 }
 
-/*
-.mosaicgroup {
-    padding-top: 0.5rem;
-}*/
-/*.mosaicgroup::before {
-    position: absolute;
-    top:  -1rem;
-    left: 0;
-    right: 0;
-    height: 2rem;
-    z-index: 3;
-    pointer-events: all;
-}
-.mosaicgroup:before{
-    color: rgba(0,0,0,0);
-    content: 'toggle scroll';
-    text-align: center;
-    font-size: 1rem;
-}
-.mosaicgroup:hover:last::before {
-    color: rgba(0,0,0,0.5);
-    transition: 0.4s;
-}*/
-
-
-/*
-.mosaicgrouphandle {
-    height: 2rem;
-}*/
-.mosaicscrollable > .mosaicgroup {
-    position: relative;
-    display: flex;
-    /* flex: 1 0 100%; */
-    flex-grow: 1;
-    flex-shrink: 0;
-    flex-direction: inherit;
-    gap: var(--gap-width);
-}
-.mosaicscrollable > .mosaicgroup > .jp-Cell {
-    flex: 0 0 max-content;
-}
-.mosaicscrollable > .mosaicrow {
-    overflow-x: auto;
-    overflow-y: auto;
-    flex-basis: min-content;
-}
-.mosaicscrollable > .mosaiccol {
-    overflow-x: auto;
-    overflow-y: auto;
-    flex-basis: min-content;
-}
-.mosaicscrollable > .mosaicgroup .mosaicgroup {
-    overflow: initial;
-    flex: 0 0 100%;
-}
 
 
 
@@ -149,9 +70,9 @@
  * make the output view full width of the cell 
  * (it usually leaves room for the output prompt, but we are putting that on top instead)
  */
-.jp-OutputArea-child {
+/* .jp-OutputArea-child {
     max-width: 100% !important;
-}
+} */
 /** makes the input prompt or blank area of markdown cells clickable with z-index, so it can be dragged there, and full size */
 /* .jp-InputPrompt {
     position: absolute;
@@ -182,98 +103,11 @@
     z-index: 2 !important;
 }
 
-/**
- * used to highlight where the cell will go when dropped by changing the border color.
- */
-#mosaicdrophighlight {
-    position: absolute;
-    background: transparent;
-    box-sizing: border-box;
-    z-index: 3; /* has to be in front to see it */
-    display: inline-block;
-    top: 0; left: 0; /* right: 0; bottom: 0; */
-    width: 0; height: 0;
-    background: transparent;
-    border: calc(var(--gap-width)*1) solid transparent;
-    box-sizing: border-box;
-    pointer-events: none;
-}
-
-
-/** when the mouse is hovering by the top highlight the top edge to show where the cell will go when dropped */
-#mosaicdrophighlight[data-hoverside=top] {
-    border-top-color: lightblue !important;
-}
-/** when the mouse is hovering by the left highlight the left edge to show where the cell will go when dropped */
-#mosaicdrophighlight[data-hoverside=left] {
-    border-left-color: lightblue !important;
-}
-/** when the mouse is hovering by the bottom highlight the bottom edge to show where the cell will go when dropped */
-#mosaicdrophighlight[data-hoverside=bottom] {
-    border-bottom-color: lightblue !important;
-}
-/** when the mouse is hovering by the right highlight the right edge to show where the cell will go when dropped */
-#mosaicdrophighlight[data-hoverside=right] {
-    border-right-color: lightblue !important;
-}
-
-
-/** don't need space on top and bottom for column */
-.mosaicgroup, .jp-Cell, .jp-Notebook {
-    margin: 0 !important;
-    border: none;
-}
-.mosaiccol::after {
-    top: 0;
-}
-.mosaicrow::after {
-    left: 0;
-}
-
-
-/** decrease opacity and give cells extra shadow when being dragged, to make it clear they are being dragged */
-.mosaicdragging {
-    position: absolute;
-    box-shadow: 0px 5px 20px 0px black;
-    opacity: 0.6;
-    background: white;
-    z-index: 2;
-}
-
-/**
- * nextcell and prevcell classes are added to the next and previous cells (in execution order)
- * when a cell is hovered over to make it clear which will execute next and which before */
-.nextcell::after, .prevcell::after {
-    position: absolute;
-    --dot-size: 7px;
-    top: calc(var(--dot-size)*-1);
-    left: calc(var(--dot-size)*-1);
-    width: var(--dot-size);
-    height: var(--dot-size);
-    border: none;
-    border-radius: var(--dot-size);
-}
-.nextcell::after {
-    background-color: rgba(255,0,0,0.5);
-}
-.prevcell::after {
-    background-color: rgba(0,122,122,0.5);
-}
-/** adds a slight darkening to the background of the group that is hovered over to visualize rows and colums */
-.mosaicgroup {
- /*   border-width: 1px;
-    border-style:  solid;
-    border-color: transparent;*/
-}
-.focusgroup {
-    transition: 0.5s;
-    background-color: rgba(0,0,0,0.03);
-    /*border-color: rgba(0,0,0,0.1);*/
-    /* border-radius: 10px; */
-}
 
 
 
+
+/* 
 .jp-Notebook-cell.jp-mod-dropTarget[data-drop-side="top"] ,
 .jp-Notebook.jp-mod-commandMode
   .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-drop-side="top"] {
@@ -308,4 +142,4 @@
   border-right-color: var(--jp-private-notebook-selected-color);
   border-right-style: solid;
   border-right-width: 2px;
-}
+} */

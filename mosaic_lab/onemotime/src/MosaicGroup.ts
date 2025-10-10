@@ -1,19 +1,27 @@
-import { StaticNotebook, Notebook, NotebookWindowedLayout } from '@jupyterlab/notebook';
+import { Notebook, NotebookWindowedLayout } from '@jupyterlab/notebook';
 import { WindowedList } from '@jupyterlab/ui-components'
 // import { Cell } from '@jupyterlab/cells';
 
-import { MosaicSubViewModel } from './mosaicviewmodel';
+import { IMosaicViewModel, MosaicViewModel } from './MosaicViewModel';
 import { Message } from '@lumino/messaging';
 import { PromiseDelegate } from '@lumino/coreutils';
+// import { Widget } from '@lumino/widgets';
+// import { Cell } from '@jupyterlab/cells'
 
-export namespace MosaicSubNotebook {
-    export interface IOptions extends StaticNotebook.IOptions {
-        // direction: 'row' | 'col'
+
+// type FlexDirection = 'row' | 'col';
+
+
+// type Tile = Cell | Mosaic;
+
+export class MosaicGroup extends WindowedList<MosaicViewModel> { //StaticNotebook {
+
+
+    getEstimatedTotalSize() {
+        return this.viewModel.getEstimatedTotalSize();
     }
-}
+    
 
-
-export class MosaicSubNotebook extends WindowedList<MosaicSubViewModel> { //StaticNotebook {
     protected getProperty(prop: string | symbol) {
         const val = (this.notebook as any)[prop];
         if (typeof val === 'function') {
@@ -23,15 +31,17 @@ export class MosaicSubNotebook extends WindowedList<MosaicSubViewModel> { //Stat
     }
     private _placeholder;
     private _ready = new PromiseDelegate<void>();
-    constructor(protected parentviewmodel: MosaicSubViewModel, protected groupID: string, protected notebook: Notebook) {
+    constructor(protected parentviewmodel : IMosaicViewModel, protected groupID : string, protected notebook: Notebook) {
+        // const tiles = new Array<Tile>
         super({
-            model: new MosaicSubViewModel(parentviewmodel, groupID, notebook),
+            model: new MosaicViewModel(parentviewmodel, groupID, notebook),
             layout: new NotebookWindowedLayout(),
             renderer: (notebook as any).renderer
         });
         this._placeholder = true;
 
-        this.node.classList.add('mosaicgroup', 'mosaic'+this.viewModel.direction);
+        this.node.classList.add('mosaicgroup-outer');
+        this.viewportNode.classList.add('mosaicgroup-inner', 'mosaic'+this.viewModel.direction);
 
         return new Proxy(this, { // a Proxy mimicing a StaticNotebook, forwarding to the real notebook given
             get: (target, prop, receiver) => {
@@ -78,20 +88,10 @@ export class MosaicSubNotebook extends WindowedList<MosaicSubViewModel> { //Stat
         return this._ready.promise;
     }
 
-    // onBeforeAttach(e:any) {
-    //     super.onBeforeAttach(e);
-    // }
-
     protected onAfterAttach(msg: Message): void {
-        this.update();
+        this.update(); // will attach inner cells according to viewModel widgetRenderer
         super.onAfterAttach(msg);
-    //     (this as any)._update();
-    //     super.onAfterAttach(msg);
     }
-
-    // protected onUpdateRequest(msg: Message): void {
-    //     super.onUpdateRequest(msg);
-    // }
 
 
 }

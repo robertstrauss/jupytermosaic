@@ -59,6 +59,7 @@
     },
     "dependencies": {
         "@jupyterlab/application": "^4.0.0",
+        "@jupyterlab/launcher": "^4.4.9",
         "@jupyterlab/settingregistry": "^4.0.0",
         "jquery": "^3.7.1"
     },
