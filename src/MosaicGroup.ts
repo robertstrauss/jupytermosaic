@@ -36,6 +36,9 @@ export class orderedMap<K, V> {
     public indexOf(key: K) {
         return this.itemOrder.indexOf(key);
     }
+    public keyOf(index: number) {
+        return this.itemOrder[index];
+    }
     public spliceIndex(startIndex: number, deleteCount: number, key:K, value:V) {
         // insert or delete
         const deleted = this.itemOrder.splice(startIndex, deleteCount, key);
@@ -208,11 +211,9 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         // returns: last parent mosaic and id of leaf in parent or null if not found, and number of leafs checked (== leafIx, or total number of leaves if not found)
         let i = 0;
         for (const id of this.tiles) {
-            if (!id) throw Error("??");
-            // console.log('id', id);
+            if (!id) break;
             if (this.tiles.key(id) instanceof Cell) {
                 if (i == leafIx) {
-                    console.log('found lead', id);
                     return [[this, id], i]; // found desired leaf
                 }
                 i += 1; // count leaf

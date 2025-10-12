@@ -81,7 +81,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     const defaultNotebookFactory = app.docRegistry.getWidgetFactory('Notebook') as NotebookWidgetFactory;
 
     // make vanilla notebooks not the default
-    // (defaultNotebookFactory as any)._defaultFor = [];
+    (defaultNotebookFactory as any)._defaultFor = [];
 
 
     function clobberCheck(

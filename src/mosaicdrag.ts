@@ -118,6 +118,36 @@ export function mosaicDrop(self: Notebook, event: Drag.Event) {
 
 
 
+export function mosaicDragOver(self: Notebook, event: Drag.Event): void {
+  if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  event.dropAction = event.proposedAction;
+  const elements = self.node.getElementsByClassName(DROP_TARGET_CLASS);
+  if (elements.length) {
+    (elements[0] as HTMLElement).classList.remove(DROP_TARGET_CLASS);
+  }
+  const target = event.target as HTMLElement;
+  const index = (self as any)._findCell(target);
+  if (index === -1) {
+    return;
+  }
+  const widget = (self as any).cellsArray[index];
+  widget.node.classList.add(DROP_TARGET_CLASS);
+
+
+  /** < MODIFIED: MOSAIC > **/
+  const side = closestSide(event, target); 
+  widget.node.dataset.mosaicDropSide = side;
+  /** </ MODIFIED: MOSAIC > **/
+}
+
+
+
+
+
 /**
  * Calculate which side of the target element the mouse is closest to. [BY: CHATGPT]
  * @param e The drag event from @lumino/dragdrop

@@ -55,6 +55,7 @@ export class MosaicViewModel extends WindowedListModel {
                 const height = this.cellsEstimatedHeight.get(model.id); height;
             } catch {
                 console.warn('problem getting height');
+                console.log(index, this.tiles.keyOf(index), model, cell.isDisposed)
                 // console.log(id, cell.model, (this as any).cells, (this as any).cells)
             }
             const height = 39;
