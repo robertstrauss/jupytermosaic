@@ -6,18 +6,28 @@ import { Widget } from '@lumino/widgets';
 // import { IChangedArgs } from '@jupyterlab/coreutils';
 // import { ISignal } from '@lumino/signaling';
 // import { CodeCellModel } from '@jupyterlab/cells';
+import { Debouncer } from '@lumino/polling';
 
-import type {  Mosaic, orderedMap, Tile } from './MosaicGroup';
+import type { Mosaic, Tile } from './MosaicGroup';
 import { WindowedListModel } from '@jupyterlab/ui-components';
 // import { IObservableList } from '@jupyterlab/observables';
 
 // NotebookViewModel.prototype.itemsList
 
 export class MosaicViewModel extends WindowedListModel {
-    protected cellsEstimatedHeight = new Map<string, number>();
+    // protected cellsEstimatedHeight = new Map<string, number>();
+    protected tilesEstimatedSize = new Map<string, number>();
+    private _emitEstimatedSizeChanged = new Debouncer(() => {
+    this._stateChanged.emit({
+        name: 'estimatedWidgetSize',
+        newValue: null,
+        oldValue: null
+        });
+    });
+    // protected cells: Array<Tile>;
 
     constructor(
-        public tiles: orderedMap<string, Tile>,
+        public tiles: Array<Tile>,
         options?: WindowedList.IModelOptions
     ) {
         super(options);
@@ -31,14 +41,14 @@ export class MosaicViewModel extends WindowedListModel {
     }
 
     _widgetRenderer (index: number): Widget {
-        return (this.tiles.index(index) as Cell)
+        return (this.tiles[index] as Cell)
     }
     // widgetRenderer is defined as a property rather than a method on super, so must follow suit
     widgetRenderer: (index: number) => Widget = MosaicViewModel.prototype._widgetRenderer.bind(this);//(index: number) => MosaicViewModel._widgetRenderer(this, index); // work around for "Class 'WindowedListModel' defines instance member property 'widgetRenderer', but extended class 'MosaicViewModel' defines it as instance member function."
 
     estimateWidgetSize: (index: number) => number = MosaicViewModel.prototype._estimateWidgetSize.bind(this);
     _estimateWidgetSize (index: number): number {
-        const cell = this.tiles.index(index);
+        const cell = this.tiles[index];
         if (!cell) {
             // This should not happen, but if it does,
             // do not throw if cell was deleted in the meantime
@@ -51,16 +61,10 @@ export class MosaicViewModel extends WindowedListModel {
         if (cell instanceof Cell) {
             // original jupyterlab NotebookViewModel height estimation
             const model = cell.model;
-            try {
-                const height = this.cellsEstimatedHeight.get(model.id); height;
-            } catch {
-                console.warn('problem getting height');
-                console.log(index, this.tiles.keyOf(index), model, cell.isDisposed)
-                // console.log(id, cell.model, (this as any).cells, (this as any).cells)
-            }
-            const height = 39;
+            const height = this.tilesEstimatedSize.get(model.id);
+            // const height = 39;
             if (typeof height === 'number') {
-                // console.log('cell height', id, height);
+            //     // console.log('cell height', id, height);
                 return height;
             }
 
@@ -84,7 +88,7 @@ export class MosaicViewModel extends WindowedListModel {
         } else { // sub mosaic
             const tile = cell as Mosaic;
 
-            const height = this.cellsEstimatedHeight.get(tile.groupID);
+            const height = this.tilesEstimatedSize.get(tile.groupID);
             if (typeof height === 'number') {
                 return height;
             }
@@ -92,4 +96,30 @@ export class MosaicViewModel extends WindowedListModel {
             return tile.getEstimatedTotalSize();
         }
     }
+
+    // getRangeToRender(): WindowedList.WindowIndex | null {
+    //     const r2r = super.getRangeToRender();
+    //     console.log("R2R", r2r);
+
+    //     const wc = this.widgetCount;
+    //     console.log('artificial', wc-1);
+    //     return [0, wc-1, 0, wc-1]//r2r;
+    // }
+
+
+    setEstimatedWidgetSize(cellId: string, size: number | null): void {
+    if (size === null) {
+      if (this.tilesEstimatedSize.has(cellId)) {
+        this.tilesEstimatedSize.delete(cellId);
+      }
+    } else {
+      this.tilesEstimatedSize.set(cellId, size);
+      this._emitEstimatedSizeChanged.invoke().catch(error => {
+        console.error(
+          'Fail to trigger an update following a estimated height update.',
+          error
+        );
+      });
+    }
+  }
 }

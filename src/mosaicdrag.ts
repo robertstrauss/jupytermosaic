@@ -62,10 +62,10 @@ export function mosaicDrop(self: Notebook, event: Drag.Event) {
       const dropCell = self.widgets[toIndex];
       const mosaicpath = dropCell.model.metadata.mosaic as Array<string> || [];
       const group = ((self as any).rootMosaic as Mosaic).treeGet(mosaicpath) as Mosaic;
-      const dropIdx = group.indexOf(dropCell.model.id); // index within this sub list
+      const dropIdx = group.tiles.indexOf(dropCell); // index within this sub list
 
       const side = closestSide(event, target);
-      // console.log('SIDE', side);
+      console.log('SIDE', side);
       // console.log('target', target);
       let toMosaic: Array<string> = [];
       const collike = (side == 'bottom' || side == 'top');

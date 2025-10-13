@@ -4,7 +4,7 @@ import { Notebook, NotebookPanel,  } from '@jupyterlab/notebook';
 import { mosaicDrop, mosaicDragOver } from './mosaicdrag';
 // import { DocumentWidget } from '@jupyterlab/docregistry';
 
-import { MosaicViewModel } from './MosaicViewModel';
+// import { MosaicViewModel } from './MosaicViewModel';
 import { Mosaic } from './MosaicGroup';
 
 // export class MosaicNotebookPanel extends NotebookPanel {
@@ -56,34 +56,33 @@ export namespace MosaicNotebookPanel {
                 console.log('added initial cells');
             }
 
-
+            const mvm = (rootMosaic as any).viewModel;
             // patch viewmodel to render mosaics
             const vm = patchNB._viewModel;
-            vm.tiles = rootMosaic.tiles;
+            // vm.tiles = rootMosaic.tiles;
             // vm.tileOrder = rootMosaic.tileOrder;
-            Object.defineProperty(vm, 'widgetCount', {get: MosaicViewModel.prototype._getWidgetCount.bind(vm)});
-            vm.widgetRenderer = MosaicViewModel.prototype._widgetRenderer.bind(patchNB._viewModel);
-            vm.estimateWidgetSize = MosaicViewModel.prototype._estimateWidgetSize.bind(patchNB._viewModel);
+            Object.defineProperty(vm, 'widgetCount', {get: mvm._getWidgetCount.bind(mvm)});
+            vm.estimateWidgetSize = mvm._estimateWidgetSize.bind(mvm);
+            vm.widgetRenderer = mvm._widgetRenderer.bind(mvm);
             
             
             // const origInsert = patchNB._insertCell;
             // patchNB._insertCell = (i: number, cmodel: ICellModel) => { origInsert.call(patchNB, i, cmodel); const cell = patchNB.cellsArray[i];
             const origInsert = patchNB.onCellInserted;
-            patchNB.onCellInserted = (i:number, cell: any) => { const cmodel = cell.model;
+            patchNB.onCellInserted = (i:number, cell: any) => { //const cmodel = cell.model;
                 origInsert.call(patchNB, i, cell);
                 
-                // console.log(rootMosaic.tiles);
-                console.warn('ic', i, cmodel.id, cmodel.metadata.mosaic);
-                // const other = rootMosaic.treeGet([...cmodel.metadata.mosaic, cmodel.id]);
-                // console.log('same?', other == cell, other === cell);
+
+                console.log('ic', i, cell);
                 
                 // console.log(patchNB.cellsArray[i].isDisposed, patchNB.cellsArray[i].model.id)
 
                 rootMosaic.mosaicInsert(cell);
                 
-                console.log(patchNB.cellsArray.map((w:any) => w.dataset.windowedListIndex))
-                console.log(patchNB.layout.widgets.map((w:any) => w.dataset.windowedListIndex))
+                // console.log(patchNB.cellsArray.map((w:any) => w.dataset.windowedListIndex))
+                // console.log(patchNB.layout.widgets.map((w:any) => w.dataset.windowedListIndex))
 
+                console.log(rootMosaic.tiles);
                 // rootMosaic.forEachLeaf(([mosaic, id]:[Mosaic, string], i:number) => {
                 //     const cell = (mosaic.tiles.key(id) as any);
                 //     console.log(cell.node, cell.node?.dataset?.windowedListIndex, cell.model?.id);
@@ -111,6 +110,8 @@ export namespace MosaicNotebookPanel {
                 origRemove.call(patchNB, i, cell);
             //     // const cell = patchNB.cellsArray[i];
                 console.log('rc', i);// cell.model.id, cell.isDisposed);
+                // const [found, leafIx] = rootMosaic.getLeaf(i);
+
             //     // const [found, _] = rootMosaic.getLeaf(i);
             //     // if (found !== null) {
             //     //     found[0].spli

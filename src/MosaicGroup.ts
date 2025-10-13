@@ -14,97 +14,19 @@ type FlexDirection = 'row' | 'col';
 export type Tile = Cell | Mosaic;
 
 
-// need strict ordering for execution and compatability
-// but also more permanent addresses for known groups
-// since things are more complicated than splicing an array
-export class orderedMap<K, V> {
-    itemMap: Map<K, V>
-    itemOrder: Array<K>
-    constructor() {
-        this.itemMap = new Map<K,V>;
-        this.itemOrder = [];
-    }
-    public index(index: number) {
-        if (!this.itemOrder[index]) {
-            return undefined
-        }
-        return this.itemMap.get(this.itemOrder[index]);
-    }
-    public key(key: K) {
-        return this.itemMap.get(key);
-    }
-    public indexOf(key: K) {
-        return this.itemOrder.indexOf(key);
-    }
-    public keyOf(index: number) {
-        return this.itemOrder[index];
-    }
-    public spliceIndex(startIndex: number, deleteCount: number, keys: Array<K>, vals: Array<V>) {
-        // insert or delete
-        const deleted = this.itemOrder.splice(startIndex, deleteCount, ...keys);
-        // this.itemOrder = [... new Set(this.itemOrder)]; // de-duplicate
-        if (deleted.length > 0) {
-            for (let key of deleted) {
-                this.itemMap.delete(key);
-            }
-        }
-        for (const i in keys) {
-            const key = keys[i];
-            const val = vals[i];
-            this.itemMap.set(key, val);
-        }
-    }
-    get length() {
-        return this.itemOrder.length;
-    }
-    get keys() {
-        return this.itemOrder;
-    }
-    get values() {
-        // not just Object.values, needs to be sorted by order
-        return this.itemOrder.map(k => this.itemMap.get(k) as V);
-    }
-    [Symbol.iterator]() {
-        let ix = 0;
-        let key = this.itemOrder[ix];
-        const that = this;
-        return {
-            next() {
-                key = that.itemOrder[ix];
-                ix += 1;
-                if (key !== undefined) {
-                    return { done: false, value: key as K }
-                } else {
-                    return { done: true }
-                }
-            }
-        }
-    }
-}
-
 export class Mosaic extends WindowedList<MosaicViewModel> { //
     static defaultConfig = {
         overscanCount: 3
     }
-    // resuse notebook's context for rendering rather than instantiating our own
-    // protected getProperty(prop: string | symbol) {
-    //     const val = (this.notebook as any)[prop];
-    //     if (typeof val === 'function') {
-    //         return val.bind(this); // use the notebook's method as if it belonged to this
-    //     }
-    //     return val;
-    // }
     
-    public tiles: orderedMap<string, Tile>;
-    // public tileOrder: Array<string>;
+    public tiles: Array<Tile>;
+    public mosaics: Map<string, Mosaic>;
     public notebook;
     public direction;
     private _placeholder;
     private _ready = new PromiseDelegate<void>();
     constructor(protected superMosaic: Mosaic, public groupID: string, protected options: Mosaic.IOptions) {
-        // const tiles = {};
-        // const tileOrder: Array<string> = [];
-        const tiles = new orderedMap<string, Tile>();
+        const tiles: Array<Tile> = [];
         super({
             model: new MosaicViewModel(tiles, {
                 overscanCount: options.notebookConfig?.overscanCount  ??
@@ -117,14 +39,11 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         });
         this.notebook = options.notebook;
         this.tiles = tiles;
-        // this.tileOrder = tileOrder;
+        this.mosaics = new Map<string, Mosaic>();
         this.direction = options.direction;
-
-        // this.direction = this.parent.direction == 'row' ? 'col' : 'row' // invert direction of parent
         this._placeholder = true;
 
         this.addClass('mosaicgroup-outer');
-        this.viewportNode.classList.add('mosaicgroup-inner', 'mosaic'+this.direction);
 
         // return new Proxy(this, { // a Proxy mimicing a StaticNotebook, forwarding to the real notebook given
         //     get: (target, prop, receiver) => {
@@ -142,14 +61,15 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
 
     treeGet(path: Array<string>, depth: number = 0): Tile {
         if (depth < path.length) {
-            return (this.tiles.key(path[depth]) as Mosaic).treeGet(path, depth+1);
+            return (this.mosaics.get(path[depth]) as Mosaic).treeGet(path, depth+1);
         }
         return this; // i am at a depth == path length, I am the result
     }
 
-    treeGetExisting(path: Array<string>, depth: number = 0): Tile {
+    treeGetExisting(path: Array<string>, depth: number = 0): Mosaic {
+        // get up to the deepest existing branch for the given path
         if (depth < path.length) {
-            const nextBranch = (this.tiles.key(path[depth]));
+            const nextBranch = (this.mosaics.get(path[depth]));
             if (nextBranch !== undefined) {
                 return (nextBranch as Mosaic).treeGetExisting(path, depth+1);
             } else {
@@ -162,15 +82,13 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
 
     addTile(groupID: string = '', index: number = -1): Mosaic {
         if (groupID == '') groupID = Mosaic.newUGID();
-        const newMosaic = new Mosaic(this, groupID, {...this.options,
-                    direction: this.direction == 'row' ? 'col' : 'row', // invert direction of parent 
-                });
-        this.splice(index, 0, {[groupID]: newMosaic})
+        const newMosaic = new Mosaic(this, groupID, this.options);
+        this.splice(index, 0, newMosaic);
         return newMosaic;
     }
     growBranch(path: Array<string>, depth: number = 0, branchsIxs: Array<number> = []): Mosaic {
         if (depth < path.length) {
-            let nextBranch = (this.tiles.key(path[depth]));
+            let nextBranch = (this.mosaics.get(path[depth]));
             if (nextBranch == undefined) {
                 nextBranch = this.addTile(path[depth], (branchsIxs[depth] || -1));
             }
@@ -182,120 +100,97 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     mosaicInsert(cell: Cell, branchIxs: Array<number> = []) {
         const path = cell.model.metadata.mosaic as Array<string> || [];
         const stem = this.growBranch(path, 0, branchIxs);
-        const insert: {[key:string]: Tile} = {};
-        insert[cell.model.id] = cell;
-        stem.splice(branchIxs[path.length] || -1, 0, insert);
+        stem.splice(branchIxs[path.length] || -1, 0, cell);
     }
 
-    indexOf(id: string) {
-        return this.tiles.indexOf(id);
-    }
-    splice(startIndex: number, replaceCount: number, tiles: {[key:string]: Tile} = {}) {
-        this.tiles.spliceIndex(startIndex, replaceCount, Object.keys(tiles), Object.values(tiles));
-        for (const [key, tile] of Object.entries(tiles)) {
-            if (tile instanceof Cell) { key;
-                // tile.disposed.connect(() => {
-                //     console.log('auto splice', key, this.indexOf(key));
-                //     this.splice(this.indexOf(key), 1);
-                //     console.log('still there?', this.indexOf(key));
-                // });
+    splice(startIndex: number, replaceCount: number, ...tiles: Array<Tile>) {
+        const deleted = this.tiles.splice(startIndex, replaceCount, ...tiles);
+        for (const deletetile of deleted) {
+            if (deletetile instanceof Mosaic) {
+                this.mosaics.delete(deletetile.groupID);
+            }
+        }
+        for (const tile of tiles) {
+            if (tile instanceof Cell) { // add disposal listener to cell to remove from tiles
+                tile.disposed.connect(() => {
+                    this.tiles.splice(this.tiles.indexOf(tile), 1);
+                });
+            } else if (tile instanceof Mosaic) {
+                this.mosaics.set(tile.groupID, tile); // add mosaic to map for easy tree traversal
             }
         }
 
+        // console.log('rep count', replaceCount, 'l', this.tiles.length);
         // unwrap if only holding one or no tiles
         if (replaceCount > 0 && this.tiles.length < 2) {
-            // const subtile = this.tiles.index(0);
-            // if (subtile && subtile instanceof Mosaic) {
-            //     subtile.unwrap(); // remove double-wrap (to preserve flex direction)
-            // }
-            // this.unwrap();
+            const subtile = this.tiles[0];
+            if (subtile && subtile instanceof Mosaic) {
+                subtile.unwrap(); // remove double-wrap (to preserve flex direction)
+            }
+            this.unwrap();
         }
+
+        this.update(); // trigger attaching of new group in DOM
     }
-    spliceCells(startIndex: number, replaceCount: number, ...cells: Array<Cell>) {
-        const withIds: {[key:string]: Cell} = {};
-        for (const cell of cells) {
-            withIds[cell.model.id] = cell;
-        }
-        this.splice(startIndex, replaceCount, withIds);
-    }
+
 
     unwrap() {
-        const idx = this.superMosaic.indexOf(this.groupID);
-        this.superMosaic.splice(idx, 1); // remove this group from parent
+        const idx = this.superMosaic.tiles.indexOf(this);
+        this.superMosaic.tiles.splice(idx, 1); // remove this group from parent
 
         if (this.tiles.length > 0) { // insert my contents (if any) where I was
-            this.superMosaic.tiles.spliceIndex(idx, 0, this.tiles.keys, this.tiles.values);
+            this.superMosaic.tiles.splice(idx, 0, ...this.tiles);
         }
+
         // update metadata of contained cells
-        this.forEachLeaf(([mosaic, id]: [Mosaic, string], leafIx:number) => {
-            const cell = mosaic.tiles.key(id) as Cell;
-            const prepath = cell.model.getMetadata('mosaic');
-            const newpath = prepath.splice(prepath.indexOf(this.groupID), 1);
-            cell.model.setMetadata('mosaic', newpath);
-        });
+        const removeGID = this.groupID;
+        const recurseUpdate = (tile: Tile) => {
+            if (tile instanceof Cell) {
+                // remove my group ID from cells mosaic tree path
+                const prepath = tile.model.getMetadata('mosaic');
+                const newpath = prepath.splice(prepath.indexOf(removeGID), 1);
+                tile.model.setMetadata('mosaic', newpath);
+            } else {
+                tile.tiles.map(t => recurseUpdate(t));
+            }
+        }
+        recurseUpdate(this);
     }
 
-    getLeaf(leafIx: number): [[Mosaic, string] | null, number] {
+    getLeaf(leafIx: number): [[Mosaic, Cell] | null, number] {
         // linearly walk through leafs (Cells) according to each sub groups order until the desired leafindex is reached
-        // returns: last parent mosaic and id of leaf in parent or null if not found, and number of leafs checked (== leafIx, or total number of leaves if not found)
+        // returns: last parent mosaic and id of leaf in parent or null if not found, and index of leaf in parent, (or total number of leaves if not found)
         let i = 0;
-        for (const id of this.tiles) {
-            if (!id) break;
-            if (this.tiles.key(id) instanceof Cell) {
+        for (const tile of this.tiles) {
+            if (tile instanceof Cell) {
                 if (i == leafIx) {
-                    return [[this, id], i]; // found desired leaf
+                    return [[this, tile], i]; // found desired leaf
                 }
                 i += 1; // count leaf
-            } else {
-                const [groupAndId, nLeafs] = (this.tiles.key(id) as Mosaic).getLeaf(leafIx-i);
+            } else { // branch
+                const [stemAndLeaf, leafNum] = tile.getLeaf(leafIx-i);
 
-                if (groupAndId !== null) {
-                    return [groupAndId!, i];
+                if (stemAndLeaf !== null) {
+                    return [stemAndLeaf, leafNum];
                 }
-                i += nLeafs!; // count all leaves from this branch
+                i += leafNum!; // count all leaves from this branch
             }
         }
         return [null, i]; // nLeafs > number of leaves I have
     }
-    forEachLeaf(f: Function): number {
-        let i = 0;
-        for (const id of this.tiles) {
-            if (!id) break;
-            if (this.tiles.key(id) instanceof Cell) {
-                f([this, id], i);
-                // i += 1; // count leaf
-            } else {
-                const nLeafs = (this.tiles.key(id) as Mosaic).forEachLeaf(f);
-                i += nLeafs!; // count all leaves from this branch
-            }
-        }
-        return i; // return number of leafs iterated, to track count 
-
-        // return [null, i]; // nLeafs > number of leaves I have
-        // let i = 0;
-        // let [found, leafIx] = this.getLeaf(i);
-        // while (found !== null) {
-        //     f(found, leafIx);
-        //     [found, leafIx] = this.getLeaf(++i);
-        // }
-    }
+    
 
     getEstimatedTotalSize() {
         return this.viewModel.getEstimatedTotalSize();
     }
     
-    protected onBeforeAttach(msg: Message): void {
-        super.onBeforeAttach(msg);
-        this.viewportNode.classList.add('mosaic'+this.direction);
-    }
-
 
 
 
     /* based on @jupyterlab/cells/Cell */
-    get dataset() {
-        return this.node.dataset;
-    }
+    // get dataset() {
+    //     return this.node.dataset;
+    // }
 
     isPlaceholder(): boolean {
         return this.placeholder;
@@ -332,6 +227,10 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     protected onAfterAttach(msg: Message): void {
         this.update(); // will attach inner cells according to viewModel widgetRenderer
         super.onAfterAttach(msg);
+
+        this.direction = (this.parent as Mosaic).direction == 'row' ? 'col' : 'row', // invert direction of parent 
+
+        this.viewportNode.classList.add('mosaicgroup-inner', 'mosaic'+this.direction);
     }
 }
 
