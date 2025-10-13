@@ -1,6 +1,6 @@
 import { Notebook, NotebookPanel,  } from '@jupyterlab/notebook';
 // import { DocumentRegistry } from '@jupyterlab/docregistry';
-import { ICellModel } from '@jupyterlab/cells';
+// import { ICellModel } from '@jupyterlab/cells';
 import { mosaicDrop, mosaicDragOver } from './mosaicdrag';
 // import { DocumentWidget } from '@jupyterlab/docregistry';
 
@@ -21,21 +21,33 @@ export namespace MosaicNotebookPanel {
             const patchNB = (super.createNotebook(options)) as any;
             
 
-            const rootMosaic = new Mosaic({path:[]} as any, 'root', {
+            const rootMosaic = new Mosaic({path:[], splice: ()=>{}, indexOf: ()=>{}, tiles: []} as any, 'root', {
                 ...options,
                 direction: 'col',
                 notebook: patchNB,
             });
 
+            /*
             patchNB.cellsArray = new Proxy([] as Array<any>, {
                 set(target, p, newValue, receiver) {
-                    console.warn('Fuck you.', target, p, newValue, receiver);
+                    // console.warn('Fuck you.', target, p, newValue, receiver);
                     // for (let i = 0; i < patchNB.viewModel.widgetCount; i++) {
 
                     // }
-                    return Reflect.set(target, p, newValue, receiver);
+                    if (p == 'length') {
+                        console.log('current length', Reflect.get(target, p), 'new set', newValue);
+                        return Reflect.set(target, p, newValue, receiver);
+                    }
+                    return Reflect.set(target, p, new Proxy(newValue, {
+                        set(target, p, newValue, receiver) {
+                            if (p == 'model' || p == '_model') {
+                                console.error('WHO TOLD YOU TO TAKE MY MODEL??', p, newValue);
+                            }
+                            return Reflect.set(target, p, newValue, receiver);
+                        },
+                    }), receiver);
                 },
-            })
+            })*/
 
             if (patchNB.model && patchNB.model.cells) {
                 for (const cell of patchNB.model.cells) {
@@ -54,16 +66,28 @@ export namespace MosaicNotebookPanel {
             vm.estimateWidgetSize = MosaicViewModel.prototype._estimateWidgetSize.bind(patchNB._viewModel);
             
             
-            const origInsert = patchNB._insertCell;
-            patchNB._insertCell = (i: number, cmodel: ICellModel) => {
+            // const origInsert = patchNB._insertCell;
+            // patchNB._insertCell = (i: number, cmodel: ICellModel) => { origInsert.call(patchNB, i, cmodel); const cell = patchNB.cellsArray[i];
+            const origInsert = patchNB.onCellInserted;
+            patchNB.onCellInserted = (i:number, cell: any) => { const cmodel = cell.model;
+                origInsert.call(patchNB, i, cell);
                 
                 // console.log(rootMosaic.tiles);
-                console.log('ic', i, cmodel.id, cmodel.metadata.mosaic);
+                console.warn('ic', i, cmodel.id, cmodel.metadata.mosaic);
+                // const other = rootMosaic.treeGet([...cmodel.metadata.mosaic, cmodel.id]);
+                // console.log('same?', other == cell, other === cell);
                 
-                origInsert.call(patchNB, i, cmodel);
-                const cell = patchNB.cellsArray[i];
+                // console.log(patchNB.cellsArray[i].isDisposed, patchNB.cellsArray[i].model.id)
 
                 rootMosaic.mosaicInsert(cell);
+                
+                console.log(patchNB.cellsArray.map((w:any) => w.dataset.windowedListIndex))
+                console.log(patchNB.layout.widgets.map((w:any) => w.dataset.windowedListIndex))
+
+                // rootMosaic.forEachLeaf(([mosaic, id]:[Mosaic, string], i:number) => {
+                //     const cell = (mosaic.tiles.key(id) as any);
+                //     console.log(cell.node, cell.node?.dataset?.windowedListIndex, cell.model?.id);
+                // })
                 // console.log(rootMosaic.tiles);
                 // for (let i = 0; i < vm.widgetCount; i++) {
                 //     const widg = vm.widgetRenderer(i)
@@ -72,6 +96,25 @@ export namespace MosaicNotebookPanel {
                 //         console.log('cells:', Object.values(widg.tiles).map(c=>(c as any).model?.id));
                 //     }
                 // }
+            }
+
+            // const origIB = patchNB.viewportNode.insertBefore;
+            // patchNB.viewportNode.insertBefore = (node1: HTMLElement, node2: HTMLElement) => {
+            //     console.log('IB', node1.dataset.windowedListIndex, node2.dataset.windowedListIndex);
+            //     origIB.call(patchNB.viewportNode, node1, node2);
+            // }
+
+            // const origRemove = patchNB._removeCell;
+            // patchNB._removeCell = (i: number) => { origRemove.call(patchNB, i);
+            const origRemove = patchNB.onCellRemoved;
+            patchNB.onCellRemoved = (i: number, cell: any) => {
+                origRemove.call(patchNB, i, cell);
+            //     // const cell = patchNB.cellsArray[i];
+                console.log('rc', i);// cell.model.id, cell.isDisposed);
+            //     // const [found, _] = rootMosaic.getLeaf(i);
+            //     // if (found !== null) {
+            //     //     found[0].spli
+            //     // }
             }
 
             patchNB.rootMosaic = rootMosaic;

@@ -31,7 +31,7 @@ export class MosaicViewModel extends WindowedListModel {
     }
 
     _widgetRenderer (index: number): Widget {
-        return (this.tiles.index(index) as Cell) || console.error('IM FUCKING STUPD!!!!!!! DUH DUHM CODE', this.tiles.index(index))
+        return (this.tiles.index(index) as Cell)
     }
     // widgetRenderer is defined as a property rather than a method on super, so must follow suit
     widgetRenderer: (index: number) => Widget = MosaicViewModel.prototype._widgetRenderer.bind(this);//(index: number) => MosaicViewModel._widgetRenderer(this, index); // work around for "Class 'WindowedListModel' defines instance member property 'widgetRenderer', but extended class 'MosaicViewModel' defines it as instance member function."

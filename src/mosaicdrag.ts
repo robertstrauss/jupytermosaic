@@ -84,6 +84,7 @@ export function mosaicDrop(self: Notebook, event: Drag.Event) {
 
       for (const movecell of [...toMove, dropCell]) {
         movecell.model.setMetadata('mosaic', toMosaic);
+        console.log('set mosaic MD of ', movecell.model.id, movecell.model.getMetadata('mosaic'));
       }
 
       self.moveCell(toIndex, fromIndex);
