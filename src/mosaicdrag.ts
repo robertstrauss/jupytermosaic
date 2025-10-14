@@ -4,13 +4,14 @@ import { Drag } from '@lumino/dragdrop'
 import { Cell, MarkdownCell } from '@jupyterlab/cells'
 import { ArrayExt, findIndex } from '@lumino/algorithm'
 import { Mosaic } from './MosaicGroup';
+import { MosaicNotebook } from './MosaicNotebookPanel';
 
 // import { MosaicNotebookViewModel } from './MosaicViewModel';
 const DROP_TARGET_CLASS = 'jp-mod-dropTarget';
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
-export function mosaicDrop(self: Notebook, event: Drag.Event) {
+export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
     if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
       return;
     }
@@ -54,29 +55,32 @@ export function mosaicDrop(self: Notebook, event: Drag.Event) {
       }
 
       // Compute the to/from indices for the move.
+      console.log('tm', toMove[0].dataset.windowedListIndex, toMove[0].model.id, (toMove[0] as any).prompt);
+      console.log('w, ca', self.widgets.map(w=>(w as any).prompt), (self as any).cellsArray.map((w:any)=>w.prompt));
       let fromIndex = ArrayExt.firstIndexOf(self.widgets, toMove[0]);
+      console.log('fi', fromIndex);
       let toIndex = (self as any)._findCell(target);
 
 
       /** < MODIFIED: MOSAIC > **/
       const dropCell = self.widgets[toIndex];
       const mosaicpath = dropCell.model.metadata.mosaic as Array<string> || [];
-      const group = ((self as any).rootMosaic as Mosaic).treeGet(mosaicpath) as Mosaic;
+      const group = self.treeGet(mosaicpath) as Mosaic;
       const dropIdx = group.tiles.indexOf(dropCell); // index within this sub list
 
-      const side = closestSide(event, target);
-      console.log('SIDE', side);
-      // console.log('target', target);
-      let toMosaic: Array<string> = [];
+      const side = dropCell.node.dataset.mosaicDropSide || closestSide(event, target);
       const collike = (side == 'bottom' || side == 'top');
       const rowlike = (side == 'left' || side == 'right');
       // const beforelike = side == 'top' || side == 'left';
       const afterlike = side == 'bottom' || side == 'right';
+
+      let toMosaic: Array<string> = [];
       if ( (group.direction == 'row' && collike)
         || (group.direction == 'col' && rowlike)) {
             const newGroup = group.addTile('', dropIdx);
             toMosaic = [...mosaicpath, newGroup.groupID];
             console.log('ADDED SUB ', group);
+
       } else if ( (group.direction == 'row' && rowlike)
                || (group.direction == 'col' && collike)) {
             toMosaic = mosaicpath;
@@ -84,19 +88,18 @@ export function mosaicDrop(self: Notebook, event: Drag.Event) {
 
       for (const movecell of [...toMove, dropCell]) {
         movecell.model.setMetadata('mosaic', toMosaic);
-        console.log('set mosaic MD of ', movecell.model.id, movecell.model.getMetadata('mosaic'));
+        console.log('SET MOSAIC MD', movecell.model.getMetadata('mosaic'));
       }
 
-      self.moveCell(toIndex, fromIndex);
-      self.moveCell(fromIndex, toIndex);
-      // self.model!.sharedModel.moveCells(toIndex, toIndex); // prompt dropped on to move as well (to joing the group)
-      // (self as any)._insertCell(toIndex, dropCell);
+      (self as any).onCellInserted(toIndex, dropCell); // trigger repositioning of destination cell, as it may be joining a new group
 
+      console.log('afer?', afterlike);
       if (afterlike) {
         toIndex += 1 // cell should be moved after, not before
       }
 
       /** </ MODIFIED: MOSAIC > **/
+      console.log('tofro', toIndex, fromIndex);
 
       // self check is needed for consistency with the view.
       if (toIndex !== -1 && toIndex > fromIndex) {
@@ -109,11 +112,14 @@ export function mosaicDrop(self: Notebook, event: Drag.Event) {
       }
       // Don't move if we are within the block of selected cells.
       if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
+        console.log('within');
         return;
       }
 
       // Move the cells one by one
+      console.log('moving...');
       self.moveCell(fromIndex, toIndex, toMove.length);
+      console.log('moved.');
     }
 }
 

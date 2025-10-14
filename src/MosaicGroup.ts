@@ -9,7 +9,7 @@ import { PromiseDelegate } from '@lumino/coreutils';
 import { Cell } from '@jupyterlab/cells'
 // import { ArrayExt } from '@lumino/algorithm';
 
-type FlexDirection = 'row' | 'col';
+export type FlexDirection = 'row' | 'col';
 
 export type Tile = Cell | Mosaic;
 
@@ -28,7 +28,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     constructor(protected superMosaic: Mosaic, public groupID: string, protected options: Mosaic.IOptions) {
         const tiles: Array<Tile> = [];
         super({
-            model: new MosaicViewModel(tiles, {
+            model: new MosaicViewModel(tiles, options.direction, {
                 overscanCount: options.notebookConfig?.overscanCount  ??
                     Mosaic.defaultConfig.overscanCount,
                 windowingActive: true
@@ -45,15 +45,21 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
 
         this.addClass('mosaicgroup-outer');
 
-        // return new Proxy(this, { // a Proxy mimicing a StaticNotebook, forwarding to the real notebook given
-        //     get: (target, prop, receiver) => {
-        //         if (prop in target) { // if this defines its own version, use that
-        //             return Reflect.get(target, prop, receiver);
-        //         }
-        //         return this.getProperty(prop); // otherwise, refer to the notebook.
-        //     }
-        // });
+        const origDetach = (this.layout as any).detachWidget;
+        (this.layout as any).detachWidget = (index:number, widget:Tile) => {
+            console.warn('detaching', index, widget, (widget as Cell).model?.id);
+            origDetach.call(this.layout, index, widget);
+        }
+
+        // patch the item resize method to use width not height when in row mode
+        (this as any)._onItemResize = this.onItemResize;
     }
+
+    // set parent(val: Mosaic) {
+    //     console.warn('tryna set my parent?');
+    //     (this as any)._parent = parent;
+        
+    // }
 
     get path(): Array<string> {
         return [...this.superMosaic.path, this.groupID];
@@ -98,21 +104,37 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     }
 
     mosaicInsert(cell: Cell, branchIxs: Array<number> = []) {
+        if (cell.parent) {
+            (cell.parent as Mosaic).splice((cell.parent as Mosaic).tiles.indexOf(cell), 1);
+        }
         const path = cell.model.metadata.mosaic as Array<string> || [];
         const stem = this.growBranch(path, 0, branchIxs);
+        console.log('splicing to', stem);
         stem.splice(branchIxs[path.length] || -1, 0, cell);
+        console.log('stem tiles and WR', stem.tiles, stem.viewModel.widgetRenderer(0));
     }
 
     splice(startIndex: number, replaceCount: number, ...tiles: Array<Tile>) {
+        // for (let i = 0; i < tiles.length; i++) {
+            // console.log()
+            // this.layout.insertWidget(startIndex+i, tiles[i]);
+            // this.layout.attachWidget(startIndex+i, tiles[i]);
+        // }
         const deleted = this.tiles.splice(startIndex, replaceCount, ...tiles);
         for (const deletetile of deleted) {
+            // this.layout.removeWidget(deletetile);
             if (deletetile instanceof Mosaic) {
                 this.mosaics.delete(deletetile.groupID);
             }
         }
         for (const tile of tiles) {
+            const oldparent = tile.parent;
+            tile.parent = this;
+            oldparent?.update();
+            tile.update();
             if (tile instanceof Cell) { // add disposal listener to cell to remove from tiles
                 tile.disposed.connect(() => {
+                    console.log('auto splice', tile, this.tiles.indexOf(tile));
                     this.tiles.splice(this.tiles.indexOf(tile), 1);
                 });
             } else if (tile instanceof Mosaic) {
@@ -129,7 +151,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
             }
             this.unwrap();
         }
-
+        
         this.update(); // trigger attaching of new group in DOM
     }
 
@@ -180,10 +202,17 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     }
     
 
-    getEstimatedTotalSize() {
-        return this.viewModel.getEstimatedTotalSize();
+    getEstimatedTotalHeight(): number {
+        return this.viewModel.getEstimatedTotalHeight();
+    }
+    getEstimatedTotalWidth(): number {
+        return this.viewModel.getEstimatedTotalWidth();
     }
     
+
+
+
+
 
 
 
@@ -224,15 +253,81 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         return this._ready.promise;
     }
 
-    protected onAfterAttach(msg: Message): void {
+    public onAfterAttach(msg: Message): void {
         this.update(); // will attach inner cells according to viewModel widgetRenderer
         super.onAfterAttach(msg);
 
-        this.direction = (this.parent as Mosaic).direction == 'row' ? 'col' : 'row', // invert direction of parent 
+        this.direction = (this.parent as Mosaic).direction == 'col' ? 'row' : 'col', // invert direction of parent 
+        this.viewModel.direction = this.direction;
 
         this.viewportNode.classList.add('mosaicgroup-inner', 'mosaic'+this.direction);
     }
+
+    protected onBeforeDetach(msg: Message): void {
+        console.warn('AAAAA someones trying to kill me!!!', this, msg);
+        super.onBeforeDetach(msg);
+    }
+
+
+    protected onScroll(event: Event): void {
+        super.onScroll(event);
+        if (this.direction == 'row') {
+            const { clientWidth, scrollWidth, scrollLeft } = event.currentTarget as HTMLDivElement;
+
+            if (
+                Math.abs(this.viewModel.scrollOffset - scrollLeft) > 1
+            ) {
+                const scrollOffset = Math.max(
+                    0,
+                    Math.min(scrollLeft, scrollWidth - clientWidth)
+                );
+                this.viewModel.scrollOffset = scrollOffset;
+
+                if (this.viewModel.windowingActive) {
+                    this.update();
+                }
+            }
+        }
+    }
+
+    private onItemResize(entries: ResizeObserverEntry[]) {
+        (this as any)._resetScrollToItem();
+
+        if (this.isHidden || this.isParentHidden) {
+            return;
+        }
+
+        const newSizes: { index: number; size: number }[] = [];
+        for (let entry of entries) {
+        // Update size only if item is attached to the DOM
+        if (entry.target.isConnected) {
+            // Rely on the data attribute as some nodes may be hidden instead of detach
+            // to preserve state.
+            newSizes.push({
+            index: parseInt(
+                (entry.target as HTMLElement).dataset.windowedListIndex!,
+                10
+            ),
+            /** MOSAIC EDITED **/
+            size: (this.direction == 'row' ? 
+                entry.borderBoxSize[0].inlineSize : 
+                entry.borderBoxSize[0].blockSize
+            )
+            /** </ MOSAIC EDITED > **/
+            });
+        }
+        }
+
+        // If some sizes changed
+        if (this.viewModel.setWidgetSize(newSizes)) {
+            (this as any)._scrollBackToItemOnResize();
+            // Update the list
+            this.update();
+        }
+    }
+
 }
+
 
 export namespace Mosaic {
     export function newUGID() {

@@ -1,12 +1,16 @@
-import { Notebook, NotebookPanel,  } from '@jupyterlab/notebook';
+import { Notebook, NotebookPanel, NotebookWindowedLayout  } from '@jupyterlab/notebook';
 // import { DocumentRegistry } from '@jupyterlab/docregistry';
 // import { ICellModel } from '@jupyterlab/cells';
 import { mosaicDrop, mosaicDragOver } from './mosaicdrag';
 // import { DocumentWidget } from '@jupyterlab/docregistry';
 
 // import { MosaicViewModel } from './MosaicViewModel';
-import { Mosaic } from './MosaicGroup';
-
+import { FlexDirection, Mosaic, Tile } from './MosaicGroup';
+// import { DocumentRegistry } from '@jupyterlab/docregistry';
+import { MosaicViewModel } from './MosaicViewModel';
+import { Cell } from '@jupyterlab/cells';
+import { Widget } from '@lumino/widgets';
+// import { Message } from '@lumino/messaging';
 // export class MosaicNotebookPanel extends NotebookPanel {
 //   constructor(options: DocumentWidget.IOptions<Notebook, INotebookModel>) {
 //     super(options);
@@ -15,9 +19,19 @@ import { Mosaic } from './MosaicGroup';
 //   }
 // }
 
+// export class MosaicNotebookWidgetFactory extends NotebookWidgetFactory {
+//     protected createNewWidget(context: DocumentRegistry.IContext<INotebookModel>, source?: NotebookPanel): MosaicNotebookPanel {
+//         super.createNewWidget(context, source);
+//     }
+// }
+
+
 export namespace MosaicNotebookPanel {
     export class ContentFactory extends NotebookPanel.ContentFactory {
         createNotebook(options: Notebook.IOptions) {
+            const mosaic = new MosaicNotebook(options);
+            return mosaic;
+            /*
             const patchNB = (super.createNotebook(options)) as any;
             
 
@@ -26,28 +40,6 @@ export namespace MosaicNotebookPanel {
                 direction: 'col',
                 notebook: patchNB,
             });
-
-            /*
-            patchNB.cellsArray = new Proxy([] as Array<any>, {
-                set(target, p, newValue, receiver) {
-                    // console.warn('Fuck you.', target, p, newValue, receiver);
-                    // for (let i = 0; i < patchNB.viewModel.widgetCount; i++) {
-
-                    // }
-                    if (p == 'length') {
-                        console.log('current length', Reflect.get(target, p), 'new set', newValue);
-                        return Reflect.set(target, p, newValue, receiver);
-                    }
-                    return Reflect.set(target, p, new Proxy(newValue, {
-                        set(target, p, newValue, receiver) {
-                            if (p == 'model' || p == '_model') {
-                                console.error('WHO TOLD YOU TO TAKE MY MODEL??', p, newValue);
-                            }
-                            return Reflect.set(target, p, newValue, receiver);
-                        },
-                    }), receiver);
-                },
-            })*/
 
             if (patchNB.model && patchNB.model.cells) {
                 for (const cell of patchNB.model.cells) {
@@ -64,6 +56,10 @@ export namespace MosaicNotebookPanel {
             Object.defineProperty(vm, 'widgetCount', {get: mvm._getWidgetCount.bind(mvm)});
             vm.estimateWidgetSize = mvm._estimateWidgetSize.bind(mvm);
             vm.widgetRenderer = mvm._widgetRenderer.bind(mvm);
+
+            // patchNB._layout = rootMosaic.layout;
+            rootMosaic.parent = patchNB;
+            // patchNB.layout.attachWidget(0, rootMosaic);
             
             
             // const origInsert = patchNB._insertCell;
@@ -123,16 +119,92 @@ export namespace MosaicNotebookPanel {
             patchNB._evtDragOver = (e:any) => mosaicDragOver(patchNB, e);
 
 
-            return patchNB;
+            return patchNB;*/
         }
     }
 }
 
 
+// export class MosaicLayout extends NotebookWindowedLayout {
+//     protected mosaics: Map<string, Mosaic> = new Map<string, Mosaic>();
+//     insertWidget(index: number, widget: Cell): void {
+//         const path = widget.model.getMetadata('mosaic');
+//         if (path) {
+            
+//         }
+//     }
+// }
+
+
+
+export class MosaicNotebook extends Notebook {
+    // protected rootMosaic: Mosaic;
+
+    protected tiles: Array<Tile>;
+    protected mosaics: Map<string, Mosaic>;
+    protected options: Mosaic.IOptions;
+    public direction: FlexDirection = 'col';
+
+    constructor(options: Notebook.IOptions) {
+        super(options);
+        this.tiles = [];
+        this.mosaics = new Map<string, Mosaic>();
+        this.options = {...options, direction: 'col', notebook: this};
+
+        // (this as any)._layout = new MosaicLayout();
+
+        const mvm = new MosaicViewModel(this.tiles, 'col', {
+                overscanCount: options.notebookConfig?.overscanCount  ??
+                    Mosaic.defaultConfig.overscanCount,
+                windowingActive: true
+            });
+        Object.defineProperty(this.viewModel, 'widgetCount', {get: mvm._getWidgetCount.bind(mvm)});
+        this.viewModel.estimateWidgetSize = mvm._estimateWidgetSize.bind(mvm);
+        this.viewModel.widgetRenderer = mvm._widgetRenderer.bind(mvm);
+
+        (this as any)._evtDrop = (e:any) => mosaicDrop(this, e);
+        (this as any)._evtDragOver = (e:any) => mosaicDragOver(this, e);
+
+        // const origDetach = (this.layout as any).detachWidget;
+        // (this.layout as any).detachWidget = (index:number, widget:Tile) => {
+        //     console.warn('detaching', index, widget, (widget as Cell).model?.id);
+        //     origDetach.call(this.layout, index, widget);
+        // }
+
+        // this.layout.insertWidget = (index: number, widget: Tile) => {
+        //     console.log('layout IW', index, widget)
+        // }
+    }
+
+    addTile = Mosaic.prototype.addTile.bind(this);
+    mosaicInsert = Mosaic.prototype.mosaicInsert.bind(this);
+    growBranch = Mosaic.prototype.growBranch.bind(this);
+    splice = Mosaic.prototype.splice.bind(this);
+    treeGet = Mosaic.prototype.treeGet.bind(this);
+    unwrap = ()=>{};
+
+    protected onCellInserted(index: number, cell: Cell): void {
+        super.onCellInserted(index, cell);
+        console.log('ic', index, cell.model.id, cell, cell.model.metadata.mosaic);
+        console.log('orig par', cell.parent);
+        console.log('mosaic', cell.model.getMetadata('mosaic'))
+        this.mosaicInsert(cell);
+        console.log('new par', cell.parent);
+    }
+    protected onCellRemoved(index: number, cell: Cell): void {
+        super.onCellRemoved(index, cell);
+        console.log('rc', cell, cell.model);
+        const path = cell.model.metadata.mosiac as Array<string> || [];
+        const group = this.treeGet(path) as Mosaic;
+        const idx = group.tiles.indexOf(cell);
+        group.splice(idx, 1);
+    }
+}
+
 
 // export class MosaicStaticNotebook extends WindowedList<MosaicNotebookViewModel> {
 //   constructor(options: StaticNotebook.IOptions) {
-//     // Inject your own view model here
+//     // Inject view model here
 //     const viewModel = new MosaicViewModel(cells, {
 //       overscanCount:
 //         options.notebookConfig?.overscanCount ??
