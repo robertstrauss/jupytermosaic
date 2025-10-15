@@ -1,4 +1,4 @@
-import { Notebook, NotebookActions } from '@jupyterlab/notebook';
+import { NotebookActions } from '@jupyterlab/notebook';
 // import { DROP_TARGET_CLASS } from '@jupyterlab/notebook/src/constants'
 import { Drag } from '@lumino/dragdrop'
 import { Cell, MarkdownCell } from '@jupyterlab/cells'
@@ -34,7 +34,7 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
     // Model presence should be checked before calling event handlers
     self.model!;
 
-    const source: Notebook = event.source;
+    const source: MosaicNotebook = event.source;
     if (source === self) {
       // Handle the case where we are moving cells within
       // the same notebook.
@@ -93,10 +93,6 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
 
       (self as any).onCellInserted(toIndex, dropCell); // trigger repositioning of destination cell, as it may be joining a new group
 
-      console.log('afer?', afterlike);
-      if (afterlike) {
-        toIndex += 1 // cell should be moved after, not before
-      }
 
       /** </ MODIFIED: MOSAIC > **/
       console.log('tofro', toIndex, fromIndex);
@@ -117,15 +113,25 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       }
 
       // Move the cells one by one
-      console.log('moving...');
+      console.log('moving...', (self as any).tiles.map(Mosaic.showMosaic));
       self.moveCell(fromIndex, toIndex, toMove.length);
-      console.log('moved.');
+      /** < MODIFIED: MOSAIC > */
+      console.log('afer?', afterlike);
+      if (afterlike) {
+        // move destination cell (now at toIndex+ n moved cells) back to in front of the new cells
+        // could have used toIndex += 1 before original move, but we need moveCell to trigger
+        // even when the from and to index are the same, since mosaic structure may change even if order doesn't.
+        self.moveCell(toIndex+toMove.length, toIndex);
+      }
+      /** </ MODIFIED: MOSAIC > */
+      console.log('moved.', (self as any).tiles.map(Mosaic.showMosaic));
+
     }
 }
 
 
 
-export function mosaicDragOver(self: Notebook, event: Drag.Event): void {
+export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
   if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
     return;
   }

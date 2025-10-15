@@ -1,19 +1,11 @@
 import { NotebookViewModel } from '@jupyterlab/notebook';
 import { Cell, CodeCellModel } from '@jupyterlab/cells';
 import { WindowedList } from '@jupyterlab/ui-components'
-// import { IObservableList } from '@jupyterlab/observables';
 import { Widget } from '@lumino/widgets';
-// import { IChangedArgs } from '@jupyterlab/coreutils';
-// import { ISignal } from '@lumino/signaling';
-// import { CodeCellModel } from '@jupyterlab/cells';
-// import { Debouncer } from '@lumino/polling';
+// import { IObservableList } from '@jupyterlab/observables';
 
 import type { FlexDirection, Tile } from './MosaicGroup';
-// import { WindowedListModel } from '@jupyterlab/ui-components';
-// import { OrientableWindowedListModel } from './orientablewindowedlist';
-// import { IObservableList } from '@jupyterlab/observables';
 
-// NotebookViewModel.prototype.itemsList
 
 export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
     static CELL_MIN_WIDTH = 50;
@@ -22,6 +14,8 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
     protected tilesEstimatedHeight = new Map<string, number>();
     protected _widgetSizersRow: WindowedList.ItemMetadata[] = [];
     protected _widgetSizersCol: WindowedList.ItemMetadata[] = [];
+
+    // protected _modelList: NestedObservableList<ICellModel>;
     // private _emitEstimatedSizeChanged = new Debouncer(() => {
     // this._stateChanged.emit({
     //     name: 'estimatedWidgetSize',
@@ -46,6 +40,12 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         });
         (this as any)._getItemMetadata = this.getItemMetadata;
     }
+
+    // set modelList(modelList: NestedObservableList<ICellModel>) {
+    //     this._modelList.changed.disconnect(this.onListChanged, this)
+    //     this._modelList = modelList;
+
+    // }
 
     // get direction() {
     //     return this._direction;
@@ -89,10 +89,10 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
             return 0;
         }
 
-        if (this.direction == 'col') {
-            return this.estimateWidgetHeight(index);
-        } else { // row mode, want width rather than height
+        if (this.direction == 'row') {
             return this.estimateWidgetWidth(index);
+        } else { // column mode, want height rather than width
+            return this.estimateWidgetHeight(index);
         }
     }
     estimateWidgetHeight(index:number): number {
@@ -130,10 +130,12 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
             );
         } else { // sub mosaic
             const height = this.tilesEstimatedHeight.get(tile.groupID);
+            // console.log('mosaic est height', height);
             if (typeof height === 'number') {
                 return height;
             }
 
+            // console.log('est total', tile.getEstimatedTotalHeight());
             return tile.getEstimatedTotalHeight();
         }
     }
@@ -153,19 +155,23 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
 
     getEstimatedTotalHeight(): number {
         if (this.direction == 'col') {
-            return super.getEstimatedTotalSize();
+            const ret = super.getEstimatedTotalSize();
+            console.warn(this.direction, 'super size est:', ret);
+            return ret;
         }
         // console.log('ima row');
         // total height of a row is really max height of elements
         let maxSize = 0;
+        // console.log('sizers', this._widgetSizersCol);
         for (let i = 0; i < this.widgetCount; i++) {
             const sizer = this._widgetSizersCol[i];
-            console.log('row el height', sizer, this.estimateWidgetHeight(i), this.widgetRenderer(i));
+            // console.log('row el height', sizer, this.estimateWidgetHeight(i), this.widgetRenderer(i));
             maxSize = Math.max(maxSize, sizer?.measured
                 ? sizer.size
                 : this.estimateWidgetHeight(i));
         }
 
+        console.log(this.direction, 'maxsize', maxSize);
         return maxSize;
     }
     getEstimatedTotalWidth(): number {
@@ -192,6 +198,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         // let me use their private field
         return -1;//(this as any)._measuredAllUntilIndex as number;
     }
+
     
     private getItemMetadata(index: number): WindowedList.ItemMetadata {
 
@@ -216,12 +223,16 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                         const widget = this.widgetRenderer(i);
                         if (widget?.node && widget.node.isConnected) {
                             const rect = widget.node.getBoundingClientRect();
+                            console.log('rect', rect);
                             size = (mode == 'row' ? rect.width : rect.height);
                             measured = true;
                         } else {
-                            size = this.estimateWidgetSize(i);
+                            size = (mode == 'row' ? 
+                                            this.estimateWidgetWidth(i)
+                                        :   this.estimateWidgetHeight(i));
                             measured = false;
                         }
+                        console.log(this.direction, 'measured', mode, i, widget, size)
                     }
 
                     widgetSizers[i] = { offset, size, measured };

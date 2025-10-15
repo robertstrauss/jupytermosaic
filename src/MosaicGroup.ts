@@ -1,29 +1,38 @@
 import { Notebook, NotebookWindowedLayout } from '@jupyterlab/notebook';
-import { WindowedList } from '@jupyterlab/ui-components'
-// import { Cell } from '@jupyterlab/cells';
-
-import { MosaicViewModel } from './MosaicViewModel';
+import { WindowedList } from '@jupyterlab/ui-components';
 import { Message } from '@lumino/messaging';
 import { PromiseDelegate } from '@lumino/coreutils';
-// import { Widget } from '@lumino/widgets';
-import { Cell } from '@jupyterlab/cells'
-// import { ArrayExt } from '@lumino/algorithm';
+import { Cell, CodeCell,  } from '@jupyterlab/cells';
+// import {  ObservableList } from '@jupyterlab/observables';
+
+import { MosaicViewModel } from './MosaicViewModel';
+
 
 export type FlexDirection = 'row' | 'col';
 
 export type Tile = Cell | Mosaic;
+
+// export type NestedObservableList<T> = IObservableList<T | NestedObservableList<T>>;
 
 
 export class Mosaic extends WindowedList<MosaicViewModel> { //
     static defaultConfig = {
         overscanCount: 3
     }
+    static showMosaic(t:Tile): any { // debugging function reducing mosaic to nested list of cell prompts
+        if (t instanceof Mosaic) {
+            return t.tiles.map(Mosaic.showMosaic);
+        } else {
+            return 'Cell:'+(t as any).prompt;
+        }
+    }
     
     public tiles: Array<Tile>;
     public mosaics: Map<string, Mosaic>;
-    public notebook;
-    public direction;
-    private _placeholder;
+    public notebook: Notebook;
+    public direction: FlexDirection;
+    // protected modelList: NestedObservableList<ICellModel>;
+    private _placeholder: boolean;
     private _ready = new PromiseDelegate<void>();
     constructor(protected superMosaic: Mosaic, public groupID: string, protected options: Mosaic.IOptions) {
         const tiles: Array<Tile> = [];
@@ -42,17 +51,21 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         this.mosaics = new Map<string, Mosaic>();
         this.direction = options.direction;
         this._placeholder = true;
+        // this.modelList = new ObservableList(); // view of main cell models array, for isolating changes relevant to me.
+        // this.viewModel.modelList = (this.modelList);
 
         this.addClass('mosaicgroup-outer');
 
         const origDetach = (this.layout as any).detachWidget;
         (this.layout as any).detachWidget = (index:number, widget:Tile) => {
-            console.warn('detaching', index, widget, (widget as Cell).model?.id);
+            console.warn('detaching', index, widget, (widget as Cell).model?.id, (widget as any).prompt, 'p');
             origDetach.call(this.layout, index, widget);
         }
 
         // patch the item resize method to use width not height when in row mode
         (this as any)._onItemResize = this.onItemResize;
+
+        (this as any)._updateTotalSize = this.updateTotalSize;
     }
 
     // set parent(val: Mosaic) {
@@ -104,25 +117,19 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     }
 
     mosaicInsert(cell: Cell, branchIxs: Array<number> = []) {
-        if (cell.parent) {
-            (cell.parent as Mosaic).splice((cell.parent as Mosaic).tiles.indexOf(cell), 1);
-        }
         const path = cell.model.metadata.mosaic as Array<string> || [];
         const stem = this.growBranch(path, 0, branchIxs);
-        console.log('splicing to', stem);
+        if (cell.parent && cell.parent == stem) { // already in its group, no-op
+            return
+        } else if (cell.parent) { // in a different group, remove it from there first
+            (cell.parent as Mosaic).splice((cell.parent as Mosaic).tiles.indexOf(cell), 1);
+        }
         stem.splice(branchIxs[path.length] || -1, 0, cell);
-        console.log('stem tiles and WR', stem.tiles, stem.viewModel.widgetRenderer(0));
     }
 
     splice(startIndex: number, replaceCount: number, ...tiles: Array<Tile>) {
-        // for (let i = 0; i < tiles.length; i++) {
-            // console.log()
-            // this.layout.insertWidget(startIndex+i, tiles[i]);
-            // this.layout.attachWidget(startIndex+i, tiles[i]);
-        // }
         const deleted = this.tiles.splice(startIndex, replaceCount, ...tiles);
         for (const deletetile of deleted) {
-            // this.layout.removeWidget(deletetile);
             if (deletetile instanceof Mosaic) {
                 this.mosaics.delete(deletetile.groupID);
             }
@@ -133,23 +140,28 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
             oldparent?.update();
             tile.update();
             if (tile instanceof Cell) { // add disposal listener to cell to remove from tiles
+                // this.modelList.push(tile.model);
                 tile.disposed.connect(() => {
-                    console.log('auto splice', tile, this.tiles.indexOf(tile));
-                    this.tiles.splice(this.tiles.indexOf(tile), 1);
+                    const idx = this.tiles.indexOf(tile);
+                    if (idx > -1) {
+                        this.tiles.splice(idx, 1);
+                    }
                 });
             } else if (tile instanceof Mosaic) {
+                // this.modelList.push(tile.modelList);
                 this.mosaics.set(tile.groupID, tile); // add mosaic to map for easy tree traversal
             }
         }
 
-        // console.log('rep count', replaceCount, 'l', this.tiles.length);
         // unwrap if only holding one or no tiles
         if (replaceCount > 0 && this.tiles.length < 2) {
+            console.log('unwrap!');
             const subtile = this.tiles[0];
             if (subtile && subtile instanceof Mosaic) {
                 subtile.unwrap(); // remove double-wrap (to preserve flex direction)
             }
             this.unwrap();
+            console.log('post unwrap parent:', this.superMosaic.tiles);
         }
         
         this.update(); // trigger attaching of new group in DOM
@@ -253,6 +265,25 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         return this._ready.promise;
     }
 
+
+
+    // Notebook methods
+
+    // private _applyContentVisibility(cell: Cell<ICellModel>, index: number): void {
+    //     const isContentVisibility =
+    //         this.notebook.notebookConfig.windowingMode === 'contentVisibility';
+
+    //     cell.toggleClass('jp-content-visibility', isContentVisibility);
+
+    //     if (isContentVisibility) {
+    //     const estHeight = this._viewModel.estimateWidgetSize(index);
+    //     cell.node.style.containIntrinsicSize = `auto ${estHeight}px`;
+    //     } else {
+    //     cell.node.style.removeProperty('contain-intrinsic-size');
+    //     }
+    // }
+
+
     public onAfterAttach(msg: Message): void {
         this.update(); // will attach inner cells according to viewModel widgetRenderer
         super.onAfterAttach(msg);
@@ -261,12 +292,17 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         this.viewModel.direction = this.direction;
 
         this.viewportNode.classList.add('mosaicgroup-inner', 'mosaic'+this.direction);
+
+        // requestAnimationFrame(() => {
+        // this.viewModel.height = this.node.getBoundingClientRect().height;
+        // console.log(this.direction, 'setting my height to', this.viewModel.height);
+        // });
     }
 
-    protected onBeforeDetach(msg: Message): void {
-        console.warn('AAAAA someones trying to kill me!!!', this, msg);
-        super.onBeforeDetach(msg);
-    }
+    // protected onBeforeDetach(msg: Message): void {
+    //     console.warn('AAAAA someones trying to kill me!!!', this, msg);
+    //     super.onBeforeDetach(msg);
+    // }
 
 
     protected onScroll(event: Event): void {
@@ -290,7 +326,21 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         }
     }
 
-    private onItemResize(entries: ResizeObserverEntry[]) {
+    protected onResize(msg: any): void {
+        console.warn('group resize!!', msg);
+        const previousHeight = this.viewModel.height;
+        this.viewModel.height =
+            msg.height >= 0 ? msg.height : this.node.getBoundingClientRect().height;
+        console.log('set vm height', this.viewModel.height);
+        if (this.viewModel.height !== previousHeight) {
+            void (this as any)._updater.invoke();
+        }
+        super.onResize(msg);
+        void (this as any)._updater.invoke();
+    }
+
+    protected onItemResize(entries: ResizeObserverEntry[]) { // @jupyterlab/ui-components/windowedlist.ts:1497
+        console.log(this.direction, 'on item resize');
         (this as any)._resetScrollToItem();
 
         if (this.isHidden || this.isParentHidden) {
@@ -299,23 +349,23 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
 
         const newSizes: { index: number; size: number }[] = [];
         for (let entry of entries) {
-        // Update size only if item is attached to the DOM
-        if (entry.target.isConnected) {
-            // Rely on the data attribute as some nodes may be hidden instead of detach
-            // to preserve state.
-            newSizes.push({
-            index: parseInt(
-                (entry.target as HTMLElement).dataset.windowedListIndex!,
-                10
-            ),
-            /** MOSAIC EDITED **/
-            size: (this.direction == 'row' ? 
-                entry.borderBoxSize[0].inlineSize : 
-                entry.borderBoxSize[0].blockSize
-            )
-            /** </ MOSAIC EDITED > **/
-            });
-        }
+            // Update size only if item is attached to the DOM
+            if (entry.target.isConnected) {
+                // Rely on the data attribute as some nodes may be hidden instead of detach
+                // to preserve state.
+                newSizes.push({
+                index: parseInt(
+                    (entry.target as HTMLElement).dataset.windowedListIndex!,
+                    10
+                ),
+                /** MOSAIC EDITED **/
+                size: (this.direction == 'row' ? 
+                    entry.borderBoxSize[0].inlineSize : 
+                    entry.borderBoxSize[0].blockSize
+                )
+                /** </ MOSAIC EDITED > **/
+                });
+            }
         }
 
         // If some sizes changed
@@ -324,8 +374,53 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
             // Update the list
             this.update();
         }
+        console.log(this.direction, 'sizers', (this.viewModel as any)._widgetSizers);
+        this.update();
     }
 
+
+    updateTotalSize(): void {
+        console.warn(this.direction, 'mosaic updating size!!');
+        if (this.viewModel.windowingActive) {
+            console.log('win active');
+        if (this.viewportNode.dataset.isScrolling == 'true') {
+            // Do not update while scrolling, delay until later
+            (this as any)._requiresTotalSizeUpdate = true;
+            return;
+        }
+        const estimatedTotalHeight = this.viewModel.getEstimatedTotalSize();
+        console.log('est total size UTS', estimatedTotalHeight);
+        const heightWithPadding =
+            estimatedTotalHeight +
+            (this as any)._viewportPaddingTop +
+            (this as any)._viewportPaddingBottom;
+        // Update inner container height
+        (this as any)._innerElement.style.height = `${heightWithPadding}px`;
+        }
+    }
+
+
+
+
+    renderCellOutputs(index: number): void { // @jupyterlab
+        // updated to deal with submosaics
+        const tile = this.viewModel.widgetRenderer(index) as Cell;
+        if (tile instanceof CodeCell && tile.isPlaceholder()) { const cell = tile as CodeCell;
+            cell.dataset.windowedListIndex = `${index}`;
+            this.layout.insertWidget(index, cell);
+            if (this.notebook.notebookConfig.windowingMode === 'full') {
+                // We need to delay slightly the removal to let codemirror properly initialize
+                requestAnimationFrame(() => {
+                    this.layout.removeWidget(cell);
+                });
+            }
+        } else if (tile instanceof Mosaic && (tile as Mosaic).isPlaceholder()) { const mosaic = tile as Mosaic;
+            for (let i = 0; i < mosaic.tiles.length; i++) {
+                mosaic.renderCellOutputs(i);
+            }
+        }
+    }
+    
 }
 
 
