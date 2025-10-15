@@ -128,11 +128,30 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     }
 
     splice(startIndex: number, replaceCount: number, ...tiles: Array<Tile>) {
+        console.warn('splice', startIndex, replaceCount, tiles);
         const deleted = this.tiles.splice(startIndex, replaceCount, ...tiles);
+        if (deleted.length > 0) {
+            this.viewModel.onListChanged({} as any, {
+                type: 'remove',
+                oldIndex: startIndex,
+                oldValues: deleted,
+                newIndex: startIndex,
+                newValues: []
+            });
+        }
         for (const deletetile of deleted) {
             if (deletetile instanceof Mosaic) {
                 this.mosaics.delete(deletetile.groupID);
             }
+        }
+        if (tiles.length > 0) {
+            this.viewModel.onListChanged({} as any, {
+                type: 'add',
+                newIndex: startIndex,
+                newValues: tiles,
+                oldIndex: startIndex,
+                oldValues: []
+            });
         }
         for (const tile of tiles) {
             const oldparent = tile.parent;
@@ -267,22 +286,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
 
 
 
-    // Notebook methods
-
-    // private _applyContentVisibility(cell: Cell<ICellModel>, index: number): void {
-    //     const isContentVisibility =
-    //         this.notebook.notebookConfig.windowingMode === 'contentVisibility';
-
-    //     cell.toggleClass('jp-content-visibility', isContentVisibility);
-
-    //     if (isContentVisibility) {
-    //     const estHeight = this._viewModel.estimateWidgetSize(index);
-    //     cell.node.style.containIntrinsicSize = `auto ${estHeight}px`;
-    //     } else {
-    //     cell.node.style.removeProperty('contain-intrinsic-size');
-    //     }
-    // }
-
+    /** Notebook-like methods */
 
     public onAfterAttach(msg: Message): void {
         this.update(); // will attach inner cells according to viewModel widgetRenderer
@@ -292,17 +296,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         this.viewModel.direction = this.direction;
 
         this.viewportNode.classList.add('mosaicgroup-inner', 'mosaic'+this.direction);
-
-        // requestAnimationFrame(() => {
-        // this.viewModel.height = this.node.getBoundingClientRect().height;
-        // console.log(this.direction, 'setting my height to', this.viewModel.height);
-        // });
     }
-
-    // protected onBeforeDetach(msg: Message): void {
-    //     console.warn('AAAAA someones trying to kill me!!!', this, msg);
-    //     super.onBeforeDetach(msg);
-    // }
 
 
     protected onScroll(event: Event): void {
@@ -347,59 +341,61 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
             return;
         }
 
-        const newSizes: { index: number; size: number }[] = [];
-        for (let entry of entries) {
-            // Update size only if item is attached to the DOM
-            if (entry.target.isConnected) {
-                // Rely on the data attribute as some nodes may be hidden instead of detach
-                // to preserve state.
-                newSizes.push({
-                index: parseInt(
-                    (entry.target as HTMLElement).dataset.windowedListIndex!,
-                    10
-                ),
-                /** MOSAIC EDITED **/
-                size: (this.direction == 'row' ? 
-                    entry.borderBoxSize[0].inlineSize : 
-                    entry.borderBoxSize[0].blockSize
-                )
-                /** </ MOSAIC EDITED > **/
-                });
+        for (const dim of ['row', 'col']) {
+            const newSizes: { index: number; size: number }[] = [];
+            for (let entry of entries) {
+                // Update size only if item is attached to the DOM
+                if (entry.target.isConnected) {
+                    // Rely on the data attribute as some nodes may be hidden instead of detach
+                    // to preserve state.
+                    newSizes.push({
+                        index: parseInt(
+                            (entry.target as HTMLElement).dataset.windowedListIndex!,
+                            10
+                        ),
+                        size: (dim == 'row' ? 
+                            entry.borderBoxSize[0].inlineSize : 
+                            entry.borderBoxSize[0].blockSize
+                        )
+                    });
+                }
             }
-        }
 
-        // If some sizes changed
-        if (this.viewModel.setWidgetSize(newSizes)) {
-            (this as any)._scrollBackToItemOnResize();
-            // Update the list
+            // If some sizes changed
+            if (this.viewModel.setWidgetSize(newSizes, dim as FlexDirection)) {
+                (this as any)._scrollBackToItemOnResize();
+                // Update the list
+                this.update();
+            }
+            // console.log(this.direction, 'sizers', (this.viewModel as any)._widgetSizers);
+            console.log(this.direction, dim, 'sizers', newSizes);
             this.update();
         }
-        console.log(this.direction, 'sizers', (this.viewModel as any)._widgetSizers);
-        this.update();
     }
 
 
     updateTotalSize(): void {
         console.warn(this.direction, 'mosaic updating size!!');
         if (this.viewModel.windowingActive) {
-            console.log('win active');
-        if (this.viewportNode.dataset.isScrolling == 'true') {
-            // Do not update while scrolling, delay until later
-            (this as any)._requiresTotalSizeUpdate = true;
-            return;
-        }
-        const estimatedTotalHeight = this.viewModel.getEstimatedTotalSize();
-        console.log('est total size UTS', estimatedTotalHeight);
-        const heightWithPadding =
-            estimatedTotalHeight +
-            (this as any)._viewportPaddingTop +
-            (this as any)._viewportPaddingBottom;
-        // Update inner container height
-        (this as any)._innerElement.style.height = `${heightWithPadding}px`;
+            if (this.viewportNode.dataset.isScrolling == 'true') {
+                // Do not update while scrolling, delay until later
+                (this as any)._requiresTotalSizeUpdate = true;
+                return;
+            }
+            const estimatedTotalHeight = this.viewModel.getEstimatedTotalHeight();
+            console.log('est total height UTS', estimatedTotalHeight);
+            const heightWithPadding =
+                estimatedTotalHeight +
+                (this as any)._viewportPaddingTop +
+                (this as any)._viewportPaddingBottom;
+            // Update inner container height
+            (this as any)._innerElement.style.height = `${heightWithPadding}px`;
+
+            const estimatedTotalWidth = this.viewModel.getEstimatedTotalWidth();
+            console.log('est tot width', estimatedTotalWidth);
+            (this as any)._innerElement.style.width = `${estimatedTotalWidth}`;
         }
     }
-
-
 
 
     renderCellOutputs(index: number): void { // @jupyterlab

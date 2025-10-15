@@ -5,6 +5,7 @@ import { Widget } from '@lumino/widgets';
 // import { IObservableList } from '@jupyterlab/observables';
 
 import type { FlexDirection, Tile } from './MosaicGroup';
+import { IObservableList } from '@jupyterlab/observables';
 
 
 export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
@@ -34,6 +35,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         // overload private properties
         Object.defineProperty(this, '_widgetSizers', {
             get() {
+                console.warn('default widg sizer requested');
                 if (this.direction == 'row') return this._widgetSizersRow;
                 if (this.direction == 'col') return this._widgetSizersCol;
             }
@@ -41,25 +43,9 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         (this as any)._getItemMetadata = this.getItemMetadata;
     }
 
-    // set modelList(modelList: NestedObservableList<ICellModel>) {
-    //     this._modelList.changed.disconnect(this.onListChanged, this)
-    //     this._modelList = modelList;
-
-    // }
-
-    // get direction() {
-    //     return this._direction;
-    // }
-    // set direction(val: FlexDirection) {
-    //     if (this.direction !== val) {
-    //         this._direction = val;
-    //         if (val == 'row') {
-    //             this._widgetSizers = this._widgetSizersRow;
-    //         } else {
-    //             this._widgetSizers = this._widgetSizersCol;
-    //         }
-    //     }
-    // }
+    public onListChanged(list: IObservableList<Widget>, changes: IObservableList.IChangedArgs<Widget>): void {
+        super.onListChanged(list, changes);
+    }
 
     _getWidgetCount(): number {
         return this.tiles.length;
@@ -74,7 +60,21 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
     // widgetRenderer is defined as a property rather than a method on super, so must follow suit
     widgetRenderer: (index: number) => Widget = MosaicViewModel.prototype._widgetRenderer.bind(this);//(index: number) => MosaicViewModel._widgetRenderer(this, index); // work around for "Class 'WindowedListModel' defines instance member property 'widgetRenderer', but extended class 'MosaicViewModel' defines it as instance member function."
 
+    get widgetSizers() {
+        return (this as any)._widgetSizers;
+    }
+    setWidgetSize(sizes: { index: number; size: number; }[], dim: 'row' | 'col' | 'mode' = 'mode'): boolean {
+        if (dim == 'mode') dim = this.direction;
 
+        // just use the same code as super, but with a different widgetSizers list based on dim
+        return super.setWidgetSize.bind(new Proxy(this, {
+            get(target, p, receiver) {
+                if (p == '_widgetSizers') return (dim == 'row' ? target._widgetSizersRow : target._widgetSizersCol)
+                
+                return Reflect.get(target, p, receiver);
+            },
+        }))(sizes);
+    }
     estimateWidgetSize: (index: number) => number = MosaicViewModel.prototype._estimateWidgetSize.bind(this);
     _estimateWidgetSize (index: number): number {
 
@@ -153,11 +153,41 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         }
     }
 
+    set measuredAllUntilIndex(val: number) {
+        (this as any)._measuredAllUntilIndex = val;
+    }
+
+    getEstimatedTotalSize(dim: 'row' | 'col' | 'mode' = 'mode'): number { // based on @jupyterlab/ui-components/windowedlist.ts:279
+        if (dim == 'mode') dim = this.direction;
+        const widgetSizers = (dim == 'row' ? this._widgetSizersRow : this._widgetSizersCol);
+        console.warn('computing est tot size in dim', dim, widgetSizers);
+
+        let totalSizeOfInitialItems = 0;
+
+        if (this.measuredAllUntilIndex >= this.widgetCount) {
+            this.measuredAllUntilIndex = this.widgetCount - 1;
+        }
+
+        // These items are all measured already
+        if (this.measuredAllUntilIndex >= 0) {
+            const itemMetadata = widgetSizers[this.measuredAllUntilIndex];
+            totalSizeOfInitialItems = itemMetadata.offset + itemMetadata.size;
+        }
+
+        // These items might have measurements, but some will be missing
+        let totalSizeOfRemainingItems = 0;
+        for (let i = this.measuredAllUntilIndex + 1; i < this.widgetCount; i++) {
+            const sizer = widgetSizers[i];
+            totalSizeOfRemainingItems += sizer?.measured
+                ? sizer.size
+                : this.estimateWidgetSize(i);
+        }
+
+        return totalSizeOfInitialItems + totalSizeOfRemainingItems;
+    }
     getEstimatedTotalHeight(): number {
         if (this.direction == 'col') {
-            const ret = super.getEstimatedTotalSize();
-            console.warn(this.direction, 'super size est:', ret);
-            return ret;
+            return this.getEstimatedTotalSize('col');
         }
         // console.log('ima row');
         // total height of a row is really max height of elements
@@ -176,7 +206,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
     }
     getEstimatedTotalWidth(): number {
         if (this.direction == 'row') {
-            return super.getEstimatedTotalSize();
+            return this.getEstimatedTotalSize('row');
         }
         
         // total width of a column is really max width of elements
@@ -190,9 +220,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
 
         return maxSize;
     }
-    getEstimatedTotalSize(): number {
-        return this.getEstimatedTotalHeight(); // size used in default implementation to set height
-    }
+    
 
     get measuredAllUntilIndex(): number {
         // let me use their private field

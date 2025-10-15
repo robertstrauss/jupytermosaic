@@ -108,7 +108,7 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       }
       // Don't move if we are within the block of selected cells.
       if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
-        console.log('within');
+        for (const movecell of toMove) (self as any).onCellInserted(toIndex, movecell); // trigger repositioning of cell, as it may be joining a new group
         return;
       }
 
@@ -121,7 +121,9 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
         // move destination cell (now at toIndex+ n moved cells) back to in front of the new cells
         // could have used toIndex += 1 before original move, but we need moveCell to trigger
         // even when the from and to index are the same, since mosaic structure may change even if order doesn't.
+        console.log('moving orig back to top', toIndex, toMove.length, (self as any).tiles.map(Mosaic.showMosaic));
         self.moveCell(toIndex+toMove.length, toIndex);
+        console.log('moved orig back to top', (self as any).tiles.map(Mosaic.showMosaic));
       }
       /** </ MODIFIED: MOSAIC > */
       console.log('moved.', (self as any).tiles.map(Mosaic.showMosaic));

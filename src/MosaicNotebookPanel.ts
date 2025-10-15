@@ -1,12 +1,10 @@
 import { Notebook, NotebookPanel  } from '@jupyterlab/notebook';
-// import { IObservableList } from '@jupyterlab/observables';
 import { Cell } from '@jupyterlab/cells';
 import { WindowedLayout } from '@jupyterlab/ui-components';
 
 import { mosaicDrop, mosaicDragOver } from './mosaicdrag';
 import { FlexDirection, Mosaic, Tile } from './MosaicGroup';
 import { MosaicViewModel } from './MosaicViewModel';
-// import { WindowedLayout } from './windowedlist';
 
 export namespace MosaicNotebookPanel {
     export class ContentFactory extends NotebookPanel.ContentFactory {
@@ -18,62 +16,9 @@ export namespace MosaicNotebookPanel {
 }
 
 
-// export class MosaicLayout extends NotebookWindowedLayout {
-// //     protected submosaics: Map<string, MosaicLayout> = new Map<string, MosaicLayout>();
-// //     protected cellOwner: WeakMap<Cell, MosaicLayout> = new WeakMap<Cell, MosaicLayout>();
-//     insertWidget(index: number, widget: Widget): void {
-//         // route attempted linear cell inserts to their proper mosaic layout
-
-//         console.warn("layout IW", index, widget);
-//         const cell = (widget as Cell)!;
-//         // if (cell.parent) {
-//         //     cell.parent.layout!.removeWidget(cell);
-//         // }
-
-//         const path = cell.model!.getMetadata('mosaic') as Array<string> || [];
-//         const stem = (this.parent as Mosaic).treeGet(path) as Mosaic;
-        
-//         const idx = stem.tiles.indexOf(cell);
-//         if (idx == -1) {
-//             throw new Error('view model unsynchronized');
-//         }
-//         if (stem.layout == this) {
-//             super.insertWidget(idx, cell);
-//         } else {
-//             stem.layout.insertWidget(idx, cell);
-//         }
-
-//         // Remove the widget from its current parent. This is a no-op
-//         // if the widget's parent is already the layout parent widget.
-//         cell.parent = this.parent;
-
-//         // remove it from its current layout
-//         const stem = this.cellOwner.get(cell);
-//         stem?.removeWidget(cell);
-
-//         // Clamp the insert index to the array bounds.
-//         let j = Math.max(0, Math.min(index, this._widgets.length));
-//         // If the widget is not in the array, insert it.
-//         const path = cell.model.getMetadata('mosaic') as Array<string> || [];
-//         if (path && path.length > 0) {
-//             let submosaic = this.submosaics.get(path[0]);
-//             if (!submosaic) {
-//                 submosaic = new MosaicLayout();
-//                 this.submosaics.set(Mosaic.newUGID(), submosaic);
-//                 ArrayExt.insert(this._widgets, index, widget)
-//             }
-//             submosaic.insertWidget(index, cell); // recursively traveres tree of mosaic paths to get to bottom group
-//         }
-//         else {
-//             this.widgets
-//         }
-//     }
-// }
-
 
 
 export class MosaicNotebook extends Notebook {
-    // protected rootMosaic: Mosaic;
 
     protected tiles: Array<Tile>;
     protected mosaics: Map<string, Mosaic>;
@@ -88,10 +33,7 @@ export class MosaicNotebook extends Notebook {
         this.options = {...options, direction: 'col', notebook: this};
         this.notebook = this; // adopted mosaic methods refer to notebook property
 
-        // (this as any)._layout = new MosaicLayout();
-        // this.layout.parent = this;
 
-        // MosaicViewModel;
         const mvm = new MosaicViewModel(this.tiles, 'col', {
                 overscanCount: options.notebookConfig?.overscanCount  ??
                     Mosaic.defaultConfig.overscanCount,
@@ -100,35 +42,43 @@ export class MosaicNotebook extends Notebook {
         Object.defineProperty(this.viewModel, 'widgetCount', {get: mvm._getWidgetCount.bind(mvm)});
         this.viewModel.estimateWidgetSize = mvm._estimateWidgetSize.bind(mvm);
         this.viewModel.widgetRenderer = mvm._widgetRenderer.bind(mvm);
-        console.log(this.viewModel, this.viewModel.height, (this.viewModel as any)._height);
-        // let h = this.viewModel.height;
-        // Object.defineProperty(this.viewModel, '_height', {
-        //     set(v) {
-        //         console.warn('notebook vm height getting set!', v);
-        //         h = v;
-        //     },
-        //     get() {
-        //         return h;
-        //     }
-        // });
+        (this.viewModel as any).onListChanged = (list: any, change: any) => { // viewModel List changes handled by mosaicgroup
+            // route cell updates to proper view model
+            // const routedChanges = new WeakMap<Mosaic, IObservableList.IChangedArgs<ICellModel>>();
+            // for (let i = 0; i < change.newValues.length; i++) {
+
+            // }
+            // const cell = change.newValues[i];
+            // const path = cell.metadata.mosaic as Array<string> || [];
+            // const stem = this.treeGet(path) as Mosaic;
+            // switch (change.type) {
+            //     case 'add': {
+            //         for (let i = 0; i < change.newValues.length; i++) {
+
+            //             (stem as any).viewModel.onListChanged(list, {
+            //                 type: change.type,
+            //                 newIndex: ,
+            //                 newValues: [cell],
+
+            //             } as IObservableList.IChangedArgs<ICellModel>);                
+            //         }
+            //         break;
+            //     }
+            //     case 'remove': {
+            //         for (let i = 0; i < change.oldValues.length; i++) {
+            //             const cell = change.oldValues[i];
+            //             const path = cell.metadata.mosaic as Array<string> || [];
+            //             const stem = this.treeGet(path) as Mosaic; 
+            //             const oldIndex = stem.tiles.indexOf(
+            //         }
+            //         break;
+            //     }
+            // }
+        };
+
 
         (this as any)._evtDrop = (e:any) => mosaicDrop(this, e);
         (this as any)._evtDragOver = (e:any) => mosaicDragOver(this, e);
-
-        // const origDetach = (this.layout as any).detachWidget;
-        // (this.layout as any).detachWidget = (index:number, widget:Tile) => {
-        //     console.warn('detaching', index, widget, (widget as Cell).model?.id, (widget as any).prompt, 'p');
-        //     console.log(this.tiles, this.tiles.map(Mosaic.showMosaic));
-        //     origDetach.call(this.layout, index, widget);
-        //     console.log(this.tiles, this.tiles.map(Mosaic.showMosaic));
-        // }
-
-        // const origIW = this.layout.insertWidget;
-        // this.layout.insertWidget = (i:number, w:Widget) => {
-        //     console.warn("IW");
-        //     origIW.call(this.layout, i, w);
-        // }
-        // this.layout.insertWidget = MosaicLayout.prototype.insertWidget.bind(this.layout);
 
         (this as any)._updateForDeferMode = this._myupdateForDeferMode;
     }
@@ -137,12 +87,6 @@ export class MosaicNotebook extends Notebook {
     mosaicInsert = Mosaic.prototype.mosaicInsert.bind(this);
     growBranch = Mosaic.prototype.growBranch.bind(this);
     splice = Mosaic.prototype.splice.bind(this);
-    // splice (startIndex, replaceCount, ...tiles) {
-    //     Mosaic.prototype.splice.bind(this)(startIndex, replaceCount, ...tiles);
-    //     for (tile of tiles) {
-    //         this.layout.insertMosaic(tile);
-    //     }
-    // }
     treeGet = Mosaic.prototype.treeGet.bind(this);
     getLeaf = Mosaic.prototype.getLeaf.bind(this);
     renderCellOutputs = Mosaic.prototype.renderCellOutputs.bind(this);
@@ -153,11 +97,7 @@ export class MosaicNotebook extends Notebook {
     protected onCellInserted(index: number, cell: Cell): void {
         super.onCellInserted(index, cell);
         console.log('ic', index, 'Cell:'+(cell as any).prompt, cell, cell.model.metadata.mosaic);
-        // console.log('orig par', cell.parent);
-        // console.log('mosaic', cell.model.getMetadata('mosaic'))
-        this.mosaicInsert(cell);
-        // console.log('new par', cell.parent);
-       
+        this.mosaicInsert(cell);    
         console.log(this.tiles, this.tiles.map(Mosaic.showMosaic));
     }
     protected onCellRemoved(index: number, cell: Cell): void {
@@ -165,7 +105,7 @@ export class MosaicNotebook extends Notebook {
         console.log('rc', index, 'Cell:'+(cell as any).prompt, cell);
         const path = cell.model.metadata.mosiac as Array<string> || [];
         const group = this.treeGet(path) as Mosaic;
-        const idx = group.tiles.indexOf(cell);
+        const idx = group.tiles.indexOf(cell); // invert order - inserts and removes in index order, when moving up will be duplicated. want to remove later one since moving up
         console.log('local index', group, idx);
         if (idx > -1) {
             group.splice(idx, 1);
