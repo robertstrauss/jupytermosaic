@@ -8,7 +8,7 @@ import { MosaicNotebook } from './MosaicNotebookPanel';
 
 // import { MosaicNotebookViewModel } from './MosaicViewModel';
 const DROP_TARGET_CLASS = 'jp-mod-dropTarget';
-
+const JUPYTER_CELL_CLASS = 'jp-Cell';
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
 export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
@@ -58,44 +58,92 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       let fromIndex = ArrayExt.firstIndexOf(self.widgets, toMove[0]);
       let toIndex = (self as any)._findCell(target);
 
-
-      /** < MODIFIED: MOSAIC > **/
-      const targetCell = self.widgets[toIndex];
-      const group = targetCell.parent as Mosaic;
-      const dropIdx = group.tiles.indexOf(targetCell); // index within this sub list
-
-      const side = targetCell.node.dataset.mosaicDropSide || closestSide(event, target);
+      const side = target.dataset.mosaicDropSide || closestSide(event, target);
       const collike = (side == 'bottom' || side == 'top');
       const rowlike = (side == 'left' || side == 'right');
-      // const beforelike = side == 'top' || side == 'left';
+      const beforelike = side == 'top' || side == 'left';
       const afterlike = side == 'bottom' || side == 'right';
 
-      const mosaicpath = Mosaic.getPath(targetCell);
+      /** < MODIFIED: MOSAIC > **/
+      let mosaicPath = null;
+      let targetCell: Cell;
+      if (toIndex < 0) { // not dropped on a cell, likely on mosaicgroup border
+         while (target && target.parentElement) { // get nearest group
+          if (target.classList.contains(Mosaic.NODE_CLASS)) {
+            target.classList.remove(DROP_TARGET_CLASS);
+            break;
+            // mosaicPath = self.findGroup(target);
+            // if (mosaicPath !== null) break;
+          }
+          target = target.parentElement;
+        }
+        // if (mosaicPath == null) return; // not over a group
+        // const [group, depth] = self.treeGetExisting(mosaicPath);
+        // if (beforelike) {
+        //   toIndex = (self as any)._findCell(group.getLeaf(0)); // before first cell as reference
+        // }
+        // else if (afterlike) {
+        //     toIndex = (self as any)._findCell(group.getLeaf(-1)); // after last cell as reference
+        //     if (toIndex > 0) toIndex++; // want to go after this cell
+        // }
+        // if (toIndex < 0) {console.error('no cell in group!', mosaicPath, group); return;}
 
-      let toMosaic: Array<string> = [];
-      if ( (group.direction == 'row' && collike)
-        || (group.direction == 'col' && rowlike)) {
-            const newGroup = group.addTile('', dropIdx);
-            toMosaic = [...mosaicpath, newGroup.groupID];
-            console.log('ADDED SUB ', group);
+        const cells = target.getElementsByClassName(JUPYTER_CELL_CLASS);
+        toIndex = (self as any)._findCell(cells[beforelike ? 0 : cells.length-1]) // get first or last cell, if going before or after
+        if (toIndex < 0) return;
+        targetCell = self.widgets[toIndex];
+        mosaicPath = Mosaic.getPath(targetCell);
+        console.log('before?', beforelike, 'on group', target, 'path', mosaicPath, 'found ref cell', toIndex, (targetCell as any).prompt)
 
-      } else if ( (group.direction == 'row' && rowlike)
-               || (group.direction == 'col' && collike)) {
-            toMosaic = mosaicpath;
+        // dropping on a group, we want to be next to it not inside, so back out 1 from the cells path
+        if (mosaicPath.length > 0) mosaicPath = mosaicPath.slice(0, mosaicPath.length-1)
+
+      } else { // found a cell to drop on, not a group.
+        targetCell = self.widgets[toIndex];
+        mosaicPath = Mosaic.getPath(targetCell);
       }
 
-      for (const movecell of [...toMove, targetCell]) {
-        movecell.model.setMetadata('mosaic', toMosaic);
-        console.log('SET MOSAIC MD', movecell.model.getMetadata('mosaic'));
+      if (toIndex < 0 || mosaicPath == null) return; // still no luck finding something to drop on
+
+      // get the deepest common branch of all cells to move
+      let divergeDepth = 0;
+      let sharedPath = Mosaic.getPath(toMove[0]);
+      for (let movecell of toMove) {
+        const path = Mosaic.getPath(movecell);
+        divergeDepth = Mosaic.divergeDepth(path, sharedPath);
+        sharedPath = path.slice(0, divergeDepth);
       }
 
+      const [targetGroup, ] = self.treeGetExisting(mosaicPath); // group to insert things in
+      if ( (targetGroup.direction == 'row' && collike)
+        || (targetGroup.direction == 'col' && rowlike)) {
+            // dropping off-axis (on top/bottom for row, or left/right for col)
+            // this means we subdivide. Create a new group:
+            mosaicPath = [...mosaicPath, Mosaic.newUGID()];
+            targetCell.model.setMetadata(Mosaic.METADATA_NAME, mosaicPath); // destination cell is part of this new group
+      }
+      // } else if ( (targetGroup.direction == 'row' && rowlike)
+      //          || (targetGroup.direction == 'col' && collike)) {
+      // }
+            
+      let transposeGroup;
+      // mod 2 of the path tells us whether its a row or column, since these must alternate
+      if ((divergeDepth % 2) != (mosaicPath.length % 2)) {
+        // grafting would transpose rows and columns of moved cell, give an extra wraper to preserve source structure
+        transposeGroup = Mosaic.newUGID();
+      }
+      // assign the metadata to each cell to place it in the mosaic
+      for (const movecell of toMove) {
+        const prevpath = Mosaic.getPath(movecell);
+        if (transposeGroup) prevpath.splice(divergeDepth, 0, transposeGroup);
+        // graft moved cell onto tree, preserving any internal structure 
+        movecell.model.setMetadata(Mosaic.METADATA_NAME, [...mosaicPath, ...prevpath.slice(divergeDepth)]);
+      }
+
+      let firstChangedIndex = toIndex;
       if (afterlike) {
         toIndex += 1; // drop on bottom or right of cell to go after it
       }
-
-
-      /** </ MODIFIED: MOSAIC > **/
-      console.log('tofro', toIndex, fromIndex);
 
       // self check is needed for consistency with the view.
       if (toIndex !== -1 && toIndex > fromIndex) {
@@ -108,33 +156,26 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       }
       // Don't move if we are within the block of selected cells.
       if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
-        console.log('indices preserved.');
-        console.log('mosaicing...', (self as any).tiles.map(Mosaic.showMosaic));
-        for (let ind = fromIndex; ind < fromIndex + toMove.length; ind++) {
+        console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
+        for (let ind = firstChangedIndex; ind < fromIndex + toMove.length; ind++) {
           self.mosaicInsert(ind); // update mosaic structure
         }
-        console.log('mosaiced', (self as any).tiles.map(Mosaic.showMosaic));
         return;
       }
 
       // Move the cells one by one
-      console.log('moving...', (self as any).tiles.map(Mosaic.showMosaic));
       self.moveCell(fromIndex, toIndex, toMove.length);
-      console.log('moved.', (self as any).tiles.map(Mosaic.showMosaic));
 
-      console.log('mosaicing...', (self as any).tiles.map(Mosaic.showMosaic));
-      let firstChangedIndex = toIndex; 
+      // moveCell usually triggers onCellInserted which does the mosaicInsertion itself,
+      // except for when creating a new group without reordering the cells, so we do it manually here
       // cells taken out from before the destination just shift the destination back.
       // orig jupyter code subtracted 1 already if toIndex > fromIndex, so we add 1
-      if (toIndex > fromIndex) firstChangedIndex += 1 - toMove.length; 
+      if (toIndex > fromIndex) firstChangedIndex += - toMove.length; 
       if (afterlike) firstChangedIndex -= 1; // include target cell even if dropped after it
+      console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
       for (let i = firstChangedIndex; i < firstChangedIndex + toMove.length+1; i++) { // go for toMove.length+1 : do the moved cells and target cell
         self.mosaicInsert(i);
       }
-      console.log('mosaiced.', (self as any).tiles.map(Mosaic.showMosaic));
-
-      /** < MODIFIED: MOSAIC > */
-      /** </ MODIFIED: MOSAIC > */
 
     } else {
       // CROSS NOTEBOOK MOSAIC NOT YET IMPLEMENTED
@@ -154,19 +195,48 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
   if (elements.length) {
     (elements[0] as HTMLElement).classList.remove(DROP_TARGET_CLASS);
   }
-  const target = event.target as HTMLElement;
-  const index = (self as any)._findCell(target);
-  if (index === -1) {
-    return;
+  let target = event.target as HTMLElement;
+
+  let index = (self as any)._findCell(target);
+
+  const side = closestSide(event, target);
+  // const collike = (side == 'bottom' || side == 'top');
+  // const rowlike = (side == 'left' || side == 'right');
+  // const beforelike = side == 'top' || side == 'left';
+  // const afterlike = side == 'bottom' || side == 'right';
+  if (index === -1) { // likely on a group border rather than a cell
+    // let path = null; // try to find the group
+    while (target && target.parentElement) {
+      if (target.classList.contains(Mosaic.NODE_CLASS)) {
+        target.classList.add(DROP_TARGET_CLASS);
+        target.dataset.mosaicDropSide = side;
+        break;
+        // path = self.findGroup(target);
+        // if (path !== null) break;
+      }
+      target = target.parentElement;
+    }
+    // if (path == null) return; // not on a group
+    // const [group, depth] = self.treeGetExisting(path);
+    // if (beforelike) {
+    //   index = (self as any)._findCell(group.getLeaf(0)); // before first cell as reference
+    //   if (index < 0) return;
+    // }
+    // else if (afterlike) {
+    //   index = (self as any)._findCell(group.getLeaf(-1)); // after last cell as reference
+    //   if (index < 0) return;
+    //   index++; // want to go after this cell
+    // }
+    // else {console.error('Invalid side value!'); return} // shouldn't happen
+  } else {
+    const widget = (self as any).cellsArray[index];
+    widget.node.classList.add(DROP_TARGET_CLASS);
+
+    // mosaic: show line on side its going to insert on
+    widget.node.dataset.mosaicDropSide = side;
   }
-  const widget = (self as any).cellsArray[index];
-  widget.node.classList.add(DROP_TARGET_CLASS);
 
 
-  /** < MODIFIED: MOSAIC > **/
-  const side = closestSide(event, target); 
-  widget.node.dataset.mosaicDropSide = side;
-  /** </ MODIFIED: MOSAIC > **/
 }
 
 

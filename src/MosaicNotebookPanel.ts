@@ -1,4 +1,4 @@
-import { Notebook, NotebookPanel  } from '@jupyterlab/notebook';
+import { INotebookModel, Notebook, NotebookPanel  } from '@jupyterlab/notebook';
 import { Cell } from '@jupyterlab/cells';
 import { WindowedLayout } from '@jupyterlab/ui-components';
 import { ArrayExt } from '@lumino/algorithm';
@@ -43,39 +43,6 @@ export class MosaicNotebook extends Notebook {
         Object.defineProperty(this.viewModel, 'widgetCount', {get: mvm._getWidgetCount.bind(mvm)});
         this.viewModel.estimateWidgetSize = mvm._estimateWidgetSize.bind(mvm);
         this.viewModel.widgetRenderer = mvm._widgetRenderer.bind(mvm);
-        (this.viewModel as any).onListChanged = (list: any, change: any) => { // viewModel List changes handled by mosaicgroup
-            // route cell updates to proper view model
-            // const routedChanges = new WeakMap<Mosaic, IObservableList.IChangedArgs<ICellModel>>();
-            // for (let i = 0; i < change.newValues.length; i++) {
-
-            // }
-            // const cell = change.newValues[i];
-            // const path = cell.metadata.mosaic as Array<string> || [];
-            // const stem = this.treeGet(path) as Mosaic;
-            // switch (change.type) {
-            //     case 'add': {
-            //         for (let i = 0; i < change.newValues.length; i++) {
-
-            //             (stem as any).viewModel.onListChanged(list, {
-            //                 type: change.type,
-            //                 newIndex: ,
-            //                 newValues: [cell],
-
-            //             } as IObservableList.IChangedArgs<ICellModel>);                
-            //         }
-            //         break;
-            //     }
-            //     case 'remove': {
-            //         for (let i = 0; i < change.oldValues.length; i++) {
-            //             const cell = change.oldValues[i];
-            //             const path = cell.metadata.mosaic as Array<string> || [];
-            //             const stem = this.treeGet(path) as Mosaic; 
-            //             const oldIndex = stem.tiles.indexOf(
-            //         }
-            //         break;
-            //     }
-            // }
-        };
 
 
         (this as any)._evtDrop = (e:any) => mosaicDrop(this, e);
@@ -91,8 +58,20 @@ export class MosaicNotebook extends Notebook {
     treeGetExisting = Mosaic.prototype.treeGetExisting.bind(this);
     // getBranchIndex = Mosaic.prototype.getBranchIndex.bind(this);
     getLeaf = Mosaic.prototype.getLeaf.bind(this);
+    findGroup = Mosaic.prototype.findGroup.bind(this);
+    findStem = Mosaic.prototype.findStem.bind(this);
     renderCellOutputs = Mosaic.prototype.renderCellOutputs.bind(this);
     unwrap = ()=>{};
+    checkEmpty = ()=>{};
+
+    get model() {
+        return super.model;
+    }
+    set model(model: INotebookModel | null) {
+        super.model = model;
+        // viewModel List changes handled by mosaicgroup. Don't need observable list to trigger it
+        this.viewModel.itemsList = null;
+    }
 
     moveCell(from: number, to: number, n: number = 1): void {
         for (let i = to; i < to + n; i++) {
@@ -113,48 +92,41 @@ export class MosaicNotebook extends Notebook {
     protected onCellRemoved(index: number, cell: Cell): void {
         super.onCellRemoved(index, cell);
         console.warn('rc', index, 'Cell:'+(cell as any).prompt, cell);
-        const path = Mosaic.getPath(cell);
-        const [stem, depth] = this.treeGetExisting(path);
-        if (depth == path.length) {
+        // const path = Mosaic.getPath(cell);
+        // const [stem, depth] = this.treeGetExisting(path);
+        // if (depth == path.length) {
+        //     const localIdx = ArrayExt.findLastIndex(stem.tiles, (t:Tile) => t === cell);
+        //     if (localIdx > -1) {
+        //         stem.splice(localIdx, 1);
+        //     }
+        // } else {
+            // console.error("Couldn't find cell in proper group, searching tree");
+
             // remove last index- Jupyter inserts and removes cells in order of their index,
             // thus when moving a cell up (smaller idx) it will be duplicated briefly.
             // And so we want to remove later one. When moving down, it removes first, and this still works
-            const localIdx = ArrayExt.findLastIndex(stem.tiles, (t:Tile) => t === cell);
-            if (localIdx > -1) stem.splice(localIdx, 1);
-        } else {
-            console.error("Couldn't find cell in proper group, searching tree");
-            let i = 0;
-            let found;
-            do {
-                found = this.getLeaf(i)[0];
-                if (found == null || found[1] === cell) break;
-                i++;
-            } while (found !== null);
-            if (found !== null) {
-                ArrayExt.removeAllOf(found[0].tiles, cell);
-            }
+            const stem = this.findStem(cell, true); 
+            if (stem !== null) stem.removeLast(cell);
+            // let i = 0;
+            // let found;
+
+            // do {
+            //     found = this.getLeaf(i)[0];
+            //     if (found == null || found[1] === cell) break;
+            //     i++;
+            // } while (found !== null);
+            // if (found !== null) {
+            //     ArrayExt.removeAllOf(found[0].tiles, cell);
+            //     found[0].checkEmpty();
+            // }
             
-        }
+        // }
         console.log(this.tiles, this.tiles.map(Mosaic.showMosaic));
     }
 
     private async _myupdateForDeferMode(cell: Cell, cellIdx: number): Promise<void> { // modified from @jupyterlab/notebook/widget.ts:966
         // insert widget into corresponding submosaic layout, not necessarily main notebook layout anymore
-        // const [found, flocalIdx] = this.getLeaf(cellIdx);
-        // let stem, localIdx;
-        // if (found !== null) {
-        //     stem = found[0];
-        //     localIdx = flocalIdx;
-        // } else { // must be out of range, find group and append it
-        //     const path = Mosaic.getPath(cell);
-        //     stem = this.treeGetOrGrow(path);
-        //     localIdx = -1; // append
-        // }
         const [stem, localIdx] = this.mosaicInsert(cellIdx);
-        if (localIdx < 0) {
-
-
-        }
         cell.dataset.windowedListIndex = `${localIdx}`;
         (stem.layout as WindowedLayout).insertWidget(localIdx, cell);
         await cell.ready;
@@ -218,7 +190,7 @@ export class MosaicNotebook extends Notebook {
         // graft remaining branch at the correct place from the reference
         if (depth < path.length) {
             stem = stem.growBranch(path.slice(depth), [localIdx]);
-            stem.splice(-1, 0, cell); // attach sole leaf to new branch
+            stem.splice(0, 0, cell); // attach sole leaf to new branch
             return [stem, 0];
         }
         else { // or attach leaf at index if branch already complete
@@ -226,124 +198,5 @@ export class MosaicNotebook extends Notebook {
             return [stem, localIdx];
         }
 
-
-
-
-        // const pathA = after ? Mosaic.getPath(after) : [];
-        // const pathB = before ? Mosaic.getPath(before) : [];
-
-        // // const divAB = Mosaic.divergeDepth(pathA, pathB);
-        // const divA = Mosaic.divergeDepth(pathA, path);
-        // const divB = Mosaic.divergeDepth(path, pathB);
-        
-
-        
-        // if (depth == path.length) { // group already exists
-
-        //     if (divA < path.length && divB < path.length){
-        //         console.error('inserted cell, branch length', path.length, 'overextends neighbors, diverging at', divA, 'and', divB, '\n',
-        //                         pathB, path, pathA, '\n trimming...'
-        //         );
-        //         path = path.slice(0, Math.min(divA, divB));
-        //         cell.model.setMetadata('mosaic', path);
-        //         [stem, depth] = this.treeGetExisting(path);
-        //     }
-
-        //     switch (path.length) { // this cell's branch should be fully constructed in one of its neighbors, thus diverging only at its full length. 
-        //         case (divB): {
-        //             // use previous cell, or its group at this depth, as referrence
-        //             const ref = (divB == pathB.length ? before : stem.mosaics.get(pathB[divB]));
-        //             if (ref !== undefined) localIdx = stem.tiles.indexOf(ref); 
-        //             console.log('index based on prev cell ref:', localIdx);
-        //             if (localIdx > -1) {localIdx++; break;} // +1 since this is the previous cell, we want to be after it
-        //             else console.warn('prev cell ref not found', ref, before, cell);
-        //             console.log('cant find', (before as any).prompt || pathB[divB], 'in', Mosaic.showMosaic(stem));
-        //         } // can still try using pathA if pathB triggered but got localIdx == -1 (prev cell not inserted yet)
-        //         case (divA): {
-        //             // use next cell, or its group at this depth, as referrence
-        //             const ref = (divA == pathA.length ? before : stem.mosaics.get(pathA[divA]));
-        //             if (ref !== undefined) localIdx = stem.tiles.indexOf(ref);
-        //             console.log('index based on next cell ref:', localIdx);
-        //             if (localIdx > -1) break;
-        //             else console.warn('next cell ref not found', ref, after, cell);
-        //         }
-        //         default: {
-        //             console.error(
-        //             // this.mosaicInsert(index-1, before, cellsArray);
-        //             // this.mosaicInsert(index-1, before, cellsArray);
-        //         }
-        //     }
-        // } else { // brand new group, just add it. assume new neighbors will populate.
-        //     stem = stem.growBranch(path.slice(depth, -1)); console.log('created new!', path);
-        //     localIdx = 0;
-        //     setTimeout(() => {
-        //         if (stem.tiles.length < 2) {
-        //             if (stem.tiles[0] && stem.tiles[0] instanceof Mosaic) {
-        //                 stem.tiles[0].unwrap();
-        //             }
-        //             stem.unwrap();
-        //         }
-        //     }, 500);
-        // }
-
-        // // graft it
-        // stem.tiles.splice(localIdx, 0, cell);
-
-        // return [stem, localIdx];
     }
 }
-
-
-// export class MosaicStaticNotebook extends WindowedList<MosaicNotebookViewModel> {
-//   constructor(options: StaticNotebook.IOptions) {
-//     // Inject view model here
-//     const viewModel = new MosaicViewModel(cells, {
-//       overscanCount:
-//         options.notebookConfig?.overscanCount ??
-//         StaticNotebook.defaultNotebookConfig.overscanCount,
-//       windowingActive
-//     });
-//     const cells = new Array<Cell>();
-//     const windowingActive =
-//       (options.notebookConfig?.windowingMode ??
-//         StaticNotebook.defaultNotebookConfig.windowingMode) === 'full';
-//     super({
-//       model: new MosaicNotebookViewModel(cells, {
-//         overscanCount:
-//           options.notebookConfig?.overscanCount ??
-//           StaticNotebook.defaultNotebookConfig.overscanCount,
-//         windowingActive
-//       }),
-//       layout: new NotebookWindowedLayout(),
-//       renderer: options.renderer ?? WindowedList.defaultRenderer,
-//       scrollbar: false
-//     });
-
-//     this.addClass(NB_CLASS);
-//     this.cellsArray = cells;
-
-//     this._idleCallBack = null;
-
-//     this._editorConfig = StaticNotebook.defaultEditorConfig;
-//     this._notebookConfig = StaticNotebook.defaultNotebookConfig;
-//     this._mimetype = IEditorMimeTypeService.defaultMimeType;
-//     this._notebookModel = null;
-//     this._modelChanged = new Signal<this, void>(this);
-//     this._modelContentChanged = new Signal<this, void>(this);
-
-//     this.node.dataset[KERNEL_USER] = 'true';
-//     this.node.dataset[UNDOER] = 'true';
-//     this.node.dataset[CODE_RUNNER] = 'true';
-//     this.rendermime = options.rendermime;
-//     this.translator = options.translator || nullTranslator;
-//     this.contentFactory = options.contentFactory;
-//     this.editorConfig =
-//       options.editorConfig || StaticNotebook.defaultEditorConfig;
-//     this.notebookConfig =
-//       options.notebookConfig || StaticNotebook.defaultNotebookConfig;
-//     this._updateNotebookConfig();
-//     this._mimetypeService = options.mimeTypeService;
-//     this.renderingLayout = options.notebookConfig?.renderingLayout;
-//     this.kernelHistory = options.kernelHistory;
-//   }
-// }

@@ -1,50 +1,134 @@
 
-/** mosaicgroups are flex so all the cells are squeezed into a row or column */
-.mosaicgroup-inner, .jp-Notebook {
+/** mosaic-groups are flex so all the cells are squeezed into a row or column */
+.mosaic-group-inner, .jp-Notebook {
     display: flex;
     position: relative;
     flex-basis: 100%; /* keeps from crushing scrollable divs to nothing */
     overflow: auto;
     /*z-index:  -2 !important;*/
+    --mosaic-group-padding: 5px;
+    --mosaic-cell-min-width: 160px;
 }
 
+.mosaic-group-outer:has(> .jp-WindowedPanel-outer:nth-child(2):last-child > .jp-WindowedPanel-inner > .mosaic-group-inner:empty) {
+  /* hide empty groups */
+  display: none;
+}
 /** 
  * makes cells and mosaic groups the same size, with gaps between them, and not overflow 
  * z-index is to make them capture the mouse events so they know when something is dragging over them
  */
-.jp-Cell, .mosaicgroup-outer { /*, .jp-Notebook {*/
+.jp-Cell, .mosaic-group-outer { /*, .jp-Notebook {*/
     /*min-width: 0;*/
     /* width: unset !important; */
     flex-grow: 1;
     flex-shrink: 0;
     flex-basis: 0; /* needs an absolute value, not content, to not collapse */
-    min-width: max-content;
     /* z-index: 2; */
 }
 .jp-Cell {
-  min-width: 160px;
+  min-width: var(--mosaic-cell-min-width);
+  box-sizing: border-box;
 }
-/* .mosaicgroup, .jp-Notebook {
-    margin: 0;
-    z-index: 0;
-    /* gap: var(--gap-width); /
-} */
-/** when hovering over a mosaicgroup it changed its background slightly so the execution order can be seen */
-/* .mosaicgroup:hover {
+.mosaic-group-outer {
+  min-width: calc(var(--mosaic-cell-min-width) + 2*var(--mosaic-group-padding));
+}
+
+/** when hovering over a mosaic-group it changed its background slightly so the execution order can be seen */
+/* .mosaic-group:hover {
     background-color: rgba(0,0,0,0.2);
 } */
 
-.mosaicrow {
+.jp-Notebook .jp-WindowedPanel-viewport .mosaic-group-inner .mosaic-row{
     flex-direction: row;
-    /**min-height: 20rem;**/
+    padding: var(--mosaic-group-padding) 0; /** padded edges to drop cells on **/
 }
-.mosaiccol, .jp-Notebook {
+.jp-Notebook .jp-WindowedPanel-viewport .mosaic-group-inner .mosaic-col, .jp-Notebook{
     flex-direction: column;
-    /* min-width: 20rem; */
+    padding: 0 var(--mosaic-group-padding);
 }
 
-
-
+.mosaic-scrolling::after {
+  pointer-events: none;
+  z-index: 2;
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  --shadow-extent: 20px;
+}
+.mosaic-col .mosaic-scrolling {
+  scroll-timeline: --shift-shadow-vert y;
+  scroll-timeline: --shift-shadow-vert vertical;
+}
+/* .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)::after { */
+.mosaic-col .mosaic-scrolling::after {
+  /* a shadow coming in on the top and bottom to show it extends beyond these sides */
+  /* box-shadow: inset 0px 30px 10px 20px rgba(0, 0, 0, 0.5),
+              inset 0px -30px 10px 20px rgba(0, 0, 0, 0.5); */
+  animation: adjust-position-vert linear forwards;
+  animation-timeline: --shift-shadow-vert;
+}
+@keyframes adjust-position-vert {
+	0% {
+    transform: translateX(0); /* stay fixed over the viewport */
+    /* fully scrolled to the start: shadow over right only, where more cells are */
+    box-shadow: inset -10px -30px 10px -10px rgba(0, 0, 0, 0.5),
+                inset 10px 10px 10px -10px rgba(0, 0, 0, 0.5);
+	}
+  5% {
+    box-shadow: inset -10px -30px 10px -10px rgba(0, 0, 0, 0.5), 
+                inset 10px 30px 10px -10px rgba(0, 0, 0, 0.5);
+  }
+  95% {
+    box-shadow: inset -10px -30px 10px -10px rgba(0, 0, 0, 0.5), 
+                inset 10px 30px 10px -10px rgba(0, 0, 0, 0.5);
+  }
+	100% {
+    transform: translateX(calc(var(--scroll-width) + -100%)); /* stay fixed over the viewport */
+    /* fully scrolled to the end: shadow over left only, where more cells are */
+    box-shadow: inset -10px -10px 10px -10px rgba(0, 0, 0, 0.5),
+                inset 10px 30px 10px -10px rgba(0, 0, 0, 0.5);
+	}
+}
+.mosaic-row.mosaic-scrolling {
+  scroll-timeline: --shift-shadow-horiz x;
+  scroll-timeline: --shift-shadow-horiz horizontal;
+}
+/* .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)::after { */
+.mosaic-row.mosaic-scrolling::after {
+  /* a shadow coming in on the left and right to show it extends beyond these sides */
+  /* left: calc(-1*var(--shadow-extent));
+  right: calc(-1*var(--shadow-extent)); */
+  animation: adjust-position-horiz linear forwards;
+  animation-timeline: --shift-shadow-horiz;
+    /* box-shadow: inset calc(-1*var(--shadow-extent)) -1px 10px -10px rgba(0, 0, 0, 0.5), 
+                inset calc(var(--shadow-extent)) 1px 10px -10px rgba(0, 0, 0, 0.5); */
+}
+@keyframes adjust-position-horiz {
+	0% {
+    transform: translateX(0); /* stay fixed over the viewport */
+    /* fully scrolled to the start: shadow over right only, where more cells are */
+    box-shadow: inset -30px -10px 10px -10px rgba(0, 0, 0, 0.5),
+                inset 10px 10px 10px -10px rgba(0, 0, 0, 0.5);
+	}
+  5% {
+    box-shadow: inset -30px -10px 10px -10px rgba(0, 0, 0, 0.5), 
+                inset 30px 10px 10px -10px rgba(0, 0, 0, 0.5);
+  }
+  95% {
+    box-shadow: inset -30px -10px 10px -10px rgba(0, 0, 0, 0.5), 
+                inset 30px 10px 10px -10px rgba(0, 0, 0, 0.5);
+  }
+	100% {
+    transform: translateX(calc(var(--scroll-width) + -100%)); /* stay fixed over the viewport */
+    /* fully scrolled to the end: shadow over left only, where more cells are */
+    box-shadow: inset -10px -10px 10px -10px rgba(0, 0, 0, 0.5),
+                inset 30px 10px 10px -10px rgba(0, 0, 0, 0.5);
+	}
+}
 
 
 /** floating vs flat layout style */
@@ -149,6 +233,7 @@
   width: 2px;
 } */
 
+.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="top"] ,
 .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="top"] ,
 .jp-Notebook.jp-mod-commandMode
   .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] {
@@ -158,6 +243,7 @@
   border-top-width: 2px;
 }
 
+.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] ,
 .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] ,
 .jp-Notebook.jp-mod-commandMode
   .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] {
@@ -167,6 +253,7 @@
   border-bottom-width: 2px;
 }
 
+.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="left"] ,
 .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="left"] ,
 .jp-Notebook.jp-mod-commandMode
   .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="left"] {
@@ -176,6 +263,7 @@
   border-left-width: 2px;
 }
 
+.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="right"] ,
 .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="right"] ,
 .jp-Notebook.jp-mod-commandMode
   .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="right"] {
