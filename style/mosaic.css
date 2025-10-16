@@ -1,0 +1,186 @@
+
+/** mosaicgroups are flex so all the cells are squeezed into a row or column */
+.mosaicgroup-inner, .jp-Notebook {
+    display: flex;
+    position: relative;
+    flex-basis: 100%; /* keeps from crushing scrollable divs to nothing */
+    overflow: auto;
+    /*z-index:  -2 !important;*/
+}
+
+/** 
+ * makes cells and mosaic groups the same size, with gaps between them, and not overflow 
+ * z-index is to make them capture the mouse events so they know when something is dragging over them
+ */
+.jp-Cell, .mosaicgroup-outer { /*, .jp-Notebook {*/
+    /*min-width: 0;*/
+    /* width: unset !important; */
+    flex-grow: 1;
+    flex-shrink: 0;
+    flex-basis: 0; /* needs an absolute value, not content, to not collapse */
+    min-width: max-content;
+    /* z-index: 2; */
+}
+.jp-Cell {
+  min-width: 160px;
+}
+/* .mosaicgroup, .jp-Notebook {
+    margin: 0;
+    z-index: 0;
+    /* gap: var(--gap-width); /
+} */
+/** when hovering over a mosaicgroup it changed its background slightly so the execution order can be seen */
+/* .mosaicgroup:hover {
+    background-color: rgba(0,0,0,0.2);
+} */
+
+.mosaicrow {
+    flex-direction: row;
+    /**min-height: 20rem;**/
+}
+.mosaiccol, .jp-Notebook {
+    flex-direction: column;
+    /* min-width: 20rem; */
+}
+
+
+
+
+
+/** floating vs flat layout style */
+/** takes away white middle column so cells are floating in the grey area */
+.jp-Notebook[data-mosaicstyle=floating] {
+    background: transparent;
+    box-shadow: none;
+}
+/** makes cells floating things with round corners */
+.jp-Notebook[data-mosaicstyle=floating] .jp-Cell {
+    background: white;
+    box-shadow: 0px 3px 10px 1px rgba(0,0,0,0.5);
+    border-radius: 10px !important;
+}
+
+
+
+
+
+
+
+/** make the input prompt (In [ ]) and output prompt (Out [ ]) above the input and output rather than beside */
+/* .jp-Cell > .jp-Cell-inputWrapper, .jp-OutputArea {
+    flex-direction: column !important;
+} */
+/** 
+ * make the output view full width of the cell 
+ * (it usually leaves room for the output prompt, but we are putting that on top instead)
+ */
+/* .jp-OutputArea-child {
+    max-width: 100% !important;
+} */
+/** makes the input prompt or blank area of markdown cells clickable with z-index, so it can be dragged there, and full size */
+/* .jp-InputPrompt {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+} */
+/** styles the input prompt of code cells only, making it bigger and on the top rather than side */
+.prompt_container > .jp-InputPrompt {
+    text-align: left;
+    position: relative;
+    height: 2.8rem;
+    width: 100%;
+}
+
+/** puts the output prompt's overlay big and on the top rather than side just like the output prompt itself */
+/* .jp-OutputArea-promptOverlay {
+    width: 100%;
+    height: 100%;
+    max-height: 2.8rem !important;
+}
+/** puts Out [ ] on the left /
+.jp-OutputArea-promptOverlay {
+    text-align: left;
+} */
+/** makes sure the output is clickable */
+.jp-OutputArea {
+    z-index: 2 !important;
+}
+
+
+
+
+.jp-Notebook-cell.jp-mod-dropTarget {
+  /* box-sizing: content-box;
+  border-radius: 10px; */
+  border: none;
+}
+
+/* .jp-Notebook-cell.jp-mod-dropTarget ::after{
+  content: '';
+  position:absolute;
+  background-color: var(--jp-private-notebook-selected-color);
+  width: inherit;
+  height: inherit;
+} */
+/* 
+.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="top"] ::after {
+  top: 0px;
+  left: 0px;
+  right: 0px;
+  height: 2px;
+}
+.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] ::after {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="left"] ::after {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="right"] ::after {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+} */
+
+.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="top"] ,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] {
+  border: none;
+  border-top-color: var(--jp-private-notebook-selected-color);
+  border-top-style: solid;
+  border-top-width: 2px;
+}
+
+.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] ,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] {
+  border: none;
+  border-bottom-color: var(--jp-private-notebook-selected-color);
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+}
+
+.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="left"] ,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="left"] {
+  border: none;
+  border-left-color: var(--jp-private-notebook-selected-color);
+  border-left-style: solid;
+  border-left-width: 2px;
+}
+
+.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="right"] ,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="right"] {
+  border: none;
+  border-right-color: var(--jp-private-notebook-selected-color);
+  border-right-style: solid;
+  border-right-width: 2px;
+} 
