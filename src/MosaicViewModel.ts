@@ -35,7 +35,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         // overload private properties
         Object.defineProperty(this, '_widgetSizers', {
             get() {
-                console.warn('default widg sizer requested');
+                // console.warn('default widg sizer requested');
                 if (this.direction == 'row') return this._widgetSizersRow;
                 if (this.direction == 'col') return this._widgetSizersCol;
             }
@@ -160,7 +160,6 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
     getEstimatedTotalSize(dim: 'row' | 'col' | 'mode' = 'mode'): number { // based on @jupyterlab/ui-components/windowedlist.ts:279
         if (dim == 'mode') dim = this.direction;
         const widgetSizers = (dim == 'row' ? this._widgetSizersRow : this._widgetSizersCol);
-        console.warn('computing est tot size in dim', dim, widgetSizers);
 
         let totalSizeOfInitialItems = 0;
 
@@ -189,10 +188,8 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         if (this.direction == 'col') {
             return this.getEstimatedTotalSize('col');
         }
-        // console.log('ima row');
         // total height of a row is really max height of elements
         let maxSize = 0;
-        // console.log('sizers', this._widgetSizersCol);
         for (let i = 0; i < this.widgetCount; i++) {
             const sizer = this._widgetSizersCol[i];
             // console.log('row el height', sizer, this.estimateWidgetHeight(i), this.widgetRenderer(i));
@@ -201,7 +198,6 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                 : this.estimateWidgetHeight(i));
         }
 
-        console.log(this.direction, 'maxsize', maxSize);
         return maxSize;
     }
     getEstimatedTotalWidth(): number {
@@ -251,7 +247,6 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                         const widget = this.widgetRenderer(i);
                         if (widget?.node && widget.node.isConnected) {
                             const rect = widget.node.getBoundingClientRect();
-                            console.log('rect', rect);
                             size = (mode == 'row' ? rect.width : rect.height);
                             measured = true;
                         } else {
@@ -260,7 +255,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                                         :   this.estimateWidgetHeight(i));
                             measured = false;
                         }
-                        console.log(this.direction, 'measured', mode, i, widget, size)
+                        // console.log(this.direction, 'measured', mode, i, widget, size)
                     }
 
                     widgetSizers[i] = { offset, size, measured };
@@ -276,7 +271,6 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
             }
             
 
-            // console.log('ws', mode, widgetSizers, this.measuredAllUntilIndex);
             for (let i = 0; i <= this.measuredAllUntilIndex; i++) {
                 const sizer = widgetSizers[i];
                 if (i === 0) {

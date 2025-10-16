@@ -55,24 +55,22 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       }
 
       // Compute the to/from indices for the move.
-      console.log('tm', toMove[0].dataset.windowedListIndex, toMove[0].model.id, (toMove[0] as any).prompt);
-      console.log('w, ca', self.widgets.map(w=>(w as any).prompt), (self as any).cellsArray.map((w:any)=>w.prompt));
       let fromIndex = ArrayExt.firstIndexOf(self.widgets, toMove[0]);
-      console.log('fi', fromIndex);
       let toIndex = (self as any)._findCell(target);
 
 
       /** < MODIFIED: MOSAIC > **/
-      const dropCell = self.widgets[toIndex];
-      const mosaicpath = dropCell.model.metadata.mosaic as Array<string> || [];
-      const group = self.treeGet(mosaicpath) as Mosaic;
-      const dropIdx = group.tiles.indexOf(dropCell); // index within this sub list
+      const targetCell = self.widgets[toIndex];
+      const group = targetCell.parent as Mosaic;
+      const dropIdx = group.tiles.indexOf(targetCell); // index within this sub list
 
-      const side = dropCell.node.dataset.mosaicDropSide || closestSide(event, target);
+      const side = targetCell.node.dataset.mosaicDropSide || closestSide(event, target);
       const collike = (side == 'bottom' || side == 'top');
       const rowlike = (side == 'left' || side == 'right');
       // const beforelike = side == 'top' || side == 'left';
       const afterlike = side == 'bottom' || side == 'right';
+
+      const mosaicpath = Mosaic.getPath(targetCell);
 
       let toMosaic: Array<string> = [];
       if ( (group.direction == 'row' && collike)
@@ -86,12 +84,14 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
             toMosaic = mosaicpath;
       }
 
-      for (const movecell of [...toMove, dropCell]) {
+      for (const movecell of [...toMove, targetCell]) {
         movecell.model.setMetadata('mosaic', toMosaic);
         console.log('SET MOSAIC MD', movecell.model.getMetadata('mosaic'));
       }
 
-      (self as any).onCellInserted(toIndex, dropCell); // trigger repositioning of destination cell, as it may be joining a new group
+      if (afterlike) {
+        toIndex += 1; // drop on bottom or right of cell to go after it
+      }
 
 
       /** </ MODIFIED: MOSAIC > **/
@@ -108,26 +108,36 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       }
       // Don't move if we are within the block of selected cells.
       if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
-        for (const movecell of toMove) (self as any).onCellInserted(toIndex, movecell); // trigger repositioning of cell, as it may be joining a new group
+        console.log('indices preserved.');
+        console.log('mosaicing...', (self as any).tiles.map(Mosaic.showMosaic));
+        for (let ind = fromIndex; ind < fromIndex + toMove.length; ind++) {
+          self.mosaicInsert(ind); // update mosaic structure
+        }
+        console.log('mosaiced', (self as any).tiles.map(Mosaic.showMosaic));
         return;
       }
 
       // Move the cells one by one
       console.log('moving...', (self as any).tiles.map(Mosaic.showMosaic));
       self.moveCell(fromIndex, toIndex, toMove.length);
-      /** < MODIFIED: MOSAIC > */
-      console.log('afer?', afterlike);
-      if (afterlike) {
-        // move destination cell (now at toIndex+ n moved cells) back to in front of the new cells
-        // could have used toIndex += 1 before original move, but we need moveCell to trigger
-        // even when the from and to index are the same, since mosaic structure may change even if order doesn't.
-        console.log('moving orig back to top', toIndex, toMove.length, (self as any).tiles.map(Mosaic.showMosaic));
-        self.moveCell(toIndex+toMove.length, toIndex);
-        console.log('moved orig back to top', (self as any).tiles.map(Mosaic.showMosaic));
-      }
-      /** </ MODIFIED: MOSAIC > */
       console.log('moved.', (self as any).tiles.map(Mosaic.showMosaic));
 
+      console.log('mosaicing...', (self as any).tiles.map(Mosaic.showMosaic));
+      let firstChangedIndex = toIndex; 
+      // cells taken out from before the destination just shift the destination back.
+      // orig jupyter code subtracted 1 already if toIndex > fromIndex, so we add 1
+      if (toIndex > fromIndex) firstChangedIndex += 1 - toMove.length; 
+      if (afterlike) firstChangedIndex -= 1; // include target cell even if dropped after it
+      for (let i = firstChangedIndex; i < firstChangedIndex + toMove.length+1; i++) { // go for toMove.length+1 : do the moved cells and target cell
+        self.mosaicInsert(i);
+      }
+      console.log('mosaiced.', (self as any).tiles.map(Mosaic.showMosaic));
+
+      /** < MODIFIED: MOSAIC > */
+      /** </ MODIFIED: MOSAIC > */
+
+    } else {
+      // CROSS NOTEBOOK MOSAIC NOT YET IMPLEMENTED
     }
 }
 
