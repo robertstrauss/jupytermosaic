@@ -114,6 +114,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
         if (groupID == '') groupID = Mosaic.newUGID();
         const newMosaic = new Mosaic(this, groupID, this.options);
         this.splice(index, 0, newMosaic);
+        console.log('spliced to', index);
         return newMosaic;
     }
     growBranch(path: Array<string>, branchsIxs: Array<number> = [], depth: number = 0): Mosaic {
@@ -128,6 +129,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     }
 
     splice(startIndex: number, replaceCount: number, ...tiles: Array<Tile>) {
+        if (startIndex < 0) startIndex = this.tiles.length;
         const deleted = this.tiles.splice(startIndex, replaceCount, ...tiles);
         if (deleted.length > 0) {
             this.viewModel.onListChanged({} as any, {

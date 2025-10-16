@@ -218,7 +218,7 @@ export class MosaicNotebook extends Notebook {
         // graft remaining branch at the correct place from the reference
         if (depth < path.length) {
             stem = stem.growBranch(path.slice(depth), [localIdx]);
-            stem.splice(0, 0, cell); // attach sole leaf to new branch
+            stem.splice(-1, 0, cell); // attach sole leaf to new branch
             return [stem, 0];
         }
         else { // or attach leaf at index if branch already complete
