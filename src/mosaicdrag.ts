@@ -202,6 +202,12 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
     (elements[0] as HTMLElement).classList.remove(DROP_TARGET_CLASS);
   }
   let target = event.target as HTMLElement;
+  while (target && target.parentElement) {
+    if (target.classList.contains(JUPYTER_CELL_CLASS)) {
+      break;
+    }
+    target = target.parentElement;
+  }
 
   let index = (self as any)._findCell(target);
 
@@ -268,6 +274,8 @@ function closestSide(e: Drag.Event, target: HTMLElement): 'top' | 'left' | 'bott
 
   // Find the minimum distance
   const minDist = Math.min(distTop, distLeft, distBottom, distRight);
+
+  console.log('closest side', target, target.getBoundingClientRect(), distTop, distLeft, distBottom, distRight, minDist);
 
   switch (minDist) {
     case distTop:
