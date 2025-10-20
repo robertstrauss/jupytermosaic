@@ -10,10 +10,10 @@
     --mosaic-cell-min-width: 160px;
 }
 
-.mosaic-group-outer:has(> .jp-WindowedPanel-outer:nth-child(2):last-child > .jp-WindowedPanel-inner > .mosaic-group-inner:empty) {
-  /* hide empty groups */
+/* .mosaic-group-outer:has(> .jp-WindowedPanel-outer:nth-child(2):last-child > .jp-WindowedPanel-inner > .mosaic-group-inner:empty) {
+  /* hide empty groups * /
   display: none;
-}
+} */
 /** 
  * makes cells and mosaic groups the same size, with gaps between them, and not overflow 
  * z-index is to make them capture the mouse events so they know when something is dragging over them

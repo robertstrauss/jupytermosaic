@@ -2,14 +2,14 @@ import { NotebookViewModel } from '@jupyterlab/notebook';
 import { Cell, CodeCellModel } from '@jupyterlab/cells';
 import { WindowedList } from '@jupyterlab/ui-components'
 import { Widget } from '@lumino/widgets';
-// import { IObservableList } from '@jupyterlab/observables';
 
-import type { FlexDirection, Tile } from './MosaicGroup';
-import { IObservableList } from '@jupyterlab/observables';
+import type { FlexDirection, ObservableTree, Tile } from './MosaicGroup';
+
+
 
 
 export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
-    static CELL_MIN_WIDTH = 50;
+    static CELL_MIN_WIDTH = 160;
     // protected cellsEstimatedHeight = new Map<string, number>();
     protected tilesEstimatedWidth = new Map<string, number>();
     protected tilesEstimatedHeight = new Map<string, number>();
@@ -25,13 +25,15 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
     //     });
     // });
     // protected cells: Array<Tile>;
-
+    protected _tiles: ObservableTree<Tile> | null = null;
     constructor(
-        public tiles: Array<Tile>,
+        tiles: ObservableTree<Tile>,
         public direction: FlexDirection,
         options?: WindowedList.IModelOptions
     ) {
         super([], options);
+        this.tiles = tiles;
+
         // overload private properties
         Object.defineProperty(this, '_widgetSizers', {
             get() {
@@ -43,26 +45,34 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         (this as any)._getItemMetadata = this.getItemMetadata;
     }
 
-    public onListChanged(list: IObservableList<Widget>, changes: IObservableList.IChangedArgs<Widget>): void {
-        super.onListChanged(list, changes);
+    set tiles(ts:ObservableTree<Tile>) {
+        this._tiles = ts;
+        this.itemsList = ts;
+    }
+    get tiles(): ObservableTree<Tile> | null {
+        return this._tiles;
+    }
+
+    public onListChanged(list: any, changes: any): void {
+        return super.onListChanged(list, changes);
     }
 
     _getWidgetCount(): number {
-        return this.tiles.length;
+        return this.tiles?.length || 0;
     }
     get widgetCount() {
         return this._getWidgetCount();
     }
 
     _widgetRenderer (index: number): Widget {
-        return (this.tiles[index])
+        return (this.tiles!.get(index))
     }
     // widgetRenderer is defined as a property rather than a method on super, so must follow suit
     widgetRenderer: (index: number) => Widget = MosaicViewModel.prototype._widgetRenderer.bind(this);//(index: number) => MosaicViewModel._widgetRenderer(this, index); // work around for "Class 'WindowedListModel' defines instance member property 'widgetRenderer', but extended class 'MosaicViewModel' defines it as instance member function."
 
-    get widgetSizers() {
-        return (this as any)._widgetSizers;
-    }
+    // get widgetSizers() {
+    //     return (this as any)._widgetSizers;
+    // }
     setWidgetSize(sizes: { index: number; size: number; }[], dim: 'row' | 'col' | 'mode' = 'mode'): boolean {
         if (dim == 'mode') dim = this.direction;
 
@@ -79,7 +89,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
     _estimateWidgetSize (index: number): number {
 
         // this.parent.index
-        const tile = this.tiles[index];
+        const tile = this.tiles?.get(index);
         if (!tile) {
             // This should not happen, but if it does,
             // do not throw if tile was deleted in the meantime
@@ -96,7 +106,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         }
     }
     estimateWidgetHeight(index:number): number {
-        const tile = this.tiles[index];
+        const tile = this.tiles!.get(index);
         if (tile instanceof Cell) {
             // return NotebookViewModel.prototype.estimateWidgetSize.bind({
             //         cells: {[index]: tile},
@@ -140,7 +150,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
         }
     }
     estimateWidgetWidth(index:number): number {
-        const tile = this.tiles[index];
+        const tile = this.tiles!.get(index);
         if (tile instanceof Cell) {
             return MosaicViewModel.CELL_MIN_WIDTH;
         } else {
@@ -245,7 +255,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                         measured = true;
                     } else {
                         const widget = this.widgetRenderer(i);
-                        if (widget?.node && widget.node.isConnected) {
+                        if (widget?.node && widget.node.isConnected && widget.node.style.display != 'none') {
                             const rect = widget.node.getBoundingClientRect();
                             size = (mode == 'row' ? rect.width : rect.height);
                             measured = true;
@@ -255,7 +265,6 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                                         :   this.estimateWidgetHeight(i));
                             measured = false;
                         }
-                        // console.log(this.direction, 'measured', mode, i, widget, size)
                     }
 
                     widgetSizers[i] = { offset, size, measured };

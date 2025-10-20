@@ -7,7 +7,7 @@ import {
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { IEditorServices } from '@jupyterlab/codeeditor';
-import { NotebookWidgetFactory, INotebookWidgetFactory, INotebookTracker, INotebookModel, ToolbarItems } from '@jupyterlab/notebook'
+import { NotebookWidgetFactory, INotebookWidgetFactory, INotebookTracker, INotebookModel, ToolbarItems, CellList } from '@jupyterlab/notebook'
 
 // import { MosaicNotebookViewModel, MosaicViewModel } from './MosaicViewModel';
 import { MosaicNotebookPanel } from './MosaicNotebookPanel';
@@ -50,6 +50,19 @@ const plugin: JupyterFrontEndPlugin<void> = {
   activate: async (app: JupyterFrontEnd, tracker:INotebookTracker,  launcher: ILauncher, router: IRouter, nbfactory: NotebookWidgetFactory, rendermime: IRenderMimeRegistry, editorServices: IEditorServices,
             settingRegistry: ISettingRegistry, toolbarRegistry: IToolbarWidgetRegistry) => {
     console.log('JupyterLab extension mosaic-lab is activated!');
+    tracker.widgetAdded.connect((sender: INotebookTracker, panel: NotebookPanel) => {
+      const addListener = (notebook: any, msg:any) => {
+        if (notebook.model) {
+          console.log('adding cell listener');
+          notebook.model.cells.changed.connect((list: CellList, msg:any) => {
+            console.log('cell change event', msg);
+          })
+        }
+      };
+      panel.content.modelChanged.connect(addListener);
+      addListener(panel.content, {});
+    
+    });
     // const settings = await settingRegistry.load('mosaic-lab:plugin');
 
     // app.docRegistry.addWidgetExtension('Notebook', {
