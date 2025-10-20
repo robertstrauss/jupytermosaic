@@ -275,8 +275,6 @@ function closestSide(e: Drag.Event, target: HTMLElement): 'top' | 'left' | 'bott
   // Find the minimum distance
   const minDist = Math.min(distTop, distLeft, distBottom, distRight);
 
-  console.log('closest side', target, target.getBoundingClientRect(), distTop, distLeft, distBottom, distRight, minDist);
-
   switch (minDist) {
     case distTop:
       return 'top';
