@@ -39,11 +39,11 @@
     background-color: rgba(0,0,0,0.2);
 } */
 
-.jp-Notebook .jp-WindowedPanel-viewport .mosaic-group-inner .mosaic-row{
+.jp-WindowedPanel-viewport.mosaic-group-inner.mosaic-row{
     flex-direction: row;
     padding: var(--mosaic-group-padding) 0; /** padded edges to drop cells on **/
 }
-.jp-Notebook .jp-WindowedPanel-viewport .mosaic-group-inner .mosaic-col, .jp-Notebook{
+.jp-WindowedPanel-viewport.mosaic-group-inner.mosaic-col, .jp-Notebook{
     flex-direction: column;
     padding: 0 var(--mosaic-group-padding);
 }
