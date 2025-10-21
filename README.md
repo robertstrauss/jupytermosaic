@@ -1,11 +1,5 @@
 # Jupyter Mosaic
 
-## HELP WANTED!
-I'm looking for a collaborator to help me develop and update the jupyter-lab version of jupyter mosaic. Since it seems jupyter intends to phase out jupyter notebooks in favor of lab, and for those who prefer labs anyways, it would be good to get a lab version of the extension working. The extension interface has completely changed so I'm working on doing this from scratch, which is going slowly due to the new and in my opinion more difficult to develop interface for jupyterlab extensions.
-
-contact me: robert.strauss@protonmail.com
-Preferred: those with knowledge of typescript or, better yet, understanding of the jupyterlab codebase (or extension interface)
-
 [Description](#description)
 
 [Installation](#installation)
@@ -34,7 +28,15 @@ Two different styles are offered, and can be switched between with a dropdown me
 
 # Installation
 
-## Jupyter notebook
+## Jupyter Lab and Jupyter Notebook version 7+
+
+```bash
+git clone https://github.com/robertstrauss/jupytermosaic
+
+cd jupytermosaic && pip install -e .
+```
+
+## NbClassic (Jupyter Notebook Version < 7)
 
 We recommend updating conda/jupyter before beginning, because we have found older versions cause `nbextension enable` to fail.
 
@@ -58,11 +60,6 @@ Or uninstalled similarly:
 ```bash
 jupyter nbextension uninstall mosaic_notebook --user
 ```
-
-## Jupyter lab
-TODO - Jupyter mosaic does not currently work on Jupyter lab.
-
-
 
 # Grid Structure and Execution Order
 A regular Jupyter notebook is a series of cells, each occupying the entire width of the notebook.
