@@ -1,28 +1,30 @@
 import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin,
-  IRouter
 } from '@jupyterlab/application';
 
-import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
+// import { ISettingRegistry } from '@jupyterlab/settingregistry';
+// import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { IEditorServices } from '@jupyterlab/codeeditor';
-import { NotebookWidgetFactory, INotebookWidgetFactory, INotebookTracker, INotebookModel } from '@jupyterlab/notebook' // INotebookModel,
+import { NotebookWidgetFactory, INotebookTracker, INotebookModel } from '@jupyterlab/notebook' // INotebookModel,
 
-// import { MosaicNotebookViewModel, MosaicViewModel } from './MosaicViewModel';
-import { MosaicNotebookPanel } from './MosaicNotebookPanel';
-// import { MosaicGroup } from './MosaicGroup';
-
-// import { ToolbarItems } from '@jupyterlab/notebook';
-import { Dialog, IToolbarWidgetRegistry, showDialog } from '@jupyterlab/apputils';
-
+import { Dialog, showDialog } from '@jupyterlab/apputils';
 import { NotebookPanel, NotebookModelFactory } from '@jupyterlab/notebook';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 // import { Doc } from 'yjs';
-// import { Cell } from '@jupyterlab/cells';
-
-// import { Contents } from '@jupyterlab/services';
 import { ILauncher } from '@jupyterlab/launcher';
+import { LabIcon } from '@jupyterlab/ui-components';
+import { IKernelSpecManager, KernelManager } from '@jupyterlab/services';
+
+
+import { MosaicNotebookPanel } from './MosaicNotebookPanel';
+
+
+import MosaicIcon from '../style/icons/mosaic-icon.svg';
+// const MOSAIC_ICON_PATH = '../style/icons/mosaic-icon.svg';
+
+
+const MosaicLabIcon = new LabIcon({ name: 'mosaic:favicon', svgstr: MosaicIcon.toString()});
 
 const PLUGIN_ID = 'mosaic-lab:plugin';
 const MOSAIC_FACTORY = 'Mosaic Notebook';
@@ -45,10 +47,9 @@ const plugin: JupyterFrontEndPlugin<void> = {
   id: PLUGIN_ID,
   description: 'Arrange Jupyter notebook cells in any way two-dimensionally. Present your code compactly in Zoom video confrences. Let your Jupyter notebook tell the story and be self-documenting in itself, like a poster presentation. Eliminate white space in your notebook and take advantage of unused screen real estate.',
   autoStart: true,
-  requires: [INotebookTracker, ILauncher, IRouter, INotebookWidgetFactory, IRenderMimeRegistry, IEditorServices, ISettingRegistry, IToolbarWidgetRegistry],
+  requires: [INotebookTracker, ILauncher, IEditorServices, IKernelSpecManager],
   optional: [],
-  activate: async (app: JupyterFrontEnd, tracker:INotebookTracker,  launcher: ILauncher, router: IRouter, nbfactory: NotebookWidgetFactory, rendermime: IRenderMimeRegistry, editorServices: IEditorServices,
-            settingRegistry: ISettingRegistry, toolbarRegistry: IToolbarWidgetRegistry) => {
+  activate: async (app: JupyterFrontEnd, tracker:INotebookTracker,  launcher: ILauncher, editorServices: IEditorServices, kernelManager:KernelManager) => {
     console.log('JupyterLab extension mosaic-lab is activated!');
 
     // const settings = await settingRegistry.load('mosaic-lab:plugin');
@@ -119,10 +120,13 @@ const plugin: JupyterFrontEndPlugin<void> = {
         }),
       mimeTypeService: defaultNotebookFactory.mimeTypeService,
       toolbarFactory: (defaultNotebookFactory as any)._toolbarFactory,
+      
       // notebookConfig: {}
+      
     }));
     mosaicWidgetFactory.widgetCreated.connect((sender: DocumentRegistry.IWidgetFactory<NotebookPanel, INotebookModel>, panel: NotebookPanel) => {
       (tracker as any).add(panel);
+      panel.title.icon = MosaicLabIcon;
     })
     mosaicWidgetFactory.widgetCreated.connect(clobberCheck);
     defaultNotebookFactory.widgetCreated.connect(clobberCheck);
@@ -140,26 +144,39 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
     
 
-    app.commands.addCommand('mosaic:notebook:open', {
-      label: 'Notebook (Mosaic)',
+    app.commands.addCommand('mosaic-notebook:create-new', {
+      label: args => `[Mosaic] ${app.serviceManager.kernelspecs.specs?.kernelspecs[args.kernelName as string]?.display_name || ''}`,
       caption: 'Create a new Mosaic Notebook',
-      execute: () => {
-        return app.commands.execute('docmanager:new-untitled', {
+      execute: async ({ kernelName }) => {
+        const model = await app.commands.execute('docmanager:new-untitled', {
           type: 'notebook'
-        }).then(model => {
-          return app.commands.execute('docmanager:open', {
-            path: model.path,
-            factory: MOSAIC_FACTORY
-          });
+        });
+
+        return app.commands.execute('docmanager:open', {
+          path: model.path,
+          factory: MOSAIC_FACTORY,
+          kernel: {name: kernelName}
         });
       },
+      icon: MosaicLabIcon,
+      iconLabel: 'Mosaic Notebook'
     });
+    
 
-    launcher.add({
-      command: 'mosaic:notebook:open',
-      category: 'Notebook',
-      rank: 10
-    });
+    for (const name in app.serviceManager.kernelspecs.specs!.kernelspecs) {
+      const spec = app.serviceManager.kernelspecs.specs!.kernelspecs[name];
+      console.log('adding kernel', name, spec, `${spec!.resources['logo-svg']}`);
+      launcher.add({
+        command: 'mosaic-notebook:create-new',
+        args: { kernelName: name },
+        category: 'Notebook',
+        rank: 0,
+        // label: `${spec.display_name} (Mosaic)`,
+        kernelIconUrl: `${spec!.resources['logo-svg']}`,
+      });
+    }
+
+
   }
 };
 

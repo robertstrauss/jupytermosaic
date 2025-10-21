@@ -9,7 +9,6 @@ import { ObservableList, IObservableList } from '@jupyterlab/observables';
 
 import { MosaicViewModel } from './MosaicViewModel';
 import { MosaicNotebook } from './MosaicNotebookPanel';
-import { Widget } from '@lumino/widgets';
 // import { Widget } from '@lumino/widgets';
 // import { MosaicNotebook } from './MosaicNotebookPanel';
 
@@ -19,18 +18,7 @@ export type FlexDirection = 'row' | 'col';
 export type Tile = LeafCell | Mosaic;
 
 export class LeafCell extends Cell {
-    protected _superMosaic: Mosaic | null = null; // mosaic tree awareness, track parent
-    get superMosaic(): Mosaic | null {
-        return this._superMosaic;
-    }
-    set superMosaic(m: Mosaic) {
-        console.log('reparent', this, 'from', this._superMosaic, 'to', m);
-        if (this._superMosaic && m !== this._superMosaic) {
-            this._superMosaic.tiles.removeValue(this);
-            console.log('removed from ', this._superMosaic);
-        }
-        this._superMosaic  = m;
-    }
+    public superMosaic: Mosaic | null = null; // mosaic tree awareness, track parent
 }
 
 // export type NestedObservableList<T> = IObservableList<T | NestedObservableList<T>>;
@@ -75,15 +63,16 @@ export class ObservableTree<T> extends ObservableList<T> {
   }
 }
 
-class ReparentableNotebookWindowedLayout extends NotebookWindowedLayout {
-    protected detachWidget(index: number, widget: Widget): void {
-        // don't execute detachment procedures if the widget has been moved to some other parent.
-        // otherwise a race condition arises hiding or showing the element depending on if
-        // reciever or donor parent updates first.
-        if (widget.parent && widget.parent !== this.parent) return;
-        super.detachWidget(index, widget);
-    }
-}
+// class ReparentableNotebookWindowedLayout extends NotebookWindowedLayout {
+//     protected detachWidget(index: number, widget: Widget): void {
+//         // don't execute detachment procedures if the widget has been moved to some other parent.
+//         // otherwise a race condition arises hiding or showing the element depending on if
+//         // reciever or donor parent updates first.
+//         if (widget.isAttached && widget.parent && widget.parent !== this.parent) return;
+//         console.log(widget, widget.parent, this, this.parent);
+//         super.detachWidget(index, widget);
+//     }
+// }
 
 export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (element in notebook), but also like a windowedlist/notebook (contains more cells)
     static METADATA_NAME = 'mosaic';
@@ -117,7 +106,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                     Mosaic.defaultConfig.overscanCount,
                 windowingActive: true
             }),
-            layout: new ReparentableNotebookWindowedLayout(),
+            layout: new NotebookWindowedLayout(), //ReparentableNotebookWindowedLayout(),
             renderer: /*options.renderer ??*/ WindowedList.defaultRenderer,
             scrollbar: false
         });
@@ -189,6 +178,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                 break;
             }
         }
+        if (msg.type == 'remove') console.warn('remove', this);
 
         requestAnimationFrame(() => this.update());
 
@@ -242,7 +232,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         if (depth < path.length) {
             let nextBranch = (this.mosaics.get(path[depth]));
             if (nextBranch == undefined) {
-                nextBranch = this.addTile(path[depth], (branchsIxs[depth] || -1));
+                nextBranch = this.addTile(path[depth], (branchsIxs.length > depth ? branchsIxs[depth] : -1));
             }
             return (nextBranch as Mosaic).growBranch(path, branchsIxs, depth+1);
         }
@@ -554,11 +544,12 @@ export namespace Mosaic {
         return cell.model!.setMetadata(Mosaic.METADATA_NAME, path);
     }
     export function setParent(tile:Tile, mosaic: Mosaic | null) {
+        // console.warn('set parent', tile instanceof Cell ? 'Cell:'+(tile as any).prompt : 'mosaic:'+tile.path, tile.superMosaic, tile.parent, mosaic);
         if (tile.superMosaic && tile.superMosaic !== mosaic) {
             tile.superMosaic.tiles.removeValue(tile);
         }
         tile.superMosaic = mosaic;
-        tile.parent = mosaic; // important: need to check parentage before removing, in case it was just moved to another list.
+        // tile.parent = mosaic; // important: need to check parentage before removing, in case it was just moved to another list.
     }
     export function divergeDepth(path1: Array<string>, path2: Array<string>): number {
         for (let i = 0; i < path1.length; i++) {

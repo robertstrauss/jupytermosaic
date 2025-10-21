@@ -81,16 +81,9 @@ export class MosaicNotebook extends Notebook {
     set model(model: INotebookModel | null) {
         super.model = model;
         // viewModel List changes handled by mosaicgroup. Don't need observable list to trigger it
-        this.viewModel.itemsList = null;
+        this.viewModel.itemsList = this.tiles;
     }
 
-    moveCell(from: number, to: number, n: number = 1): void {
-        for (let i = to; i < to + n; i++) {
-            // longestSharedPath = [];
-        }
-
-        super.moveCell(from, to, n);
-    }
 
     protected onCellInserted(index: number, cell: Cell): void {
         super.onCellInserted(index, cell);
@@ -139,7 +132,7 @@ export class MosaicNotebook extends Notebook {
             base = reference.superMosaic! as Mosaic;
         }
         let idx = base.tiles.indexOf(reference);
-        console.log('ref', base, reference, idx);
+        // console.log('ref', base, reference, idx);
         if (idx < 0) {
             console.error('referrence leaf/branch missing!');
             base = this as any;
@@ -175,7 +168,9 @@ export class MosaicNotebook extends Notebook {
         const cell = this.cellsArray[index] as LeafCell;
         const nextCell = this.cellsArray[index+1] as LeafCell;
 
-        Mosaic.setParent(cell, null); // remove from current position
+        // remove from current group
+        Mosaic.setParent(cell, null);
+        cell.parent = null;
 
         let prevPath = prevCell?.superMosaic?.path || [];//Mosaic.getPath(prevCell)! : [];
         let path = Mosaic.getPath(cell); // use saved MD path to get where it goes, not where it is
@@ -201,27 +196,24 @@ export class MosaicNotebook extends Notebook {
         let nextDiverge = nextCell?.superMosaic ? Mosaic.divergeDepth(nextPath, path) : -1;
 
         // if we've left the groups of the other cells, let them collapse if underpopulated
-        // if (this.leafStems.has(prevCell)) {
         if (prevCell && prevCell.superMosaic) {
-            // let prevGroup = this.leafStems.get(prevCell);
             let prevGroup: any = prevCell;
             for ( let i = prevDiverge; i < prevPath.length; i++ ) {
                 prevGroup = prevGroup!.superMosaic!;
                 prevGroup?.checkEmpty();
             }
             // path was updated by collapsing redundant groups
-            prevPath = prevCell.superMosaic!.path; //Mosaic.getPath(prevCell)!;
+            prevPath = prevCell.superMosaic!.path;
             prevDiverge = prevCell.superMosaic ? Mosaic.divergeDepth(prevPath, path) : -1;
         }
         if (nextCell && nextCell.superMosaic) {
-            // let nextGroup = this.leafStems.get(nextCell);
             let nextGroup: any = nextCell;
             for ( let i = nextDiverge; i < nextPath.length; i++ ) {
                 nextGroup = nextGroup!.superMosaic!;
                 nextGroup?.checkEmpty();
             }
             // path was updated by collapsing redundant groups
-            nextPath = nextCell.superMosaic.path; //Mosaic.getPath(nextCell)!;
+            nextPath = nextCell.superMosaic.path;
             nextDiverge = nextCell.superMosaic ? Mosaic.divergeDepth(nextPath, path) : -1;
         }
 
