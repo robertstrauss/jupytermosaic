@@ -34,6 +34,12 @@ Two different styles are offered, and can be switched between with a dropdown me
 pip install git+https://github.com/robertstrauss/jupytermosaic.git
 ```
 
+### Uninstall
+
+```bash
+pip uninstall mosaic
+```
+
 ## NbClassic (Jupyter Notebook Version < 7)
 
 We recommend updating conda/jupyter before beginning, because we have found older versions cause `nbextension enable` to fail.
@@ -48,7 +54,7 @@ You may need to restart the Jupyter notebook server if it was already running.
 You should see a dropdown on the jupyter notebook toolbar for the notebook style with the options "Flat layout" and "Floating cells" to confirm the installation.
 Congrats! You can now drag cells around by their handle ("In [x]:") to make any layout you like. This will even save with the notebook and load back up next time. And if you send the notebook file to someone with the extension, they will see the layout you created. Enjoy!
 
-## Uninstall
+### Uninstall
 
 It can be disabled by running this in the directory you cloned the repo at:
 ```bash
