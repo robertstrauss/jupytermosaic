@@ -4,7 +4,7 @@ import { Message } from '@lumino/messaging';
 // import { ChildMessage } from '@lumino/widgets';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Cell, CodeCell,  } from '@jupyterlab/cells';
-// import { ArrayExt } from '@lumino/algorithm';
+import { ArrayExt } from '@lumino/algorithm';
 import { ObservableList, IObservableList } from '@jupyterlab/observables';
 
 import { MosaicViewModel } from './MosaicViewModel';
@@ -59,9 +59,21 @@ export class ObservableTree<T> extends ObservableList<T> {
         }
         return out;
     }
-    indexOf(val: T): number {
-        return (this as any)._array.indexOf(val);
+    indexOf(value: T): number {
+        const itemCmp = (this as any)._itemCmp;
+        return ArrayExt.findFirstIndex((this as any)._array, (item: T) => {
+            return itemCmp(item, value);
+        });
     }
+    removeValue(value: T): number {
+    const itemCmp = (this as any)._itemCmp;
+    const index = ArrayExt.findFirstIndex((this as any)._array, (item: T) => {
+      return itemCmp(item, value);
+    });
+    if (index < 0) return index;
+    this.remove(index);
+    return index;
+  }
 }
 
 export class Mosaic extends WindowedList<MosaicViewModel> { //
@@ -133,7 +145,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
 
     onTreeChanged(tree:ObservableTree<Tile>, msg:IObservableList.IChangedArgs<Tile>): void {
         switch (msg.type) {
-            case 'set':
+            // case 'set':
             case 'clear':
             case 'remove': {
                 // for (const tile of msg.oldValues) {
@@ -168,15 +180,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
                 break;
             }
         }
-        console.log('TREE CHANGE', this.path, 'propagating to', this.superMosaic);
         // trigger update on super tree for this item
-        // if (this.superMosaic) {
-        //     console.log('idx', this.superMosaic.tiles.indexOf(this));
-        //     this.superMosaic.tiles.set(this.superMosaic.tiles.indexOf(this), this);
-        //     const idx2 = this.superMosaic.tiles.removeValue(this);
-        //     console.log('idx2', idx2);
-        //     this.superMosaic.tiles.insert(idx2, this);
-        // }
         if (this.superMosaic) {
             const idx = this.superMosaic.tiles.indexOf(this);
             if (idx > -1) this.superMosaic.onTreeChanged(this.superMosaic.tiles, {
@@ -246,10 +250,8 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     }
 
     checkEmpty() {
-        console.log('checking empty!', this.node, Mosaic.showMosaic(this));
         // unwrap if only holding one or no tiles
         if (this.tiles.length < 2) {
-            console.log('unwrap!', Mosaic.showMosaic(this));
             const subtile = this.tiles.get(0);
             if (subtile && subtile instanceof Mosaic) {
                 subtile.unwrap(); // remove double-wrap (to preserve flex direction)
@@ -262,30 +264,14 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     unwrap() {
         if (!this.superMosaic) return;
 
-        // update metadata of contained cells
-        // const removeGID = this.groupID;
-        // const recurseUpdate = (tile: Tile) => {
-        //     if (tile instanceof Cell) {
-        //         // remove my group ID from cells mosaic tree path
-        //         const prepath = Mosaic.getPath(tile) || [];
-        //         const idx = prepath.indexOf(removeGID);
-        //         if (idx > -1) {
-        //             const newpath = prepath.splice(prepath.indexOf(removeGID), 1);
-        //             Mosaic.setPath(tile, newpath);
-        //         }
-        //     } else {
-        //         tile.tiles.map((t:Tile) => recurseUpdate(t));
-        //     }
-        //     this.update();
-        // }
-        // recurseUpdate(this);
-
         // remove self from superMosaic
         const idx = this.superMosaic.tiles.removeValue(this); // I am now dereferrenced, I should be garbage collected.
+        // console.log('unwrapping:', this.path, Mosaic.showMosaic(this), 'index in super:', idx, this.superMosaic);
         if (this.tiles.length > 0) { // insert my contents (if any) where I was
+            console.log('im not empty');
             this.superMosaic.tiles.splice(idx, 0, ...this.tiles);
+            console.log('gave to parent:', Mosaic.showMosaic(this.superMosaic as Mosaic));
         }
-        // if (this.superMosaic !== null) console.log('parent after unwrap', Mosaic.showMosaic(this.superMosaic as Mosaic));
     }
 
     getLeaf(leafIx: number): [[Mosaic, LeafCell] | null, number] {
@@ -462,7 +448,6 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
 
             // If some sizes changed
             if (this.viewModel.setWidgetSize(newSizes, dim as FlexDirection)) {
-                console.log('UPD SIZE');
                 (this as any)._scrollBackToItemOnResize();
                 // Update the list
                 this.update();
@@ -555,7 +540,7 @@ export namespace Mosaic {
         return cell.model!.setMetadata(Mosaic.METADATA_NAME, path);
     }
     export function setParent(tile:Tile, mosaic: Mosaic | null) {
-        console.log('SETTING PARENT', tile, mosaic);
+        console.log((tile as any).prompt, 'removing from parent', tile.superMosaic, 'to', mosaic);
         if (tile.superMosaic && tile.superMosaic !== mosaic) {
             tile.superMosaic.tiles.removeValue(tile);
         }

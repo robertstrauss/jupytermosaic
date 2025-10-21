@@ -50,17 +50,10 @@ export class MosaicNotebook extends Notebook {
 
         (this as any)._updateForDeferMode = this._myupdateForDeferMode;
 
-        // this.tiles.changed.connect((tree:any, msg:any) => {
-        //     Mosaic.prototype.onTreeChanged.bind(this)(tree, msg);
-        //     for (const tile of msg.newValues) {
-        //         if (tile instanceof Cell) {
-        //             this.leafStems.set(tile, this);
-        //         } else {
-
-        //         }
-        //     }
-        // }, this);
         this.tiles.changed.connect(this.onTreeChanged, this);
+
+
+        console.log('='.repeat(15));
     }
 
     public superMosaic = null;
@@ -78,6 +71,7 @@ export class MosaicNotebook extends Notebook {
     onTreeChanged(tree: ObservableTree<Tile>, change:any) {
         Mosaic.prototype.onTreeChanged.bind(this)(tree, change);
         console.log(this.tiles, Mosaic.showMosaic(this as any));
+        requestAnimationFrame(() => this.update());
     }
     unwrap = ()=>{};
     checkEmpty = ()=>{};
@@ -111,9 +105,8 @@ export class MosaicNotebook extends Notebook {
         super.onCellRemoved(index, cell);
         console.warn('rc', index, 'Cell:'+(cell as any).prompt, cell);
 
-        const [found, n] = this.getLeaf(index);
-        console.log('found', found);
-        if (found !== null && n == index) {
+        const [found, _] = this.getLeaf(index);
+        if (found !== null) {
             const [stem, leaf] = found;
             if (leaf == cell) {
                 stem.tiles.removeValue(leaf);
@@ -146,7 +139,15 @@ export class MosaicNotebook extends Notebook {
             reference = base;
             base = reference.superMosaic! as Mosaic;
         }
-        const idx = base.tiles.indexOf(reference) + offset;
+        let idx = base.tiles.indexOf(reference);
+        console.log('ref', base, reference, idx);
+        if (idx < 0) {
+            console.error('referrence leaf/branch missing!');
+            base = this as any;
+            idx = this.tiles.length; // send it to the end
+        } else {
+        idx += offset;
+        }
         // console.log('ref', reference, 'base', base, 'refpath', refPath, 'refDiv', refDiverge, 'path', path);
 
         // graft it

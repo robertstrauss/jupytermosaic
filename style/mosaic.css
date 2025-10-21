@@ -236,7 +236,7 @@
 .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="top"] ,
 .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="top"] ,
 .jp-Notebook.jp-mod-commandMode
-  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] {
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="top"] {
   border: none;
   border-top-color: var(--jp-private-notebook-selected-color);
   border-top-style: solid;
@@ -246,7 +246,8 @@
 .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] ,
 .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] ,
 .jp-Notebook.jp-mod-commandMode
-  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] {
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget[data-mosaic-drop-side="bottom"],
+  .jp-WindowedPanel-viewport.jp-mod-dropTarget[data-mosaic-drop-side="bottom"] {
   border: none;
   border-bottom-color: var(--jp-private-notebook-selected-color);
   border-bottom-style: solid;
