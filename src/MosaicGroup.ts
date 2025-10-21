@@ -9,6 +9,7 @@ import { ObservableList, IObservableList } from '@jupyterlab/observables';
 
 import { MosaicViewModel } from './MosaicViewModel';
 import { MosaicNotebook } from './MosaicNotebookPanel';
+import { Widget } from '@lumino/widgets';
 // import { Widget } from '@lumino/widgets';
 // import { MosaicNotebook } from './MosaicNotebookPanel';
 
@@ -41,8 +42,6 @@ export class ObservableTree<T> extends ObservableList<T> {
         }); 
     }
     splice(startIndex: number, replaceCount:number, ...values: Array<T>): Array<T> {
-        // console.warn('splicing', startIndex, replaceCount, ...values);
-        // const deleted = this._array.splice(startIndex, replaceCount, ...values);
         const removed = [];
         for (let n = 0; n < replaceCount; n++) {
             removed.push(this.remove(startIndex));
@@ -76,7 +75,17 @@ export class ObservableTree<T> extends ObservableList<T> {
   }
 }
 
-export class Mosaic extends WindowedList<MosaicViewModel> { //
+class ReparentableNotebookWindowedLayout extends NotebookWindowedLayout {
+    protected detachWidget(index: number, widget: Widget): void {
+        // don't execute detachment procedures if the widget has been moved to some other parent.
+        // otherwise a race condition arises hiding or showing the element depending on if
+        // reciever or donor parent updates first.
+        if (widget.parent && widget.parent !== this.parent) return;
+        super.detachWidget(index, widget);
+    }
+}
+
+export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (element in notebook), but also like a windowedlist/notebook (contains more cells)
     static METADATA_NAME = 'mosaic';
     static NODE_CLASS = 'mosaic-group-outer';
     static INNER_GROUP_CLASS = 'mosaic-group-inner';
@@ -96,8 +105,8 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
     protected _superMosaic: Mosaic | MosaicNotebook | null = null;
     public tiles: ObservableTree<Tile>;
     public mosaics: Map<string, Mosaic>;
-    // public notebook: Notebook;
-    // protected modelList: NestedObservableList<ICellModel>;
+
+    // can be hidden in super-windowed-list, like cell.
     private _placeholder: boolean;
     private _ready = new PromiseDelegate<void>();
     constructor(public groupID: string, public direction: FlexDirection = 'col') {
@@ -108,7 +117,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
                     Mosaic.defaultConfig.overscanCount,
                 windowingActive: true
             }),
-            layout: new NotebookWindowedLayout(),
+            layout: new ReparentableNotebookWindowedLayout(),
             renderer: /*options.renderer ??*/ WindowedList.defaultRenderer,
             scrollbar: false
         });
@@ -180,6 +189,9 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
                 break;
             }
         }
+
+        requestAnimationFrame(() => this.update());
+
         // trigger update on super tree for this item
         if (this.superMosaic) {
             const idx = this.superMosaic.tiles.indexOf(this);
@@ -191,7 +203,6 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
                 oldValues: [this]
             });
         }
-        requestAnimationFrame(() => this.update());
     }
 
 
@@ -519,6 +530,9 @@ export class Mosaic extends WindowedList<MosaicViewModel> { //
             }
         }
     }
+
+
+    detachWidget() {}
     
 }
 
@@ -540,11 +554,11 @@ export namespace Mosaic {
         return cell.model!.setMetadata(Mosaic.METADATA_NAME, path);
     }
     export function setParent(tile:Tile, mosaic: Mosaic | null) {
-        console.log((tile as any).prompt, 'removing from parent', tile.superMosaic, 'to', mosaic);
         if (tile.superMosaic && tile.superMosaic !== mosaic) {
             tile.superMosaic.tiles.removeValue(tile);
         }
         tile.superMosaic = mosaic;
+        tile.parent = mosaic; // important: need to check parentage before removing, in case it was just moved to another list.
     }
     export function divergeDepth(path1: Array<string>, path2: Array<string>): number {
         for (let i = 0; i < path1.length; i++) {

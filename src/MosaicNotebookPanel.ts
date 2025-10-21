@@ -105,7 +105,7 @@ export class MosaicNotebook extends Notebook {
         super.onCellRemoved(index, cell);
         console.warn('rc', index, 'Cell:'+(cell as any).prompt, cell);
 
-        const [found, _] = this.getLeaf(index);
+        const [found, ] = this.getLeaf(index);
         if (found !== null) {
             const [stem, leaf] = found;
             if (leaf == cell) {
