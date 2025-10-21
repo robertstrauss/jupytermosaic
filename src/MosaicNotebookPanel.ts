@@ -22,6 +22,8 @@ export namespace MosaicNotebookPanel {
 
 export class MosaicNotebook extends Notebook {
 
+    public superMosaic = null;
+    public path = [];
     public tiles: ObservableTree<Tile>;
     protected mosaics: Map<string, Mosaic>;
     protected options: Mosaic.IOptions;
@@ -55,8 +57,6 @@ export class MosaicNotebook extends Notebook {
 
     }
 
-    public superMosaic = null;
-    public path = [];
     addTile = Mosaic.prototype.addTile.bind(this);
     growBranch = Mosaic.prototype.growBranch.bind(this);
     splice = Mosaic.prototype.splice.bind(this);

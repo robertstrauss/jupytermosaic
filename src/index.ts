@@ -15,6 +15,8 @@ import { DocumentRegistry } from '@jupyterlab/docregistry';
 import { ILauncher } from '@jupyterlab/launcher';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { IKernelSpecManager, KernelManager } from '@jupyterlab/services';
+import { ILayoutRestorer } from '@jupyterlab/application';
+// import { Widget } from '@lumino/widgets';
 
 
 import { MosaicNotebookPanel } from './MosaicNotebookPanel';
@@ -47,37 +49,39 @@ const plugin: JupyterFrontEndPlugin<void> = {
   id: PLUGIN_ID,
   description: 'Arrange Jupyter notebook cells in any way two-dimensionally. Present your code compactly in Zoom video confrences. Let your Jupyter notebook tell the story and be self-documenting in itself, like a poster presentation. Eliminate white space in your notebook and take advantage of unused screen real estate.',
   autoStart: true,
-  requires: [INotebookTracker, ILauncher, IEditorServices, IKernelSpecManager],
+  requires: [INotebookTracker, ILauncher, IEditorServices, IKernelSpecManager, ILayoutRestorer],
   optional: [],
-  activate: async (app: JupyterFrontEnd, tracker:INotebookTracker,  launcher: ILauncher, editorServices: IEditorServices, kernelManager:KernelManager) => {
+  activate: async (app: JupyterFrontEnd, tracker:INotebookTracker,  launcher: ILauncher, editorServices: IEditorServices, kernelManager: KernelManager, restorer: ILayoutRestorer) => {
     console.log('JupyterLab extension mosaic-lab is activated!');
 
     // const settings = await settingRegistry.load('mosaic-lab:plugin');
+    const defaultNotebookFactory = app.docRegistry.getWidgetFactory('Notebook') as NotebookWidgetFactory;
 
     // app.docRegistry.addWidgetExtension('Notebook', {
     //   createNew: (panel:NotebookPanel, context:DocumentRegistry.IContext<DocumentRegistry.IModel>) => {
-    //     // if (settings.get('enableMosaic')) {
-    //       const patchNB = (panel.content) as any;
-    //       // Have to do this the monkey-patch-y way because of how the instantation of NotebookViewModel is hard-coded into StaticNotebook
+    //     const mosaic = new MosaicNotebook({
+    //         rendermime: panel.content.rendermime,
+    //         contentFactory: panel.content.contentFactory,
+    //         mimeTypeService: defaultNotebookFactory.mimeTypeService,});
+    //     mosaic.model = panel.model;
+    //     console.warn("EXTENSION MOSAIC", mosaic);
+    //     // const disposable = context.addSibling(mosaic, {ref: panel.id}); // add mosaic view
+    //     // panel.node.appendChild(mosaic.node);
+    //     // disposable;
+    //     // panel.content.hide(); // close old notebook
+    //     console.log('pre', panel, panel.content, panel.content.node, panel.content.isAttached);
+    //     // (panel as any)._content = mosaic;
 
-    //       patchNB._viewModel.widgetRenderer = (index:number) => MosaicViewModel._widgetRenderer(patchNB._viewModel, index);
-
-    //       Object.defineProperty(patchNB._viewModel, 'widgetCount', {get:  () => {
-    //         return Object.getOwnPropertyDescriptor(MosaicViewModel.prototype, 'widgetCount')?.get?.call(patchNB._viewModel)}
-    //       });
-
-    //     // }
-    //     return panel;
+    //     // panel.node.addEventListener('after-attach', () => {
+    //     panel.node.appendChild(mosaic.node);
+    //     // Widget.attach(mosaic, panel.node);
+    //     console.log('new nb', panel.content, mosaic.isAttached, mosaic.node);
+    // //     return panel;
     //   }
-    // })
+    // });
 
 
-    const defaultNotebookFactory = app.docRegistry.getWidgetFactory('Notebook') as NotebookWidgetFactory;
-
-    // make vanilla notebooks not the default
-    // (defaultNotebookFactory as any)._defaultFor = [];
-
-    console.log('def toolbar fac?', defaultNotebookFactory, (defaultNotebookFactory as any).toolbarFactory);
+    // function dontrun() {
 
 
     function clobberCheck(
@@ -130,20 +134,40 @@ const plugin: JupyterFrontEndPlugin<void> = {
     })
     mosaicWidgetFactory.widgetCreated.connect(clobberCheck);
     defaultNotebookFactory.widgetCreated.connect(clobberCheck);
+
     app.docRegistry.addWidgetFactory(mosaicWidgetFactory);
     app.docRegistry.setDefaultWidgetFactory('notebook', MOSAIC_FACTORY);
-    console.log('set default factory', app.docRegistry.defaultWidgetFactory('*.ipynb'))
+
+    if (restorer) {
+      // app.restored.then(() => {
+        mosaicWidgetFactory.widgetCreated.connect((sender, widget) => {
+          // Each widget must have a unique ID for restorer
+          const path = widget.context.path;
+          widget.id = `mosaic-notebook-${path}`;
+          widget.title.icon = MosaicLabIcon;
+          widget.title.label = path.split('/').pop() ?? path;
+
+          // Let the layout restorer track this widget
+          console.warn('SETTING RESTORER', path, widget.id, widget.title);
+          restorer.add(widget, path);/* {
+            name: `mosaic-notebook:${path}`,
+            args: { path, factory: MOSAIC_FACTORY },
+            command: 'docmanager:open'
+          });*/
+        });
+      // })
+    }
 
 
-    // give Mosaic Notebook all the bells and whistles of a normal notebook (toolbar, cell action buttons)
+    // give Mosaic Notebook all the bells and whistles of a normal notebook (cell action buttons)
     for (const ext of app.docRegistry.widgetExtensions('Notebook')) {
-      console.log('adding ext', ext);
       app.docRegistry.addWidgetExtension(MOSAIC_FACTORY, ext);
     }
-    // app.docRegistry.addWidgetExtension(MOSAIC_FACTORY, defaultNotebookToolbar);
+
 
     
 
+    // create launch command
     app.commands.addCommand('mosaic-notebook:create-new', {
       label: args => `[Mosaic] ${app.serviceManager.kernelspecs.specs?.kernelspecs[args.kernelName as string]?.display_name || ''}`,
       caption: 'Create a new Mosaic Notebook',
@@ -162,10 +186,9 @@ const plugin: JupyterFrontEndPlugin<void> = {
       iconLabel: 'Mosaic Notebook'
     });
     
-
+    // add launch icon to launcher
     for (const name in app.serviceManager.kernelspecs.specs!.kernelspecs) {
       const spec = app.serviceManager.kernelspecs.specs!.kernelspecs[name];
-      console.log('adding kernel', name, spec, `${spec!.resources['logo-svg']}`);
       launcher.add({
         command: 'mosaic-notebook:create-new',
         args: { kernelName: name },
@@ -176,7 +199,8 @@ const plugin: JupyterFrontEndPlugin<void> = {
       });
     }
 
-
+  // }
+  // dontrun;
   }
 };
 

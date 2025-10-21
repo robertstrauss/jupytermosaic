@@ -15,6 +15,6 @@ describe('observablelist removeValue test', () => {
     a.removeValue(3); // value not in a! shouldn't do anything.
 
     console.log('a = ', a);
-    expect((a as any)._array).toEqual(a_0);
+    expect(Array.from(a)).toEqual(a_0);
   });
 });

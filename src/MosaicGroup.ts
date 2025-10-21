@@ -178,7 +178,6 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                 break;
             }
         }
-        if (msg.type == 'remove') console.warn('remove', this);
 
         requestAnimationFrame(() => this.update());
 
