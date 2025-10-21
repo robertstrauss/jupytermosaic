@@ -2,6 +2,7 @@ import { INotebookModel, Notebook, NotebookPanel  } from '@jupyterlab/notebook';
 import { Cell } from '@jupyterlab/cells';
 import { WindowedLayout } from '@jupyterlab/ui-components';
 // import { ArrayExt } from '@lumino/algorithm';
+// import { EditorServices } from
 
 import { mosaicDrop, mosaicDragOver } from './mosaicdrag';
 import { FlexDirection, LeafCell, Mosaic, ObservableTree, Tile } from './MosaicGroup';
@@ -52,8 +53,6 @@ export class MosaicNotebook extends Notebook {
 
         this.tiles.changed.connect(this.onTreeChanged, this);
 
-
-        console.log('='.repeat(15));
     }
 
     public superMosaic = null;
