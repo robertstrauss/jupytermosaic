@@ -31,9 +31,7 @@ Two different styles are offered, and can be switched between with a dropdown me
 ## Jupyter Lab and Jupyter Notebook version 7+
 
 ```bash
-git clone https://github.com/robertstrauss/jupytermosaic
-
-cd jupytermosaic && pip install -e .
+pip install git+https://github.com/robertstrauss/jupytermosaic.git
 ```
 
 ## NbClassic (Jupyter Notebook Version < 7)
