@@ -1,19 +1,21 @@
-import { Notebook, NotebookWindowedLayout } from '@jupyterlab/notebook';
+import { Notebook, NotebookPanel, NotebookWindowedLayout } from '@jupyterlab/notebook';
 import { WindowedList } from '@jupyterlab/ui-components';
 import { Message } from '@lumino/messaging';
 // import { ChildMessage } from '@lumino/widgets';
 import { PromiseDelegate } from '@lumino/coreutils';
-import { Cell, CodeCell,  } from '@jupyterlab/cells';
+import { Cell, CodeCell, MarkdownCell,  } from '@jupyterlab/cells';
 import { ArrayExt } from '@lumino/algorithm';
 import { ObservableList, IObservableList } from '@jupyterlab/observables';
 
 import { MosaicViewModel } from './MosaicViewModel';
 import { MosaicNotebook } from './MosaicNotebookPanel';
+
+import { runIcon } from '@jupyterlab/ui-components';
 // import { Widget } from '@lumino/widgets';
 // import { MosaicNotebook } from './MosaicNotebookPanel';
 
-import InArrows from '../style/icons/in-arrows.svg';
-import OutArrows from '../style/icons/out-arrows.svg';
+// import InArrows from '../style/icons/in-arrows.svg';
+// import OutArrows from '../style/icons/out-arrows.svg';
 // const MOSAIC_ICON_PATH = '../style/icons/mosaic-icon.svg';
 
 // import { LabIcon } from '@jupyterlab/ui-components';
@@ -85,7 +87,6 @@ export class ObservableTree<T> extends ObservableList<T> {
 export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (element in notebook), but also like a windowedlist/notebook (contains more cells)
     static METADATA_NAME = 'mosaic';
     static NODE_CLASS = 'mosaic-group-outer';
-    static ROWEXPAND_CLASS = 'mosaic-rowexpand';
     static INNER_GROUP_CLASS = 'mosaic-group-inner';
     static DIR_CLASS = {
         'row': 'mosaic-row',
@@ -104,7 +105,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     public tiles: ObservableTree<Tile>;
     public mosaics: Map<string, Mosaic>;
     protected _direction: FlexDirection;
-    public expandButton: HTMLElement | null = null;
+    public runButton: HTMLElement | null = null;
 
     // can be hidden in super-windowed-list, like cell.
     private _placeholder: boolean;
@@ -152,10 +153,6 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     }
     set direction(d: FlexDirection) {
         this._direction = d;
-        if (this.expandButton) {
-            if (d == 'col') this.expandButton.style.display = 'none';
-            else if (d == 'row') this.expandButton.style.display = '';
-        }
     }
 
     get superMosaic(): Mosaic | MosaicNotebook | null {
@@ -181,17 +178,6 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     }
     getState() {
         return this.notebook!.model!.getMetadata(this.id) || {};
-    }
-
-    expandRow() {
-        if (this.expandButton) this.expandButton.innerHTML = InArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
-        this.viewportNode.classList.add(Mosaic.ROWEXPAND_CLASS);
-        this.saveState({expanded: true});
-    }
-    unexpandRow() {
-        if (this.expandButton) this.expandButton.innerHTML = OutArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
-        this.viewportNode.classList.remove(Mosaic.ROWEXPAND_CLASS);
-        this.saveState({expanded: false});
     }
 
 
@@ -422,6 +408,26 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     }
 
 
+    async runAll() {
+        for (const tile of this.tiles) {
+            if (tile instanceof Mosaic) {
+                tile.runAll();
+            }
+            else if (tile instanceof Cell) {
+                if (!this.notebook) return console.warn('No notebook! Cannot run cells');
+                const context = (this.notebook?.parent as NotebookPanel).sessionContext
+                if (tile instanceof CodeCell) {
+                    try {
+                        await CodeCell.execute(tile, context);
+                    } catch (e) {
+                        console.error('Cell exec err', e);
+                    }
+                } else if (tile instanceof MarkdownCell) {
+                    tile.rendered = true;
+                }
+            }
+        }
+    }
 
     /** Notebook-like methods */
 
@@ -434,18 +440,40 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
 
         this.viewportNode.classList.add(Mosaic.INNER_GROUP_CLASS, Mosaic.DIR_CLASS[this.direction]);
 
-        this.expandButton = document.createElement('div');
-        this.node.appendChild(this.expandButton);
-        this.expandButton.classList.add('mosaic-rowexapnd-btn');
-        const { expanded } = this.getState();
-        console.warn('got expanded', expanded);
-        if (expanded === true || expanded === 'true') this.expandRow(); // set initial display to expanded mode
-        else this.unexpandRow();
-        // this.expandButton.innerHTML = OutArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
-        this.expandButton.onclick = () => {
-            if (this.viewportNode.classList.contains(Mosaic.ROWEXPAND_CLASS)) this.unexpandRow();
-            else this.expandRow();
+        if (!this.runButton) {
+            this.runButton = document.createElement('div');
+            this.runButton.appendChild(runIcon.element());
+            this.runButton.classList.add('mosaic-group-run-btn');
+            this.runButton.onclick = () => this.runAll();
         }
+        this.node.appendChild(this.runButton);
+
+        // drag in the gaps of a row to resize elements
+        const w = this.getState().elWidth;
+        if (Number.isFinite(w)) this.setElWidth(w);
+        let dragging = false;
+        this.node.onmousedown = (ev: MouseEvent) => {
+            if (ev.target === this.viewportNode) dragging = true;
+        }
+        const endDrag = (ev: MouseEvent) => {
+            dragging = false;
+            if (this.direction == 'row') {
+                const elWidth = this.layout.widgets[0].node.getBoundingClientRect().width;
+                this.saveState({...this.getState(), elWidth});
+            }
+        }
+        this.node.onmouseleave = endDrag;
+        this.node.onmouseup = endDrag;
+        this.node.onmousemove = (ev: MouseEvent) => {
+            if (dragging && this.direction == 'row') {
+                const oldWidth = this.layout.widgets[0].node.getBoundingClientRect().width;
+                this.setElWidth(oldWidth+ev.movementX);
+            }
+        }
+    }
+
+    protected setElWidth(width: number) {
+        this.node.style.setProperty('--el-width', `${width}px`);
     }
 
 
