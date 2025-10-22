@@ -146,6 +146,41 @@
 
 
 
+.mosaic-rowexapnd-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 35px;
+  height: 30px;
+  color: var(--jp-ui-font-color0);
+  background-color: rgba(120, 120, 120, 0.3);
+  border-radius: 3px;
+  z-index: 3;
+  align-items: center;
+  justify-content: center;
+
+  opacity: 0; /* invisible except when hovered over */
+  transition: 0.2s;
+}
+.mosaic-rowexapnd-btn > svg {
+  max-width: 35px;
+  height: 35px;
+  color:inherit;
+}
+.mosaic-rowexapnd-btn:hover {
+  opacity: 1;
+}
+/* .mosaic-rowexapnd-btn[data-expanded='true'] {
+   mask: url('./icons/in-arrows.svg');
+   mask-size: 100%;
+   mask-position: center;
+} */
+
+.jp-WindowedPanel-viewport.mosaic-group-inner.mosaic-row.mosaic-rowexpand > * {
+  /* optional mode, force cells to fill full width of row, causing scrolling. */
+  flex-basis: 100%;
+  flex-shrink: 0;
+}
 
 
 

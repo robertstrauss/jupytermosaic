@@ -12,6 +12,14 @@ import { MosaicNotebook } from './MosaicNotebookPanel';
 // import { Widget } from '@lumino/widgets';
 // import { MosaicNotebook } from './MosaicNotebookPanel';
 
+import InArrows from '../style/icons/in-arrows.svg';
+import OutArrows from '../style/icons/out-arrows.svg';
+// const MOSAIC_ICON_PATH = '../style/icons/mosaic-icon.svg';
+
+// import { LabIcon } from '@jupyterlab/ui-components';
+
+// const InArrowsIcon = new LabIcon({ name: 'mosaic:favicon', svgstr: InArrows.toString()});
+// const OutArrowsIcon = new LabIcon({ name: 'mosaic:favicon', svgstr: OutArrows.toString()});
 
 export type FlexDirection = 'row' | 'col';
 
@@ -77,6 +85,7 @@ export class ObservableTree<T> extends ObservableList<T> {
 export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (element in notebook), but also like a windowedlist/notebook (contains more cells)
     static METADATA_NAME = 'mosaic';
     static NODE_CLASS = 'mosaic-group-outer';
+    static ROWEXPAND_CLASS = 'mosaic-rowexpand';
     static INNER_GROUP_CLASS = 'mosaic-group-inner';
     static DIR_CLASS = {
         'row': 'mosaic-row',
@@ -94,11 +103,13 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     protected _superMosaic: Mosaic | MosaicNotebook | null = null;
     public tiles: ObservableTree<Tile>;
     public mosaics: Map<string, Mosaic>;
+    protected _direction: FlexDirection;
+    public expandButton: HTMLElement;
 
     // can be hidden in super-windowed-list, like cell.
     private _placeholder: boolean;
     private _ready = new PromiseDelegate<void>();
-    constructor(public groupID: string, public direction: FlexDirection = 'col') {
+    constructor(public groupID: string, direction: FlexDirection = 'col') {
         const tiles: ObservableTree<Tile> = new ObservableTree();
         super({
             model: new MosaicViewModel(tiles, direction, {
@@ -113,6 +124,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         // this.notebook = options.notebook;
         this.tiles = tiles;
         this.mosaics = new Map<string, Mosaic>();
+        this._direction = direction;
         // this.direction = options.direction;
         this._placeholder = true;
 
@@ -124,6 +136,39 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         (this as any)._onItemResize = this.onItemResize;
 
         (this as any)._updateTotalSize = this.updateTotalSize;
+
+
+
+        // TODO: mosaic group control buttons in top corner, hidden unless hovered over
+
+        this.expandButton = document.createElement('div');
+        this.node.appendChild(this.expandButton);
+        this.expandButton.classList.add('mosaic-rowexapnd-btn')
+        this.expandButton.innerHTML = OutArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
+        this.expandButton.onclick = () => {
+            console.warn('CLICK!');
+            if (this.viewportNode.classList.contains(Mosaic.ROWEXPAND_CLASS)) {
+                this.expandButton.innerHTML = OutArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
+                // this.expandButton.dataset.expanded = 'false';
+                this.viewportNode.classList.remove(Mosaic.ROWEXPAND_CLASS);
+            }
+            else {
+                this.expandButton.innerHTML = InArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
+                // this.expandButton.dataset.expanded = 'true';
+                this.viewportNode.classList.add(Mosaic.ROWEXPAND_CLASS);
+            }
+        }
+
+        console.warn(this.expandButton);
+    }
+
+    get direction() {
+        return this._direction;
+    }
+    set direction(d: FlexDirection) {
+        this._direction = d;
+        if (d == 'col') this.expandButton.style.display = 'none';
+        else if (d == 'row') this.expandButton.style.display = '';
     }
 
     get superMosaic(): Mosaic | MosaicNotebook | null {
@@ -347,22 +392,19 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     }
 
     protected set placeholder(v: boolean) {
+        console.warn('PLACEHOLDER SET');
         if (this._placeholder !== v && v === false) {
             this.initializeDOM();
             this._placeholder = v;
             this._ready.resolve();
-        } else if (v==true) {
-            this.node.style.border = '1px solid blue';
         }
     }
 
     protected initializeDOM(): void {
+        console.log('INITIALIZING DOM');
         if (!this.placeholder) {
             return;
         }
-
-        this.node.style.border = '1px solid red';
-        // TODO: mosaic group control buttons in top corner, hidden unless hovered over
 
     }
 
