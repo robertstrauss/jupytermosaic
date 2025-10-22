@@ -451,6 +451,8 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
 
     protected onScroll(event: Event): void {
         super.onScroll(event);
+        // super onScroll updates the viewModels scrollOffset with the scrollTop
+        // we have horizontal windowedlists, in which case we need to do the same but with scrollLeft:
         if (this.direction == 'row') {
             const { clientWidth, scrollWidth, scrollLeft } = event.currentTarget as HTMLDivElement;
 
@@ -468,6 +470,33 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                 }
             }
         }
+        
+        console.log('scroll, updating', this.direction, this.viewportNode.scrollTop, this.viewportNode.scrollLeft);
+        // tag things scrolled all the way to one side, so CSS styling shows shadow on overflowing elements
+        if (this.direction == 'col') {
+            if (this.viewportNode.scrollTop < 10) {
+                this.dataset.mosaicScrolledSide = 'top';
+            }
+            else if (this.viewportNode.scrollTop > this.viewportNode.scrollHeight-10) {
+                this.dataset.mosaicScrolledSide = 'bottom';
+            } else {
+                this.dataset.mosaicScrolledSide = '';
+            }
+        }
+        else if (this.direction == 'row') {
+            if (this.viewportNode.scrollLeft < 10) {
+                this.dataset.mosaicScrolledSide = 'left';
+            }
+            else if (this.viewportNode.scrollLeft > this.viewportNode.scrollWidth-10) {
+                this.dataset.mosaicScrolledSide = 'right';
+            } else {
+                this.dataset.mosaicScrolledSide = '';
+            }
+        }
+        console.log('scroll result', this.dataset.mosaicScrolledSide);
+        // for setting box-shadow to show when content is off the page
+        // this.node.style.setProperty('--scroll-left', `${this.viewportNode.scrollLeft}`);
+        // this.node.style.setProperty('--scroll-top', `${this.viewportNode.scrollTop}`);
     }
 
     protected onResize(msg: any): void {
@@ -547,11 +576,11 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             if (   (this.viewportNode.scrollWidth > this.viewportNode.clientWidth)
                 || (this.viewportNode.scrollHeight > this.viewportNode.clientHeight)
             ) {
-                this.viewportNode.classList.add('mosaic-scrolling');
-                this.viewportNode.style.setProperty('--scroll-width', `${this.viewportNode.scrollWidth}px`);
-                this.viewportNode.style.setProperty('--scroll-height', `${this.viewportNode.scrollHeight}px`);
+                this.node.classList.add('mosaic-scrolling');
+                this.node.style.setProperty('--scroll-width', `${this.viewportNode.scrollWidth}px`);
+                this.node.style.setProperty('--scroll-height', `${this.viewportNode.scrollHeight}px`);
             } else {
-                this.viewportNode.classList.remove('mosaic-scrolling');
+                this.node.classList.remove('mosaic-scrolling');
             }
         }
     }
