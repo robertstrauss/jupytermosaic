@@ -144,6 +144,10 @@
     border-radius: 10px !important;
 }
 
+.jp-Notebook.jp-WindowedPanel-viewport[role="feed"] {
+  padding: 0; /* get rid of padding of outer notebook, more useful to be flush with edge in mosaic mode */
+}
+
 
 
 .mosaic-rowexapnd-btn {
@@ -227,13 +231,6 @@
 }
 
 
-
-
-.jp-Notebook-cell.jp-mod-dropTarget {
-  /* box-sizing: content-box;
-  border-radius: 10px; */
-  border: none;
-}
 
 /* .jp-Notebook-cell.jp-mod-dropTarget ::after{
   content: '';

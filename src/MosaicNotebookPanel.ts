@@ -27,7 +27,7 @@ export class MosaicNotebook extends Notebook {
     public tiles: ObservableTree<Tile>;
     protected mosaics: Map<string, Mosaic>;
     protected options: Mosaic.IOptions;
-    protected notebook: Notebook;
+    public notebook: Notebook = this;
     public direction: FlexDirection = 'col';
 
     constructor(options: Notebook.IOptions) {

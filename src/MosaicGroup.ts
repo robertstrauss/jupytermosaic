@@ -104,7 +104,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     public tiles: ObservableTree<Tile>;
     public mosaics: Map<string, Mosaic>;
     protected _direction: FlexDirection;
-    public expandButton: HTMLElement;
+    public expandButton: HTMLElement | null = null;
 
     // can be hidden in super-windowed-list, like cell.
     private _placeholder: boolean;
@@ -138,28 +138,13 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         (this as any)._updateTotalSize = this.updateTotalSize;
 
 
+        
 
-        // TODO: mosaic group control buttons in top corner, hidden unless hovered over
+    }
 
-        this.expandButton = document.createElement('div');
-        this.node.appendChild(this.expandButton);
-        this.expandButton.classList.add('mosaic-rowexapnd-btn')
-        this.expandButton.innerHTML = OutArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
-        this.expandButton.onclick = () => {
-            console.warn('CLICK!');
-            if (this.viewportNode.classList.contains(Mosaic.ROWEXPAND_CLASS)) {
-                this.expandButton.innerHTML = OutArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
-                // this.expandButton.dataset.expanded = 'false';
-                this.viewportNode.classList.remove(Mosaic.ROWEXPAND_CLASS);
-            }
-            else {
-                this.expandButton.innerHTML = InArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
-                // this.expandButton.dataset.expanded = 'true';
-                this.viewportNode.classList.add(Mosaic.ROWEXPAND_CLASS);
-            }
-        }
-
-        console.warn(this.expandButton);
+    get notebook(): Notebook | undefined {
+        // traverse up the tree to get the notebook
+        return this.superMosaic!.notebook;
     }
 
     get direction() {
@@ -167,8 +152,10 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     }
     set direction(d: FlexDirection) {
         this._direction = d;
-        if (d == 'col') this.expandButton.style.display = 'none';
-        else if (d == 'row') this.expandButton.style.display = '';
+        if (this.expandButton) {
+            if (d == 'col') this.expandButton.style.display = 'none';
+            else if (d == 'row') this.expandButton.style.display = '';
+        }
     }
 
     get superMosaic(): Mosaic | MosaicNotebook | null {
@@ -183,6 +170,28 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
 
     get path(): Array<string> {
         return [...(this.superMosaic !== null ? this.superMosaic.path : []), this.groupID];
+    }
+
+
+    get id() {
+        return `mosaic:${this.path.join('/')}`;
+    }
+    saveState(state: any) {
+        this.notebook!.model!.setMetadata(this.id, state);
+    }
+    getState() {
+        return this.notebook!.model!.getMetadata(this.id) || {};
+    }
+
+    expandRow() {
+        if (this.expandButton) this.expandButton.innerHTML = InArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
+        this.viewportNode.classList.add(Mosaic.ROWEXPAND_CLASS);
+        this.saveState({expanded: true});
+    }
+    unexpandRow() {
+        if (this.expandButton) this.expandButton.innerHTML = OutArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
+        this.viewportNode.classList.remove(Mosaic.ROWEXPAND_CLASS);
+        this.saveState({expanded: false});
     }
 
 
@@ -424,6 +433,19 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         this.viewModel.direction = this.direction;
 
         this.viewportNode.classList.add(Mosaic.INNER_GROUP_CLASS, Mosaic.DIR_CLASS[this.direction]);
+
+        this.expandButton = document.createElement('div');
+        this.node.appendChild(this.expandButton);
+        this.expandButton.classList.add('mosaic-rowexapnd-btn');
+        const { expanded } = this.getState();
+        console.warn('got expanded', expanded);
+        if (expanded === true || expanded === 'true') this.expandRow(); // set initial display to expanded mode
+        else this.unexpandRow();
+        // this.expandButton.innerHTML = OutArrows.toString().replace(/stroke="[^"]*"/g, 'stroke="currentColor"');
+        this.expandButton.onclick = () => {
+            if (this.viewportNode.classList.contains(Mosaic.ROWEXPAND_CLASS)) this.unexpandRow();
+            else this.expandRow();
+        }
     }
 
 
