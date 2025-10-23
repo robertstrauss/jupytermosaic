@@ -139,7 +139,14 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         (this as any)._updateTotalSize = this.updateTotalSize;
 
 
-        
+        this.viewportNode.addEventListener('scroll', (e: Event) => {
+            this.onScroll(e);
+            e.stopPropagation();
+        });
+        this.viewportNode.addEventListener('scrollend', (e: Event) => {
+            this.updateOverflowShadow();
+            e.stopPropagation();
+        });
 
     }
 
@@ -209,8 +216,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                         Mosaic.setPath(tile, this.path);
                         // console.log('adding ', 'Cell:'+(tile as any).prompt);
                         tile.disposed.connect((cell:LeafCell, msg:any)=> {
-                            console.log('dispose!');
-                            setTimeout(() => this.checkEmpty(), 250);
+                            setTimeout(() => this.checkEmpty(), 250); // allow timeout for cells to be re-added, so it doesn't collapse when moving a cell
                         });
 
                     }
@@ -440,6 +446,8 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
 
         this.viewportNode.classList.add(Mosaic.INNER_GROUP_CLASS, Mosaic.DIR_CLASS[this.direction]);
 
+        this.updateOverflowShadow(); // update shadowing baased on scroll
+
         if (!this.runButton) {
             this.runButton = document.createElement('div');
             this.runButton.appendChild(runIcon.element());
@@ -498,14 +506,14 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                 }
             }
         }
-        
-        console.log('scroll, updating', this.direction, this.viewportNode.scrollTop, this.viewportNode.scrollLeft);
+    }
+    protected updateOverflowShadow(): void {
         // tag things scrolled all the way to one side, so CSS styling shows shadow on overflowing elements
         if (this.direction == 'col') {
             if (this.viewportNode.scrollTop < 10) {
                 this.dataset.mosaicScrolledSide = 'top';
             }
-            else if (this.viewportNode.scrollTop > this.viewportNode.scrollHeight-10) {
+            else if (this.viewportNode.scrollTop > this.viewportNode.scrollHeight-this.viewportNode.clientHeight-10) {
                 this.dataset.mosaicScrolledSide = 'bottom';
             } else {
                 this.dataset.mosaicScrolledSide = '';
@@ -515,16 +523,12 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             if (this.viewportNode.scrollLeft < 10) {
                 this.dataset.mosaicScrolledSide = 'left';
             }
-            else if (this.viewportNode.scrollLeft > this.viewportNode.scrollWidth-10) {
+            else if (this.viewportNode.scrollLeft > this.viewportNode.scrollWidth-this.viewportNode.clientWidth-10) {
                 this.dataset.mosaicScrolledSide = 'right';
             } else {
                 this.dataset.mosaicScrolledSide = '';
             }
         }
-        console.log('scroll result', this.dataset.mosaicScrolledSide);
-        // for setting box-shadow to show when content is off the page
-        // this.node.style.setProperty('--scroll-left', `${this.viewportNode.scrollLeft}`);
-        // this.node.style.setProperty('--scroll-top', `${this.viewportNode.scrollTop}`);
     }
 
     protected onResize(msg: any): void {

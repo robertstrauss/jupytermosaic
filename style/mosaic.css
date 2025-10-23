@@ -65,22 +65,21 @@
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='top']::after {
   /* overshadow mostly the bottom, where more content lurks */
-    box-shadow: inset -10px -30px 10px -10px rgba(0, 0, 0, 0.5),
-                inset 10px 10px 10px -10px rgba(0, 0, 0, 0.5);
+    box-shadow: inset 0px -35px 20px -20px rgba(0, 0, 0, 0.7),
+                inset 0px   0px 20px -20px rgba(0, 0, 0, 0.7);
 }
 
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='bottom']::after {
   /* overshadow mostly the top, where more content lurks */
-    box-shadow: inset -10px -10px 10px -10px rgba(0, 0, 0, 0.5),
-                inset 10px 30px 10px -10px rgba(0, 0, 0, 0.5);
+    box-shadow: inset 0px  0px 20px -20px rgba(0, 0, 0, 0.7),
+                inset 0px 35px 20px -20px rgba(0, 0, 0, 0.7);
 }
 
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)::after {
   /* overshadow both top and bottom, where more content lurks */
-/* .mosaic-col .mosaic-scrolling::after { */
-  /* a shadow coming in on the top and bottom to show it extends beyond these sides */
-  box-shadow: inset -10px -30px 10px -10px rgba(0, 0, 0, 0.5), 
-                inset 10px 30px 10px -10px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0px -35px 20px -20px rgba(0, 0, 0, 0.7), 
+              inset 0px 35px  20px -20px rgba(0, 0, 0, 0.7);
+  transition: 0.8s;
   /* animation: adjust-position-vert linear forwards;
   animation-timeline: --shift-shadow-vert; */
 }
@@ -112,25 +111,19 @@
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="left"]::after {
   /* overshadow mostly the right, where more content lurks */
-  box-shadow: inset -30px -10px 10px -10px rgba(0, 0, 0, 0.5),
-                inset 10px 10px 10px -10px rgba(0, 0, 0, 0.5);
+  box-shadow: inset -35px -0px 20px -20px rgba(0, 0, 0, 0.7),
+              inset   0px  0px 20px -20px rgba(0, 0, 0, 0.7);
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="right"]::after {
   /* overshadow mostly the left, where more content lurks */
-  box-shadow: inset -10px -10px 10px -10px rgba(0, 0, 0, 0.5),
-                inset 30px 10px 10px -10px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0px   0px 20px -20px rgba(0, 0, 0, 0.7),
+              inset 35px  0px 20px -20px rgba(0, 0, 0, 0.7);
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)::after {
-/* .mosaic-row.mosaic-scrolling::after { */
   /* a shadow coming in on the left and right to show it extends beyond these sides */
-  /* left: calc(-1*var(--shadow-extent));
-  right: calc(-1*var(--shadow-extent)); */
-  /* animation: adjust-position-horiz linear forwards; */
-  /* animation-timeline: --shift-shadow-horiz; */
-    /* box-shadow: inset calc(-1*var(--shadow-extent)) -1px 10px -10px rgba(0, 0, 0, 0.5), 
-                inset calc(var(--shadow-extent)) 1px 10px -10px rgba(0, 0, 0, 0.5); */
-    box-shadow: inset -30px -10px 10px -10px rgba(0, 0, 0, 0.5), 
-                inset 30px 10px 10px -10px rgba(0, 0, 0, 0.5);
+    box-shadow: inset -35px 0px 20px -20px rgba(0, 0, 0, 0.7), 
+                inset  35px 0px 20px -20px rgba(0, 0, 0, 0.7);
+    transition: 0.8s;
 }
 @keyframes adjust-position-horiz {
 	0% {
