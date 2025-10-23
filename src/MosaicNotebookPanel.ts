@@ -69,7 +69,7 @@ export class MosaicNotebook extends Notebook {
     renderCellOutputs = Mosaic.prototype.renderCellOutputs.bind(this);
     onTreeChanged(tree: ObservableTree<Tile>, change:any) {
         Mosaic.prototype.onTreeChanged.bind(this)(tree, change);
-        console.log(this.tiles, Mosaic.showMosaic(this as any));
+        // console.log(this.tiles, Mosaic.showMosaic(this as any));
         requestAnimationFrame(() => this.update());
     }
     unwrap = ()=>{};
@@ -87,26 +87,20 @@ export class MosaicNotebook extends Notebook {
 
     protected onCellInserted(index: number, cell: Cell): void {
         super.onCellInserted(index, cell);
-
-        console.warn('ic', index, 'Cell:'+(cell as any).prompt, cell, cell.model.metadata.mosaic);
-
         this.mosaicInsert(index);
-        // console.log(this.tiles, this.tiles.map(Mosaic.showMosaic));
     }
     protected onCellRemoved(index: number, cell: Cell): void {
         super.onCellRemoved(index, cell);
-        console.warn('rc', index, 'Cell:'+(cell as any).prompt, cell);
 
         const [found, ] = this.getLeaf(index);
         if (found !== null) {
             const [stem, leaf] = found;
             if (leaf == cell) {
                 stem.tiles.removeValue(leaf);
-                console.log('removed');
+            } else {
+                console.warn('failed to remove', index, cell);
             }
         }
-
-        // console.log(this.tiles.map(Mosaic.showMosaic));
     }
 
     private async _myupdateForDeferMode(cell: Cell, cellIdx: number): Promise<void> { // modified from @jupyterlab/notebook/widget.ts:966
@@ -147,12 +141,12 @@ export class MosaicNotebook extends Notebook {
             // grow the cell's own branch and attach at referrence index
             const stem = base.growBranch(path.slice(refDiverge), [idx]);
             stem.splice(0, 0, cell);
-            console.log('grafted', 'branch:'+stem.path, 'to', base.path, 'at', idx);
+            // console.log('grafted', 'branch:'+stem.path, 'to', base.path, 'at', idx);
             return [stem, idx];
         } else {
             // cell attaches directly to reference's branch
             base.splice(idx, 0, cell);
-            console.log('grafted', 'Cell:'+(cell as any).prompt, 'to', base.groupID, 'at', idx);
+            // console.log('grafted', 'Cell:'+(cell as any).prompt, 'to', base.groupID, 'at', idx);
             return [base, idx];
         }
 
@@ -180,7 +174,6 @@ export class MosaicNotebook extends Notebook {
             const branch = this.growBranch(path || []);
             // this.insertLeaf(branch, cell);
             branch.splice(0, 0, cell);
-            console.log('grafting initial cell', cell, branch);
             return [branch, 0];
         }
 

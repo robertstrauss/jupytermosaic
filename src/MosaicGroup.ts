@@ -442,6 +442,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         super.onAfterAttach(msg);
 
         this.direction = (this.parent as Mosaic).direction == 'col' ? 'row' : 'col', // invert direction of parent 
+        // console.log('attached as', this.direction, 'to',  this.parent, (this.parent as Mosaic).direction);
         this.viewModel.direction = this.direction;
 
         this.viewportNode.classList.add(Mosaic.INNER_GROUP_CLASS, Mosaic.DIR_CLASS[this.direction]);
