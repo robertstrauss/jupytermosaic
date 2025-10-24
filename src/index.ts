@@ -7,15 +7,31 @@ import { IEditorServices } from '@jupyterlab/codeeditor';
 import { NotebookWidgetFactory, NotebookTracker, INotebookTracker, INotebookModel } from '@jupyterlab/notebook' 
 import { NotebookPanel, NotebookModelFactory } from '@jupyterlab/notebook';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
-import { IDocumentManager, DocumentManager } from '@jupyterlab/docmanager';
+import { IDocumentManager } from '@jupyterlab/docmanager';
 import { ILauncher } from '@jupyterlab/launcher';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { ILayoutRestorer } from '@jupyterlab/application';
-// import { PathExt } from '@jupyterlab/coreutils';
 
 import { MosaicNotebookPanel, MosaicNotebook } from './MosaicNotebookPanel';
 
 import MosaicIcon from '../style/icons/mosaic-icon.svg';
+
+import { DocumentManager } from '@jupyterlab/docmanager';
+/** patch DocumnetManager to not open default editor when no widgetName is specified if a different editor exists
+  * added to jupyterlab in PR https://github.com/jupyterlab/jupyterlab/pull/18034
+  * important for not duplicating Mosaic and Jupyter Notebook editors when reloading (restoring workspace) */
+DocumentManager.prototype.openOrReveal = function (path:string, widgetName:any = null, kernel?: any, options?: any) {
+  const widget = this.findWidget(path, widgetName);
+  if (widget) {
+    (this as any)._opener.open(widget, {
+      type: widgetName,
+      ...options
+    });
+    return widget;
+  }
+  return this.open(path, widgetName || 'default', kernel, options ?? {});
+};
+///// end patch
 
 
 const MosaicLabIcon = new LabIcon({ name: 'mosaic:favicon', svgstr: MosaicIcon.toString()});
@@ -44,6 +60,16 @@ const plugin: JupyterFrontEndPlugin<void> = {
     console.log('JupyterLab extension mosaic-lab is activated!');
     
 
+    ////// Patch the tracker to allow two different kinds of widgets, open simultaneously and restored correctly
+    ////// This is easier than creating a new NotebookTracker() and having to reattach all the command enabling hooks to the new namespace
+    const getNotebookFactoryName = (panel: NotebookPanel) => (panel.content instanceof MosaicNotebook ? MOSAIC_FACTORY : 'Notebook');
+    (tracker as any)._pool._restore.args = (widget: NotebookPanel) => ({
+                path: widget.context.path,
+                factory: getNotebookFactoryName(widget),
+            });
+    (tracker as any)._pool._restore.name = (widget: NotebookPanel) => `${widget.context.path}:${getNotebookFactoryName(widget)}`;
+    /////// end patching tracker
+
     // const tracker = new NotebookTracker({
     //   namespace: 'mosaic-notebook'
     // });
@@ -59,17 +85,13 @@ const plugin: JupyterFrontEndPlugin<void> = {
     
     // re-use existing context to open a file as both Mosaic and Jupyter notebook, so they stay in sync
     const createContext = (docmanager as any)._createContext.bind(docmanager);
-    // docmanager.open = (path: string, widgetName?: string, kernel?: any, options?: DocumentRegistry.IOpenOptions) => {
     (docmanager as any)._createContext = (path: string, factory: any, ...args:any[]) => {
-        // tracker.find; // also search other tracker if not using proxy to same tracker
-        const other = tracker.find((otherPanel: NotebookPanel) => (otherPanel.context.path == path));
-                  // ||  jptracker.find((otherPanel: NotebookPanel) => (otherPanel.context.path == path));
+      // find existing panel editing this file
+      const other = tracker.find((otherPanel: NotebookPanel) => (otherPanel.context.path == path));
 
-        if (other !== undefined) {
-          console.log('found other!', other, other.context, other.sessionContext);
-          console.log('given', path, factory, 'args',  ...args);
-          return other.context;
-        }
+      if (other !== undefined) {
+        return other.context;
+      }
       return createContext(path, factory);
     }
     
@@ -83,7 +105,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
       name: MOSAIC_FACTORY,
       fileTypes: ['notebook'],
       defaultFor: ['notebook'],
-      modelName: 'mosaic-notebook', //mosaic-
+      modelName: 'mosaic-notebook',
       preferKernel: true,
       canStartKernel: true,
       rendermime: jupyterWidgetFactory.rendermime,
@@ -101,18 +123,6 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
     app.docRegistry.addWidgetFactory(mosaicWidgetFactory);
     app.docRegistry.setDefaultWidgetFactory('notebook', MOSAIC_FACTORY);
-    console.log('default fact', app.docRegistry.defaultWidgetFactory('a.ipynb'));
-
-
-    app.serviceManager.workspaces.list().then(a => console.log('ws list!', a))
-    app.serviceManager.workspaces.list().then(a => {
-      for (const id of a.ids) {
-        app.serviceManager.workspaces.fetch(id).then(ws => {
-          console.log('got workspace!', ws);
-        });
-      }
-      return a;
-    });
 
 
     // give Mosaic Notebook all the bells and whistles of a normal notebook (cell action buttons)
@@ -150,75 +160,6 @@ const plugin: JupyterFrontEndPlugin<void> = {
         kernelIconUrl: `${spec!.resources['logo-svg']}`,
       });
     }
-
-
-
-    ////// Patch the tracker to allow two different kinds of widgets, open simultaneously and restored correctly
-    (tracker as any)._pool._restore.args = (widget: NotebookPanel) => {
-              console.log('restorer widg', widget);
-              console.log('inst mosaic?', widget.content, widget.content instanceof MosaicNotebook, MOSAIC_FACTORY);
-              console.log((tracker as any)._pool);
-              return ({
-                path: widget.context.path,
-                factory: (widget.content instanceof MosaicNotebook ? MOSAIC_FACTORY : 'Notebook'), //a: Private.factoryNameProperty.get()
-            })};
-    (tracker as any)._pool._restore.name = (widget: NotebookPanel) => {
-      const factory = (widget.content instanceof MosaicNotebook ? MOSAIC_FACTORY : 'Notebook');
-      return `${widget.context.path}:${factory}`;
-    }
-
-    // patch openOrReveal to open all factories of a widget that were previously open, not just first one
-    // const openOrReveal = docmanager.openOrReveal;
-    docmanager.openOrReveal = (function (path:string, widgetName:any = null, kernel?: any, options?: any) {
-      // console.warn('OOR', widgetName);
-
-      // const self = (docmanager) as any;
-      // // based on findWidget, @jupyterlab/docmanager/manager.ts:385
-      // const newPath = PathExt.normalize(path);
-
-      // let widgetNames = [widgetName];
-      // console.log('given widgetName', widgetName);
-      // if (widgetName == 'default') {
-      //   widgetNames = self.registry
-      //     .preferredWidgetFactories(newPath)
-      //     .map((f:any) => f.name);
-      // }
-      // console.log('widget names', widgetNames);
-      // let widget;
-      // for (const context of self._contextsForPath(newPath)) {
-      //   console.log('context', context);
-      //   for (const widgetName of widgetNames) {
-      //     if (widgetName !== null) {
-      //       widget = self._widgetManager.findWidget(context, widgetName);
-      //       if (widget) {
-      //         self._opener.open(widget, {
-      //           type: widgetName,
-      //           ...options
-      //         });
-      //       }
-      //     }
-      //   }
-      // }
-
-      // if (widget) {
-      //   return widget;
-      // }
-      // return openOrReveal.bind(docmanager)(path, widgetName as any, kernel, options);//self.open(path, widgetName, kernel, options ?? {}, kernelPreference);
-      const widget = docmanager.findWidget(path, widgetName);
-      if (widget) {
-        (docmanager as any)._opener.open(widget, {
-          type: widgetName,
-          ...options
-        });
-        return widget;
-      }
-      return (docmanager as any).open(path, widgetName || 'default', kernel, options ?? {});
-    }).bind(docmanager);
-    /////// end patching tracker
-
-
-
-    
 
   }
 };
