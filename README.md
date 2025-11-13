@@ -81,6 +81,31 @@ This structure is more difficult to explain with words than it is to understand,
 
 This execution order is also how the cells are linearized when the notebook is opened without the Jupyter Mosaic extension.
 
+# Developing
+
+To set contribute to jupyter mosaic, use the following tips for developing.
+Rebuild:
+```sh
+git clone git@github.com:/robertstrauss/jupytermosaic.git
+cd jupytermosaic
+jlpm install
+jlpm build # or jlpm watch for automatic rebuilding on file changes
+pip install -e .
+```
+
+Useful for debugging: run jupyter server in with an option to expose jupyterapp object in the browser console.
+
+<!--
+using full --dev-mode requires building from source
+# git clone https://github.com/jupyterlab/jupyterlab.git
+# cd jupyterlab
+# jlpm install
+# jlpm build:core
+# jupyter lab build # uses local dev_mode/ folder
+-->
+```sh
+jupyter lab --expose-app-in-browser 
+```
 
 # Please cite
 Robert Strauss, "Jupyter Mosaic" 2020, https://github.com/robertstrauss/jupytermosaic

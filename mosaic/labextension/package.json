@@ -57,8 +57,8 @@
     "watch:labextension": "jupyter labextension watch ."
   },
   "dependencies": {
-    "@jupyterlab/application": "^4.0.0",
-    "@jupyterlab/launcher": "^4.4.9"
+    "@jupyterlab/application": "^4.4.10",
+    "@jupyterlab/launcher": "^4.4.10"
   },
   "devDependencies": {
     "@jupyterlab/builder": "^4.0.0",
@@ -99,7 +99,7 @@
     "extension": true,
     "outputDir": "mosaic/labextension",
     "_build": {
-      "load": "static/remoteEntry.59c661af827a928e7be9.js",
+      "load": "static/remoteEntry.053df42c8c942255d158.js",
       "extension": "./extension",
       "style": "./style"
     }

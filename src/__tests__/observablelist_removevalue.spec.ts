@@ -16,5 +16,6 @@ describe('observablelist removeValue test', () => {
 
     console.log('a = ', a);
     expect(Array.from(a)).toEqual(a_0);
+    // fixed in jupyterlab PR 18018
   });
 });

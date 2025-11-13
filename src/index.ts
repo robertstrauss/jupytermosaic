@@ -24,7 +24,7 @@ DocumentManager.prototype.openOrReveal = function (path:string, widgetName:any =
   const widget = this.findWidget(path, widgetName);
   if (widget) {
     (this as any)._opener.open(widget, {
-      type: widgetName,
+      type: widgetName || 'default',
       ...options
     });
     return widget;
@@ -82,6 +82,13 @@ const plugin: JupyterFrontEndPlugin<void> = {
     //   }),
     //   name: widget => `${widget.context.path}:${MOSAIC_FACTORY}`,
     // });
+
+    app.serviceManager.workspaces.list().then(value => {
+      console.log("WORKSPACES", value);
+    });
+    // app.serviceManager.workspaces.fetch('defaul').then((workspace:any) => {
+    //   console.log('WORKSPACE', workspace);
+    // });
     
     // re-use existing context to open a file as both Mosaic and Jupyter notebook, so they stay in sync
     const createContext = (docmanager as any)._createContext.bind(docmanager);
@@ -96,7 +103,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     }
     
 
-    const jupyterWidgetFactory = app.docRegistry.getWidgetFactory('Notebook') as NotebookWidgetFactory;
+    const jupyterWidgetFactory = app.docRegistry.getWidgetFactory('Notebook') as any as NotebookWidgetFactory;
 
     const mosaicModelFactory = new MosaicModelFactory({ disableDocumentWideUndoRedo: false });
     app.docRegistry.addModelFactory(mosaicModelFactory);
@@ -121,7 +128,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
       panel.title.icon = MosaicLabIcon;
     });
 
-    app.docRegistry.addWidgetFactory(mosaicWidgetFactory);
+    app.docRegistry.addWidgetFactory(mosaicWidgetFactory as any);
     app.docRegistry.setDefaultWidgetFactory('notebook', MOSAIC_FACTORY);
 
 
