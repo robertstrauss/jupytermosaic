@@ -22,7 +22,8 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       return;
     }
 
-    let target = event.target as HTMLElement;
+    // let target = event.target as HTMLElement;
+    let target = elFromPoint(event.clientX, event.clientY) as HTMLElement;
     while (target && target.parentElement) {
       if (target.classList.contains(DROP_TARGET_CLASS)) {
         target.classList.remove(DROP_TARGET_CLASS);
@@ -79,7 +80,7 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
         }
       }
 
-      const side = target.dataset.mosaicDropSide || closestSide(event, target);
+      const side = target.dataset.mosaicDropSide || closestSide(event, target, 0.25);
       const collike = (side == 'bottom' || side == 'top');
       const rowlike = (side == 'left' || side == 'right');
       const beforelike = side == 'top' || side == 'left';
@@ -158,9 +159,9 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       // Don't move if we are within the block of selected cells.
       if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
         firstChangedIndex = Math.min(fromIndex, firstChangedIndex);
-        console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
+        // console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
         for (let i = 0; i < toMove.length+1; i++) {
-          console.log('mos insert', 'Cell:'+ (self.widgets[firstChangedIndex+i] as any).prompt);
+          // console.log('mos insert', 'Cell:'+ (self.widgets[firstChangedIndex+i] as any).prompt);
           self.mosaicInsert(firstChangedIndex+i);
           // self.mosaicInsert(movedcell); // TODO - make before/after, with/new integrate within Notebook/model?
         }
@@ -176,9 +177,9 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       // orig jupyter code subtracted 1 already if toIndex > fromIndex, so we add 1
       if (toIndex > fromIndex) firstChangedIndex -= toMove.length; 
       // if (afterlike) firstChangedIndex -= 1; // include target cell even if dropped after it
-      console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
+      // console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
       for (let i = 0; i < toMove.length+1; i++) { // go for toMove.length+1 : do the moved cells and target cell
-        console.log('mos insert', 'Cell:'+(self.widgets[firstChangedIndex+i] as any).prompt);
+        // console.log('mos insert', 'Cell:'+(self.widgets[firstChangedIndex+i] as any).prompt);
         self.mosaicInsert(firstChangedIndex+i);
       }
 
@@ -186,7 +187,6 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       // CROSS NOTEBOOK MOSAIC NOT YET IMPLEMENTED
     }
 }
-
 
 
 export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
@@ -200,7 +200,8 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
   if (elements.length) {
     (elements[0] as HTMLElement).classList.remove(DROP_TARGET_CLASS);
   }
-  let target = event.target as HTMLElement;
+  // let target = event.target as HTMLElement;
+  let target = elFromPoint(event.clientX, event.clientY) as HTMLElement;
   while (target && target.parentElement) {
     if (target.classList.contains(JUPYTER_CELL_CLASS)) {
       break;
@@ -210,13 +211,14 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
 
   let index = (self as any)._findCell(target);
 
-  const side = closestSide(event, target);
+  const side = closestSide(event, target, 0.25);
   // const collike = (side == 'bottom' || side == 'top');
   // const rowlike = (side == 'left' || side == 'right');
   // const beforelike = side == 'top' || side == 'left';
   // const afterlike = side == 'bottom' || side == 'right';
   if (index === -1) { // likely on a group border rather than a cell
     // let path = null; // try to find the group
+    target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement;
     while (target && target.parentElement) {
       if (target.classList.contains(Mosaic.NODE_CLASS)) {
         target.classList.add(DROP_TARGET_CLASS);
@@ -228,9 +230,11 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
       target = target.parentElement;
     }
 
+
     if (!target || !target.parentElement) { // nothing found, probably dropping off end of notebook.
-      event.source.viewportNode.classList.add(DROP_TARGET_CLASS);
-      event.source.viewportNode.dataset.mosaicDropSide = 'bottom';
+      target = event.source.viewportNode;
+      target.classList.add(DROP_TARGET_CLASS);
+      target.dataset.mosaicDropSide = 'bottom';
     }
   } else {
     const widget = (self as any).cellsArray[index];
@@ -238,9 +242,46 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
 
     // mosaic: show line on side its going to insert on
     widget.node.dataset.mosaicDropSide = side;
+
+    target = widget.node;
   }
 
+  const toMove: Cell[] = event.mimeData.getData('internal:cells');
 
+  if (toMove.map(cell => cell.node).includes(target)) {
+    // event.dropAction = 'none';
+    target.dataset.mosaicDropSide = '';
+  }
+
+  // Auto-scroll if near edges
+  let group = event.target as HTMLElement;
+  while (group && group.parentElement) {
+    if (group.classList.contains(Mosaic.INNER_GROUP_CLASS)) {
+      if (group.dataset.mosaicDirection === 'row') {
+        if ( ((event.clientX < group.getBoundingClientRect().left + 20) && (group.scrollLeft > 0)) ) {
+          group.scrollBy({left: -20});
+          // trigger new drag check since content moved under it due to scroll
+          requestAnimationFrame(() => {mosaicDragOver(self, event)});
+          break;
+        } else if ((event.clientX > group.getBoundingClientRect().right - 20) && (group.scrollLeft + group.clientWidth < group.scrollWidth)) {
+          group.scrollBy({left: 20});
+          requestAnimationFrame(() => {mosaicDragOver(self, event)});
+          break;
+        }
+      } else {
+        if ( ((event.clientY < group.getBoundingClientRect().top + 20) && (group.scrollTop > 0)) ) {
+          group.scrollBy({top: -20});
+          requestAnimationFrame(() => {mosaicDragOver(self, event)});
+          break;
+        } else if ((event.clientY > group.getBoundingClientRect().bottom - 20) && (group.scrollTop + group.clientHeight < group.scrollHeight)) {
+          group.scrollBy({top: 20});
+          requestAnimationFrame(() => {mosaicDragOver(self, event)});
+          break;
+        }
+      }
+    }
+    group = group.parentElement;
+  }
 }
 
 
@@ -248,21 +289,30 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
 
 
 /**
- * Calculate which side of the target element the mouse is closest to. [BY: CHATGPT]
+ * Calculate which side of the target element the mouse is closest to.
  * @param e The drag event from @lumino/dragdrop
  * @param target The target HTMLElement
+ * @param balanceAspect Make drop zones more equal size for non-square elements (0.0 = strictly use closest side, 1.0 = make all zones equal area, 0.5 = in-betweeen)
  * @returns One of 'top', 'left', 'bottom', 'right'
  */
-function closestSide(e: Drag.Event, target: HTMLElement): 'top' | 'left' | 'bottom' | 'right' {
+function closestSide(e: Drag.Event, target: HTMLElement, balanceAspect = 0): 'top' | 'left' | 'bottom' | 'right' {
   const rect = target.getBoundingClientRect();
   const x = e.clientX;
   const y = e.clientY;
 
   // Calculate distances to each side
-  const distTop = Math.abs(y - rect.top);
-  const distLeft = Math.abs(x - rect.left);
-  const distBottom = Math.abs(y - rect.bottom);
-  const distRight = Math.abs(x - rect.right);
+  let distTop = Math.abs(y - rect.top);
+  let distLeft = Math.abs(x - rect.left);
+  let distBottom = Math.abs(y - rect.bottom);
+  let distRight = Math.abs(x - rect.right);
+
+  if (balanceAspect > 0) {
+    const aspect = rect.width / rect.height;
+    distTop = (1-balanceAspect) * distTop + balanceAspect * distTop * aspect;
+    distBottom = (1-balanceAspect) * distBottom + balanceAspect * distBottom * aspect;
+    distLeft = (1-balanceAspect) * distLeft + balanceAspect * distLeft / aspect;
+    distRight = (1-balanceAspect) * distRight + balanceAspect * distRight / aspect;
+  }
 
   // Find the minimum distance
   const minDist = Math.min(distTop, distLeft, distBottom, distRight);
@@ -280,4 +330,15 @@ function closestSide(e: Drag.Event, target: HTMLElement): 'top' | 'left' | 'bott
       // Fallback, shouldn't happen
       return 'top';
   }
+}
+
+function elFromPoint(x: number, y: number): HTMLElement | null {
+  const overlays = document.querySelectorAll('.lm-cursor-backdrop, .lm-DragImage');
+
+  overlays.forEach(o => (o as HTMLElement).style.visibility = 'hidden');
+
+  const realTarget = document.elementFromPoint(x, y);
+
+  overlays.forEach(o => (o as HTMLElement).style.visibility = '');
+  return realTarget as HTMLElement;
 }

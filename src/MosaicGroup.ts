@@ -445,6 +445,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         // console.log('attached as', this.direction, 'to',  this.parent, (this.parent as Mosaic).direction);
         this.viewModel.direction = this.direction;
 
+        this.viewportNode.dataset.mosaicDirection = this.direction;
         this.viewportNode.classList.add(Mosaic.INNER_GROUP_CLASS, Mosaic.DIR_CLASS[this.direction]);
 
         this.updateOverflowShadow(); // update shadowing baased on scroll
