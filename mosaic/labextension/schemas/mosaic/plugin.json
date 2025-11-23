@@ -1,0 +1,21 @@
+{
+  "jupyter.lab.setting-icon": "settings",
+  "jupyter.lab.setting-icon-label": "Mosaic",
+  "title": "Mosaic Notebook Settings",
+  "description": "Controls global stylistic features of the mosaic notebook.",
+  "type": "object",
+  "properties": {
+    "skeuomorphic": {
+      "type": "boolean",
+      "title": "Skeuomorphic Style (Floating Cell Bubbles)",
+      "default": false,
+      "description": "Stylize cells as seperate, floating, and round, rather than the default flat, seamless view."
+    },
+    "topCellHandle": {
+        "type": "boolean",
+        "title": "Cell Handle Placement",
+        "default": false,
+        "description": "Put cell handles above code areas rather than beside it"
+    }
+  }
+}

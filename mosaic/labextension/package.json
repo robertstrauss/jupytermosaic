@@ -98,8 +98,9 @@
   "jupyterlab": {
     "extension": true,
     "outputDir": "mosaic/labextension",
+    "schemaDir": "schema",
     "_build": {
-      "load": "static/remoteEntry.cde1e10d3e67cb205e24.js",
+      "load": "static/remoteEntry.53a8f76bebfb4e037768.js",
       "extension": "./extension",
       "style": "./style"
     }

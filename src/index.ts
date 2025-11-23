@@ -11,6 +11,7 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 import { ILauncher } from '@jupyterlab/launcher';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { ILayoutRestorer } from '@jupyterlab/application';
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
 import { MosaicNotebookPanel, MosaicNotebook } from './MosaicNotebookPanel';
 
@@ -36,13 +37,27 @@ DocumentManager.prototype.openOrReveal = function (path:string, widgetName:any =
 
 const MosaicLabIcon = new LabIcon({ name: 'mosaic:favicon', svgstr: MosaicIcon.toString()});
 
-const PLUGIN_ID = 'mosaic-lab:plugin';
+const PLUGIN_ID = 'mosaic:plugin';
 const MOSAIC_FACTORY = 'MosaicNotebook';
 
 
 class MosaicModelFactory extends NotebookModelFactory {
   get name(): string {
     return 'mosaic-notebook';
+  }
+}
+
+function applySettings(s: any) {
+  if (s.skeuomorphic) {
+    document.body.classList.add('mosaic-skeuomorphic');
+  } else {
+    document.body.classList.remove('mosaic-skeuomorphic');
+  }
+
+  if (s.topCellHandle) {
+    document.body.classList.add('mosaic-top-cell-handles');
+  } else {
+    document.body.classList.remove('mosaic-top-cell-handles');
   }
 }
 
@@ -53,12 +68,19 @@ const plugin: JupyterFrontEndPlugin<void> = {
   id: PLUGIN_ID,
   description: 'Arrange Jupyter notebook cells in any way two-dimensionally. Present your code compactly in Zoom video confrences. Let your Jupyter notebook tell the story and be self-documenting in itself, like a poster presentation. Eliminate white space in your notebook and take advantage of unused screen real estate.',
   autoStart: true,
-  requires: [INotebookTracker, ILauncher, IEditorServices, ILayoutRestorer, IDocumentManager],
+  requires: [INotebookTracker, ILauncher, IEditorServices, ILayoutRestorer, IDocumentManager, ISettingRegistry],
   optional: [],
   activate: async (app: JupyterFrontEnd, tracker: NotebookTracker,  launcher: ILauncher, editorServices: IEditorServices,
-                  restorer: ILayoutRestorer, docmanager: DocumentManager) => {
-    console.log('JupyterLab extension mosaic-lab is activated!');
+                  restorer: ILayoutRestorer, docmanager: DocumentManager, settings: ISettingRegistry) => {
+    console.log('JupyterLab extension mosaic is activated!');
     
+    const loaded = await settings.load(plugin.id);
+    // Apply settings initially
+    applySettings(loaded.composite);
+    // React to changes
+    loaded.changed.connect(() => {
+      applySettings(loaded.composite);
+    });
 
     ////// Patch the tracker to allow two different kinds of widgets, open simultaneously and restored correctly
     ////// This is easier than creating a new NotebookTracker() and having to reattach all the command enabling hooks to the new namespace

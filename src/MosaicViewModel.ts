@@ -257,7 +257,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                         const widget = this.widgetRenderer(i);
                         if (widget?.node && widget.node.isConnected && widget.node.style.display != 'none') {
                             const rect = widget.node.getBoundingClientRect();
-                            size = (mode == 'row' ? rect.width : rect.height);
+                            size = (mode == 'row' ? rect.width : rect.height) + (parseFloat(getComputedStyle(widget.node).margin));
                             measured = true;
                         } else {
                             size = (mode == 'row' ? 

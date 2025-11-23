@@ -88,6 +88,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     static METADATA_NAME = 'mosaic';
     static NODE_CLASS = 'mosaic-group-outer';
     static INNER_GROUP_CLASS = 'mosaic-group-inner';
+    static TAB_GROUP_CLASS = 'mosaic-tabgroup';
     static DIR_CLASS = {
         'row': 'mosaic-row',
         'col': 'mosaic-col'
@@ -181,10 +182,10 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         return `mosaic:${this.path.join('/')}`;
     }
     saveState(state: any) {
-        this.notebook!.model!.setMetadata(this.id, state);
+        Mosaic.saveMosaicState(this.notebook!, this.id, state);
     }
-    getState() {
-        return this.notebook!.model!.getMetadata(this.id) || {};
+    loadState() {
+        return Mosaic.loadMosaicState(this.notebook!, this.id);
     }
 
 
@@ -458,8 +459,15 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         }
         this.node.appendChild(this.runButton);
 
+        // tabbed layout mode
+        if (this.loadState().tabbed) {
+            this.viewportNode.classList.add(Mosaic.TAB_GROUP_CLASS);
+        } else {
+            this.viewportNode.classList.remove(Mosaic.TAB_GROUP_CLASS);
+        }
+
         // drag in the gaps of a row to resize elements
-        const w = this.getState().elWidth;
+        const w = this.loadState().elWidth;
         if (Number.isFinite(w)) this.setElWidth(w);
         let dragging = false;
         this.node.onmousedown = (ev: MouseEvent) => {
@@ -469,7 +477,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             dragging = false;
             if (this.direction == 'row') {
                 const elWidth = this.layout.widgets[0].node.getBoundingClientRect().width;
-                this.saveState({...this.getState(), elWidth});
+                this.saveState({...this.loadState(), elWidth});
             }
         }
         this.node.onmouseleave = endDrag;
@@ -558,7 +566,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                 const size = (dim == 'row' ? 
                             entry.borderBoxSize[0].inlineSize : 
                             entry.borderBoxSize[0].blockSize
-                        );
+                        ) + (2*parseFloat(getComputedStyle(entry.target).margin));
                 // Update size only if item is attached to the DOM
                 if (entry.target.isConnected && size > 0) {
                     // Rely on the data attribute as some nodes may be hidden instead of detach
@@ -685,6 +693,12 @@ export namespace Mosaic {
     }
     export function newUGID() {
         return "mg-"+crypto.randomUUID();
+    }
+    export function loadMosaicState(notebook: Notebook, id: string): any {
+        return notebook!.model!.getMetadata(id) || {};
+    }
+    export function saveMosaicState(notebook: Notebook, id: string, state: any) {
+        notebook!.model!.setMetadata(id, state); 
     }
     export interface IOptions extends Notebook.IOptions{
         direction: FlexDirection;

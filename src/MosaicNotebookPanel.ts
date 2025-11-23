@@ -162,6 +162,11 @@ export class MosaicNotebook extends Notebook {
         const cell = this.cellsArray[index] as LeafCell;
         const nextCell = this.cellsArray[index+1] as LeafCell;
 
+        if (cell == null) {
+            console.warn('no cell at index!', index);
+            return [this, -1];
+        }
+
         // remove from current group
         Mosaic.setParent(cell, null);
         cell.parent = null;

@@ -84,7 +84,7 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       const collike = (side == 'bottom' || side == 'top');
       const rowlike = (side == 'left' || side == 'right');
       const beforelike = side == 'top' || side == 'left';
-      const afterlike = side == 'bottom' || side == 'right';
+      const afterlike = side == 'bottom' || side == 'right' || side == 'tab';
 
       if (toIndex < 0) { // on group or end space, not cell
         if (target.classList.contains(Mosaic.NODE_CLASS)) { // selecting edge of group
@@ -108,11 +108,14 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       // const [targetGroup, ] = self.treeGetExisting(mosaicPath); // group to insert things in
       const targetAxis = (mosaicPath.length % 2) === 0 ? 'col' : 'row';
       if ( (targetAxis == 'row' && collike)
-        || (targetAxis == 'col' && rowlike)) {
+        || (targetAxis == 'col' && rowlike)
+        || (side == 'tab' && !(targetCell as any).superMosaic?.tabbed)) {
             // dropping off-axis (on top/bottom for row, or left/right for col)
             // means we subdivide. Create a new group:
-            mosaicPath = [...mosaicPath, Mosaic.newUGID()];
+            const newID = Mosaic.newUGID();
+            mosaicPath = [...mosaicPath, newID];
             targetCell.model.setMetadata(Mosaic.METADATA_NAME, mosaicPath); // destination cell is part of this new group
+            Mosaic.saveMosaicState(self, newID, {tabbed: true});
       }
 
       // get the deepest common branch of all cells to move
@@ -202,35 +205,25 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
   }
   // let target = event.target as HTMLElement;
   let target = elFromPoint(event.clientX, event.clientY) as HTMLElement;
+  let side: string = '';
   while (target && target.parentElement) {
     if (target.classList.contains(JUPYTER_CELL_CLASS)) {
       break;
     }
+    if (target.classList.contains(Mosaic.NODE_CLASS)) {
+      break;
+    }
+    if (target.classList.contains('jp-InputPrompt')) {
+      side = 'tab';
+    }
     target = target.parentElement;
   }
+  target.classList.add(DROP_TARGET_CLASS);
+  if (side == '') side = closestSide(event, target, 0.25);
 
   let index = (self as any)._findCell(target);
 
-  const side = closestSide(event, target, 0.25);
-  // const collike = (side == 'bottom' || side == 'top');
-  // const rowlike = (side == 'left' || side == 'right');
-  // const beforelike = side == 'top' || side == 'left';
-  // const afterlike = side == 'bottom' || side == 'right';
-  if (index === -1) { // likely on a group border rather than a cell
-    // let path = null; // try to find the group
-    target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement;
-    while (target && target.parentElement) {
-      if (target.classList.contains(Mosaic.NODE_CLASS)) {
-        target.classList.add(DROP_TARGET_CLASS);
-        target.dataset.mosaicDropSide = side;
-        break;
-        // path = self.findGroup(target);
-        // if (path !== null) break;
-      }
-      target = target.parentElement;
-    }
-
-
+  if (index === -1) {
     if (!target || !target.parentElement) { // nothing found, probably dropping off end of notebook.
       target = event.source.viewportNode;
       target.classList.add(DROP_TARGET_CLASS);
