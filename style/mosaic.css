@@ -62,42 +62,63 @@
   --overflow-shadow-color: var(--jp-layout-color3);
   --overflow-shadow-opacity: 1.0;
 } */
-.mosaic-scrolling::after {
+.mosaic-scrolling::after, .mosaic-scrolling::before {
   pointer-events: none;
   z-index: 2;
   content: '';
   position: absolute;
-  top: 0;
+  /* top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: 0; */
   /* --shadow-extent: 20px; */
 }
 .mosaic-col .mosaic-scrolling {
   /* scroll-timeline: --shift-shadow-vert y;
   scroll-timeline: --shift-shadow-vert vertical; */
 }
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='top']::after {
-  /* overshadow mostly the bottom, where more content lurks */
-    /* box-shadow: inset 0px -35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
-                inset 0px   0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
+.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='top']::before {
+  /* hide top shadow if scrolled all the way to the top */
+  opacity: 0;
 }
 
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='bottom']::after {
-  /* overshadow mostly the top, where more content lurks */
-    /* box-shadow: inset 0px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
-                inset 0px 35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
+  display: none;
+  opacity: 0;;
 }
 
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)::after {
   /* overshadow both top and bottom, where more content lurks */
+  /* stick out past edges, shadow decays less along width */
+  left: -15px;
+  right: -15px;
+  height: 15px; /* thickness of shadow overlay */
+  bottom: 0;
+  border-bottom: 1px solid rgb(var(--overflow-shadow-color));
   background: radial-gradient(
     farthest-side at 50% 100%,
-    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 0%,
-    rgba(var(--overflow-shadow-color), 0) 20%,
-    rgba(var(--overflow-shadow-color), 0) 80%,
-    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 100%
+    rgba(var(--overflow-shadow-color), 1) 0%,
+    rgba(var(--overflow-shadow-color), 0) 100%
   );
+  transition: 0.8s;
+  opacity: 1;
+}
+.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)::before {
+  /* overshadow both top and bottom, where more content lurks */
+  /* stick out past edges, shadow decays less along width */
+  left: -15px;
+  right: -15px;
+  height: 15px; /* thickness of shadow overlay */
+  top: 0;
+  border-top: 1px solid rgb(var(--overflow-shadow-color));
+  background: radial-gradient(
+    farthest-side at 50% 0,
+    rgba(var(--overflow-shadow-color), 1) 0%,
+    rgba(var(--overflow-shadow-color), 0) 100%
+  );
+  transition: 0.8s;
+  opacity: 1;
+  /* a shadow coming in on the left and right to show it extends beyond these sides */
   /* box-shadow: inset 0px -35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)), 
               inset 0px 35px  20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
   /* transition: 0.8s; */
@@ -126,36 +147,50 @@
                 inset 10px 30px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity));
 	}
 } */
-.mosaic-row.mosaic-scrolling {
-  scroll-timeline: --shift-shadow-horiz x;
-  scroll-timeline: --shift-shadow-horiz horizontal;
-}
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="left"]::after {
+
+.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="left"]::before {
+  opacity: 0;
   /* overshadow mostly the right, where more content lurks */
   /* box-shadow: inset -35px -0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
               inset   0px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="right"]::after {
+  opacity: 0;
   /* overshadow mostly the left, where more content lurks */
   /* box-shadow: inset 0px   0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
               inset 35px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
 }
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)::after {
   /* a shadow coming in on the left and right to show it extends beyond these sides */
+.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)::before {
+  /* an elliptical shadow and border for a slit-like appearance, content sliding under a seam in the background */
+  /* stick out past edges, shadow decays less along width */
+  top: -15px;
+  bottom: -15px;
+  width: 15px; /* thickness of shadow overlay */
+  left: 0;
+  border-left: 1px solid rgb(var(--overflow-shadow-color));
   background: radial-gradient(
-    ellipse at left center,
-    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 0%,
-    rgba(var(--overflow-shadow-color), 0) 20%,
-    rgba(var(--overflow-shadow-color), 0) 80%,
-    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 100%
-  ),
-  radial-gradient(
-    ellipse at right center,
-    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 0%,
-    rgba(var(--overflow-shadow-color), 0) 20%,
-    rgba(var(--overflow-shadow-color), 0) 80%,
-    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 100%
+    farthest-side at 0 50%,
+    rgba(var(--overflow-shadow-color), 1) 0%,
+    rgba(var(--overflow-shadow-color), 0) 100%
   );
+  transition: 0.8s;
+  opacity: 1;
+}
+.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)::after {
+  /* stick out past edges, shadow decays less along width */
+  top: -15px;
+  bottom: -15px;
+  width: 15px; /* thickness of shadow overlay */
+  right: 0;
+  border-right: 1px solid rgb(var(--overflow-shadow-color));
+  background: radial-gradient(
+    farthest-side at 100% 50%,
+    rgba(var(--overflow-shadow-color), 1) 0%,
+    rgba(var(--overflow-shadow-color), 0) 100%
+  );
+  transition: 0.8s;
+  opacity: 1;
     /* box-shadow: inset -35px 0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)), 
                 inset  35px 0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity));
     transition: 0.8s; */
