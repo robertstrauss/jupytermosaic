@@ -1,4 +1,3 @@
-
 /** mosaic-groups are flex so all the cells are squeezed into a row or column */
 .mosaic-group-inner, .jp-Notebook .jp-WindowedPanel-viewport {
     display: flex;
@@ -234,12 +233,13 @@ body:not(.mosaic-skeuomorphic) .jp-Notebook {
     --cell-margin: 5px;
 }
 /** makes cells floating bubbles with round corners */
-.mosaic-skeuomorphic .jp-Notebook .jp-Cell {
+.mosaic-skeuomorphic .jp-Notebook .jp-Cell, .mosaic-skeuomorphic .mosaic-tab {
     /* background-color: var(--jp-layout-color3); */
     /* make the cells slightly lighter than background */
     background-color: rgba(255, 255, 255, 0.03);
     box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
     border-radius: 10px !important;
+    margin: var(--cell-margin);
 }
 .mosaic-skeuomorphic .jp-Notebook .jp-ThemedContainer :not(.jp-Cell) {
   /* make the background darker than usual to differentiate from the cells */
@@ -433,120 +433,62 @@ body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosa
 }
 
 
-
-
-body {
-  --mosaic-tab-bar-width: 100px;
-  --mosaic-tab-bar-height: 30px;
-  --mosaic-tab-bar-gap: 2px;
+.mosaic-tabgroup {
+    border: 1px solid var(--jp-layout-color2);
+    border-radius: 5px;
+    margin: 5px;
+    padding: 5px;
 }
 
-.jp-Notebook .mosaic-tabgroup.mosaic-row .jp-Cell {
-  height: var(--mosaic-tab-bar-height);
-  gap: var(--mosaic-tab-bar-gap);
+.mosaic-tabgroup:has(.jp-Notebook-cell.jp-mod-active) {
+    border-color: var(--jp-brand-color1);
+    box-shadow: 0 0 5px var(--jp-brand-color1);
 }
 
-.jp-Notebook .mosaic-tabgroup.mosaic-col .jp-Cell {
-  width: var(--mosaic-tab-bar-height);
-  gap: var(--mosaic-tab-bar-gap);
-}
-.mosaic-tabgroup > .jp-Cell:not(.jp-mod-active) *:not(:has(.jp-InputPrompt), .jp-InputPrompt) {
-  display: none;
-}
-.mosaic-tabgroup > .jp-Cell {
-  /* Make active cell editor anchor to group containing cell, to be full size when selected */
-  /* position: static; */
-  display: contents;
-  & .jp-Cell-inputWrapper {
-    /* position: static; */
-    display: contents;
-    & .jp-Cell-inputArea {
-      /* position: static; */
-      display: contents;
-      /* & .jp-InputArea-editor{ */
-        /* position: absolute; */
-      /* } */
-    }
-  }
-}
-.jp-Notebook .mosaic-tabgroup.mosaic-row {
-  display: grid;
-  grid-template-rows: auto 1fr; /* auto proportion space between tabs, but second row filled by active cell content */
-  grid-template-areas:
-    "tab-bar"
-    "active-cell";
-  /* grid-auto-flow: column;
-  grid-auto-columns: 1fr; */
-}
-.jp-Notebook .mosaic-tabgroup.mosaic-col {
-  display: grid;
-  grid-template-columns: auto 1fr; /* auto proportion space between tabs, but second row filled by active cell content */
-  grid-template-areas:
-    "tab-bar active-cell";
-  /* grid-auto-flow: row;
-  grid-auto-rows: 1fr; */
-}
-.mosaic-tabgroup.mosaic-row .jp-Cell.jp-mod-active {
-  & .jp-Cell-inputWrapper > .jp-Cell-inputArea {
-    & .jp-InputPrompt:first-of-type {
-      /* create a subgrid context to essentially flexbox the tabs */
-      display: grid;
-      grid-auto-flow: column;
-      grid-auto-columns: 1fr;
-    }
-    & .jp-InputPrompt {
-      grid-area: tab-bar;
-    }
-    & .jp-InputArea-editor {
-      /* top: calc(var(--mosaic-tab-bar-height) + 2*var(--cell-margin));
-      left: var(--jp-cell-padding);
-      right: var(--jp-cell-padding); */
-      /* bottom: var(--jp-cell-padding); */
-      /* height: max-content; */
-      /* flex: 0 0 auto; */
-      /* width: 100%; of full row, due to display: contents on parents */
-      grid-area: active-cell;
-    }
-  }
-  & .jp-Cell-outputWrapper {
-    grid-area: active-cell;
-  }
+
+.mosaic-tab-bar {
+    display: flex;
+    flex-direction: row;
+    /* background-color: var(--jp-layout-color2); */
+    /* border-bottom: 1px solid var(--jp-border-color1); */
+    flex-shrink: 0;
+    overflow-x: auto;
 }
 
-.mosaic-tabgroup.mosaic-col .jp-Cell.jp-mod-active > .jp-Cell-inputWrapper > .jp-Cell-inputArea {
-  & .jp-InputPrompt:first-of-type {
-      /* create a subgrid context to essentially flexbox the tabs */
-      display: grid;
-      grid-auto-flow: row;
-      grid-auto-rows: 1fr; 
-  }
-  & .jp-InputPrompt {
-    grid-area: tab-bar;
-    width: var(--mosaic-tab-bar-width);
-  }
-  & .jp-InputArea-editor, & .jp-OutputArea {
-  /* top: var(--jp-cell-padding);
-  left: calc(var(--mosaic-tab-bar-width) + 2*var(--cell-margin));
-  right: var(--jp-cell-padding); */
-  /* bottom: var(--jp-cell-padding); */
-  /* height: max-content; */
-  /* flex: 0 0 auto; */
-    grid-area: active-cell;
-    /* width: calc(100% - var(--mosaic-tab-bar-width) - 2*var(--cell-margin));
-    right: 0px;  */
-  }
+.mosaic-tab {
+    background-color: rgba(0,0,0, 0.1);
+    padding: 8px 12px;
+    cursor: pointer;
+    border-right: 1px solid var(--jp-border-color1);
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-shadow: none;
+    min-width: 100px;
 }
-/* .mosaic-tabgroup.mosaic-row::after {
-  position: relative;
-  display: block;
-  content: "";
-  top: var(--mosaic-tab-bar-height + 2*var(--cell-margin));
-  left: 0;
-  right: 0;
-} */
+.mosaic-tab > pre {
+    height: 1rem;
+    margin: 0;
+}
 
+.mosaic-tab:hover {
+    background-color: rgba(0,0,0,0.2);
+    box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
+}
 
+.mosaic-tab-active {
+    background-color: rgba(255,255,255,0.3);
+    box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
+    font-weight: bold;
+    border: 1px solid var(--jp-border-color1);
+}
 
-/* .mosaic-tabgroup .jp-Cell:not(.jp-mod-active) > .jp-Cell-inputWrapper > .jp-Cell-inputArea > .jp-InputArea-editor {
-  display: none;
-} */
+.mosaic-add-tab-button {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-left: 1px solid var(--jp-accent-color1);
+    margin-left: auto;
+}
+
+.mosaic-add-tab-button:hover {
+    background-color: var(--jp-layout-color3);
+}

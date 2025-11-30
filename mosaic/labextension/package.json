@@ -100,7 +100,7 @@
     "outputDir": "mosaic/labextension",
     "schemaDir": "schema",
     "_build": {
-      "load": "static/remoteEntry.53a8f76bebfb4e037768.js",
+      "load": "static/remoteEntry.7bcd37c678ed5989c755.js",
       "extension": "./extension",
       "style": "./style"
     }

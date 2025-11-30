@@ -40,6 +40,10 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                 // console.warn('default widg sizer requested');
                 if (this.direction == 'row') return this._widgetSizersRow;
                 if (this.direction == 'col') return this._widgetSizersCol;
+            },
+            set(value: WindowedList.ItemMetadata[]) {
+                if (this.direction == 'row') this._widgetSizersRow = value;
+                if (this.direction == 'col') this._widgetSizersCol = value;
             }
         });
         (this as any)._getItemMetadata = this.getItemMetadata;

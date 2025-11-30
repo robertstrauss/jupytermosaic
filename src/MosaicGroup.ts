@@ -1,9 +1,9 @@
-import { Notebook, NotebookPanel, NotebookWindowedLayout } from '@jupyterlab/notebook';
+import { Notebook, NotebookPanel, NotebookWindowedLayout, NotebookActions } from '@jupyterlab/notebook';
 import { WindowedList } from '@jupyterlab/ui-components';
 import { Message } from '@lumino/messaging';
 // import { ChildMessage } from '@lumino/widgets';
 import { PromiseDelegate } from '@lumino/coreutils';
-import { Cell, CodeCell, MarkdownCell,  } from '@jupyterlab/cells';
+import { Cell, CodeCell, MarkdownCell } from '@jupyterlab/cells';
 import { ArrayExt } from '@lumino/algorithm';
 import { ObservableList, IObservableList } from '@jupyterlab/observables';
 
@@ -89,6 +89,9 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     static NODE_CLASS = 'mosaic-group-outer';
     static INNER_GROUP_CLASS = 'mosaic-group-inner';
     static TAB_GROUP_CLASS = 'mosaic-tabgroup';
+    static TAB_BAR_CLASS = 'mosaic-tab-bar';
+    static TAB_CLASS = 'mosaic-tab';
+    static TAB_ACTIVE_CLASS = 'mosaic-tab-active';
     static DIR_CLASS = {
         'row': 'mosaic-row',
         'col': 'mosaic-col'
@@ -106,6 +109,9 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     public tiles: ObservableTree<Tile>;
     public mosaics: Map<string, Mosaic>;
     protected _direction: FlexDirection;
+    protected _mode: 'row' | 'col' | 'tabbed';
+    protected _tabBar: HTMLElement | null = null;
+    protected _activeTile: Tile | null = null;
     public runButton: HTMLElement | null = null;
 
     // can be hidden in super-windowed-list, like cell.
@@ -127,6 +133,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         this.tiles = tiles;
         this.mosaics = new Map<string, Mosaic>();
         this._direction = direction;
+        this._mode = direction;
         // this.direction = options.direction;
         this._placeholder = true;
 
@@ -163,6 +170,29 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         this._direction = d;
     }
 
+    get mode(): 'row' | 'col' | 'tabbed' {
+        return this._mode;
+    }
+    set mode(m: 'row' | 'col' | 'tabbed') {
+        if (this._mode === m) {
+            return;
+        }
+        this._mode = m;
+
+        if (m === 'tabbed') {
+            this.viewModel.windowingActive = false;
+            this.node.classList.add(Mosaic.TAB_GROUP_CLASS);
+            this.buildTabBar();
+        } else {
+            this.viewModel.windowingActive = true;
+            this.node.classList.remove(Mosaic.TAB_GROUP_CLASS);
+            this.destroyTabBar();
+            this.direction = m;
+        }
+        this.viewModel.direction = this.direction;
+        this.update();
+    }
+
     get superMosaic(): Mosaic | MosaicNotebook | null {
         return this._superMosaic;
     }
@@ -194,6 +224,11 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             // case 'set':
             case 'clear':
             case 'remove': {
+                if (this.mode === 'tabbed') {
+                    for (const tile of msg.oldValues) {
+                        this.removeTab(tile);
+                    }
+                }
                 // for (const tile of msg.oldValues) {
                     // console.warn('removing', tile);
                     // if (tile instanceof Mosaic) {
@@ -207,6 +242,14 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             }
             case 'set':
             case 'add': {
+                if (this.mode === 'tabbed') {
+                    for (const tile of msg.newValues) {
+                        this.addTab(tile);
+                    }
+                    if (!this._activeTile && this.tiles.length > 0) {
+                        this.setActiveTab(this.tiles.get(0));
+                    }
+                }
                 for (const tile of msg.newValues) {
                     Mosaic.setParent(tile, this);
                     if (tile instanceof Mosaic) {
@@ -325,20 +368,25 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     getLeaf(leafIx: number): [[Mosaic, LeafCell] | null, number] {
         // linearly walk through leafs (Cells) according to each sub groups order until the desired leafindex is reached
         // returns: last parent mosaic and id of leaf in parent or null if not found, and index of leaf in parent, (or total number of leaves if not found)
+        let increment = 1;
         let i = 0;
-        for (const tile of this.tiles) {
+        if (leafIx < 0) {
+            increment = -1;
+            i = -1;
+        }
+        for (const tile of (leafIx > 0 ? this.tiles : Array.from(this.tiles).reverse())) {
             if (tile instanceof Cell) {
                 if (i == leafIx) {
                     return [[this, tile], i]; // found desired leaf
                 }
-                i += 1; // count leaf
+                i += increment; // count leaf
             } else { // branch
                 const [stemAndLeaf, leafNum] = tile.getLeaf(leafIx-i);
 
                 if (stemAndLeaf !== null) {
                     return [stemAndLeaf, leafNum];
                 }
-                i += leafNum!; // count all leaves from this branch
+                i += increment * leafNum!; // count all leaves from this branch
             }
         }
         return [null, i]; // nLeafs > number of leaves I have
@@ -462,9 +510,13 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
 
         // tabbed layout mode
         if (this.loadState().tabbed) {
-            this.viewportNode.classList.add(Mosaic.TAB_GROUP_CLASS);
+            this.mode = 'tabbed';
         } else {
             this.viewportNode.classList.remove(Mosaic.TAB_GROUP_CLASS);
+        }
+
+        if (this.notebook) {
+            this.notebook.activeCellChanged.connect(this.onActiveCellChanged, this);
         }
 
         // drag in the gaps of a row to resize elements
@@ -490,33 +542,191 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             }
         }
     }
-
     protected setElWidth(width: number) {
         this.node.style.setProperty('--el-width', `${width}px`);
     }
 
+    public onBeforeDetach(msg: Message): void {
+        if (this.notebook) {
+            this.notebook.activeCellChanged.disconnect(this.onActiveCellChanged, this);
+        }
+        super.onBeforeDetach(msg);
+    }
 
-    protected onScroll(event: Event): void {
-        super.onScroll(event);
-        // super onScroll updates the viewModels scrollOffset with the scrollTop
-        // we have horizontal windowedlists, in which case we need to do the same but with scrollLeft:
-        if (this.direction == 'row') {
-            const { clientWidth, scrollWidth, scrollLeft } = event.currentTarget as HTMLDivElement;
+    protected onActiveCellChanged(notebook: Notebook, cell: Cell | null): void {
+        if (cell && this.mode === 'tabbed') {
+            // find which of my tiles contains this cell
+            let containingTile: Tile | undefined = undefined;
+            for (const tile of this.tiles) {
+                if (tile === cell) {
+                    containingTile = tile;
+                    break;
+                }
+                if (tile instanceof Mosaic) {
+                    let superMosaic = (cell as LeafCell).superMosaic;
+                    while(superMosaic) {
+                        if (superMosaic === tile) {
+                            containingTile = tile;
+                            break;
+                        }
+                        superMosaic = superMosaic.superMosaic as Mosaic;
+                    }
+                }
+                if (containingTile) break;
+            }
 
-            if (
-                Math.abs(this.viewModel.scrollOffset - scrollLeft) > 1
-            ) {
-                const scrollOffset = Math.max(
-                    0,
-                    Math.min(scrollLeft, scrollWidth - clientWidth)
-                );
-                this.viewModel.scrollOffset = scrollOffset;
+            if (containingTile) {
+                this.setActiveTab(containingTile);
+            }
+        }
+    }
 
-                if (this.viewModel.windowingActive) {
-                    this.update();
+    buildTabBar(): void {
+        if (this._tabBar) {
+            this.destroyTabBar();
+        }
+        this._tabBar = document.createElement('div');
+        this._tabBar.classList.add(Mosaic.TAB_BAR_CLASS);
+        this.innerElement.insertBefore(this._tabBar, this.viewportNode);
+
+        for (const tile of this.tiles) {
+            this.addTab(tile);
+        }
+
+        const addButton = document.createElement('div');
+        addButton.textContent = '+';
+        addButton.classList.add('mosaic-add-tab-button');
+        addButton.onclick = () => this.addNewCell();
+        this._tabBar.appendChild(addButton);
+
+        // After update, all widgets are attached. Hide all except the first.
+        requestAnimationFrame(() => {
+            for (let i = 1; i < this.layout.widgets.length; i++) {
+                this.layout.widgets[i].hide();
+            }
+            if (this.tiles.length > 0) {
+                this.setActiveTab(this.tiles.get(0));
+            }
+        });
+    }
+
+    destroyTabBar(): void {
+        if (this._tabBar) {
+            this._tabBar.remove();
+            this._tabBar = null;
+        }
+        // show all tiles so windowed list can manage them
+        for (const tile of this.tiles) {
+            tile.show();
+        }
+        this._activeTile = null;
+    }
+
+    addTab(tile: Tile): void {
+        if (!this._tabBar) {
+            return;
+        }
+
+        const tab = document.createElement('div');
+        tab.classList.add(Mosaic.TAB_CLASS);
+        const title = document.createElement('pre');
+        tab.appendChild(title); // for some reason textContent assignment doesn't work in firefox
+        title.textContent = this.getTileTitle(tile);
+        tab.onclick = () => this.setActiveTab(tile);
+        (tile as any).__tab = tab;
+        
+        const addButton = this._tabBar.querySelector('.mosaic-add-tab-button');
+        if (addButton) {
+            this._tabBar.insertBefore(tab, addButton);
+        } else {
+            this._tabBar.appendChild(tab);
+        }
+    }
+
+    removeTab(tile: Tile): void {
+        if ((tile as any).__tab) {
+            (tile as any).__tab.remove();
+        }
+    }
+
+    setActiveTab(tile: Tile): void {
+        if (this._activeTile === tile && !tile.isHidden) {
+            return;
+        }
+
+        if (this._activeTile) {
+            ((this._activeTile as any).__tab as HTMLElement)?.classList.remove(Mosaic.TAB_ACTIVE_CLASS);
+            this._activeTile.hide();
+        }
+
+        this._activeTile = tile;
+
+        if (this._activeTile) {
+            ((this._activeTile as any).__tab as HTMLElement)?.classList.add(Mosaic.TAB_ACTIVE_CLASS);
+            this._activeTile.show();
+
+            if (this.notebook) {
+                let cellToActivate: Cell | null = null;
+                if (this._activeTile instanceof Cell) {
+                    cellToActivate = this._activeTile;
+                } else if (this._activeTile instanceof Mosaic) {
+                    // find first cell in this mosaic
+                    const [leafInfo, ] = this._activeTile.getLeaf(0);
+                    if (leafInfo) {
+                        cellToActivate = leafInfo[1];
+                    }
+                }
+
+                if (cellToActivate) {
+                    const index = this.notebook.widgets.indexOf(cellToActivate);
+                    if (index > -1) {
+                        this.notebook.activeCellIndex = index;
+                    }
                 }
             }
         }
+    }
+
+    getTileTitle(tile: Tile): string {
+        console.log('getting title for', tile);
+        if (tile instanceof Mosaic) {
+            console.log('mosaic.', tile.getTileTitle(tile.getLeaf(0)[0]![1]));
+            return `${tile.tiles.length} items: ${tile.getTileTitle(tile.getLeaf(0)[0]![1])}`;
+        } else {
+            let title = '';
+            if (tile instanceof CodeCell) {
+                console.log('code cell. prompt', (tile as any).prompt);
+                title = (`[${(tile as any).prompt}]: `) || '';
+            }
+            const content = tile.model.sharedModel.getSource();
+            if (content.length > 15) {
+                title += content.slice(0,12).split('\n')[0] + '...';
+            } else {
+                title += content.split('\n')[0];
+            }
+            console.log('title:', title);
+            if (title.trim() === '') {
+                title = 'Cell';
+            }
+            return title;
+        }
+    }
+
+    get mosaicNotebook(): MosaicNotebook | null {
+        let n: any = this;
+        while (n) {
+            if (n instanceof MosaicNotebook) {
+                return n;
+            }
+            n = n.superMosaic;
+        }
+        return null;
+    }
+
+    addNewCell(): void {
+        this.setActiveTab(this.getLeaf(-1)[0]![1]);
+        NotebookActions.insertBelow(this.notebook!);
+        this.update();
     }
     protected updateOverflowShadow(): void {
         // tag things scrolled all the way to one side, so CSS styling shows shadow on overflowing elements
