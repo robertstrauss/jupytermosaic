@@ -232,11 +232,14 @@ body:not(.mosaic-skeuomorphic) .jp-Notebook {
     box-shadow: none;
     --cell-margin: 5px;
 }
+
+.mosaic-skeuomorphic .jp-Notebook .jp-Cell {
+    background-color: rgba(255, 255, 255, 0.03);
+}
 /** makes cells floating bubbles with round corners */
-.mosaic-skeuomorphic .jp-Notebook .jp-Cell, .mosaic-skeuomorphic .mosaic-tab {
+.mosaic-skeuomorphic .jp-Notebook .jp-Cell, .mosaic-skeuomorphic .mosaic-tab, .mosaic-skeuomorphic .mosaic-add-tab-button {
     /* background-color: var(--jp-layout-color3); */
     /* make the cells slightly lighter than background */
-    background-color: rgba(255, 255, 255, 0.03);
     box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
     border-radius: 10px !important;
     margin: var(--cell-margin);
@@ -411,17 +414,21 @@ div .jp-Notebook .jp-WindowedPanel-viewport {
   display: block;
 } 
 
-.mosaic-top-cell-handles .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-top-cell-handles .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-group-outer:has(> div > div > .mosaic-tabgroup.mosaic-row).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-tabgroup.mosaic-row > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after {
+/* .mosaic-top-cell-handles  */
+/* .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after, */
+/* .mosaic-top-cell-handles  */
+/* .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after, */
+/* .mosaic-group-outer:has(> div > div > .mosaic-tabgroup).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after, */
+.mosaic-group-outer.mosaic-tabgroup:has(.jp-mod-dropTarget[data-mosaic-drop-side="tab"])::after
+/* .mosaic-tabgroup.mosaic-row > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after { */ {
   top: var(--jp-cell-padding);
   right: var(--jp-cell-padding);
-  width: var(--mosaic-tab-bar-width);
-  height: var(--mosaic-tab-bar-height);
+  /* width: var(--mosaic-tab-bar-width); */
+  width: 50%;
+  height: 1rem;
   display: block;
 } 
-body:not(.mosaic-top-cell-handles)  .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
+/* body:not(.mosaic-top-cell-handles)  .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
 body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
 .mosaic-group-outer:has(> div > div > .mosaic-tabgroup.mosaic-col).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
 .mosaic-tabgroup.mosaic-col > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after {
@@ -430,7 +437,7 @@ body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosa
   width: var(--mosaic-tab-bar-width);
   height: var(--mosaic-tab-bar-height);
   display: block;
-}
+} */
 
 
 .mosaic-tabgroup {
@@ -438,6 +445,10 @@ body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosa
     border-radius: 5px;
     margin: 5px;
     padding: 5px;
+}
+
+.mosaic-top-cell-handles .mosaic-tabgroup > .jp-WindowedPanel-outer > .jp-WindowedPanel-inner > .mosaic-group-inner > .jp-CodeCell .jp-InputPrompt {
+    display: none; /* hide input prompt of cells inside tab groups, since prompt is already shown in tab title */
 }
 
 .mosaic-tabgroup:has(.jp-Notebook-cell.jp-mod-active) {
@@ -453,15 +464,16 @@ body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosa
     /* border-bottom: 1px solid var(--jp-border-color1); */
     flex-shrink: 0;
     overflow-x: auto;
+    align-items: center;
 }
 
 .mosaic-tab {
     background-color: rgba(0,0,0, 0.1);
-    padding: 8px 12px;
+    padding: 0.5rem 0.5rem;
     cursor: pointer;
     border-right: 1px solid var(--jp-border-color1);
     white-space: nowrap;
-    flex-shrink: 0;
+    flex: 1 0 auto;
     box-shadow: none;
     min-width: 100px;
 }
@@ -469,26 +481,42 @@ body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosa
     height: 1rem;
     margin: 0;
 }
+body:not(.mosaic-skeuomorphic) .mosaic-tab, body:not(.mosaic-skeuomorphic) .mosaic-add-tab-button {
+  border-radius: 0;
+  margin: 0;
+  height: 1rem;
+}
 
-.mosaic-tab:hover {
+.mosaic-tab:not(.mosaic-tab-selected):hover {
     background-color: rgba(0,0,0,0.2);
     box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
 }
 
 .mosaic-tab-active {
-    background-color: rgba(255,255,255,0.3);
+    background-color: rgba(255,255,255,0.05);
     box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
     font-weight: bold;
-    border: 1px solid var(--jp-border-color1);
+    border: 1px solid var(--jp-brand-color1);
+    border-left: 5px solid var(--jp-brand-color1);
 }
 
 .mosaic-add-tab-button {
-    padding: 8px 12px;
-    cursor: pointer;
-    border-left: 1px solid var(--jp-accent-color1);
-    margin-left: auto;
+  border: 1px solid var(--jp-border-color1);
+  padding: 0.5rem 0.5rem;
+  width: 1rem; height: 1rem;
+  flex: 0 0 auto;
+  cursor: pointer;
+  text-align: center;
+  vertical-align: middle;
+  /* border-left: 1px solid var(--jp-accent-color1); */
+    /* margin-left: auto; */
 }
 
 .mosaic-add-tab-button:hover {
     background-color: var(--jp-layout-color3);
+}
+
+.mosaic-tab-selected, .mosaic-tab-selected.mosaic-tab-active {
+    background-color: var(--jp-notebook-multiselected-color);
+    color: white;
 }

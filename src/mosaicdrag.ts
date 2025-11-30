@@ -140,9 +140,13 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       // assign the metadata to each cell to place it in the mosaic
       for (const movecell of toMove) {
         const prevpath = Mosaic.getPath(movecell)!;
+        const state = Mosaic.loadMosaicState(self, 'mosaic:'+prevpath.join('/')) || {};
         if (transposeGroup) prevpath.splice(divergeDepth, 0, transposeGroup);
+        const destPath = [...mosaicPath, ...prevpath.slice(divergeDepth)];
+        // copy over any previous saved state for this cell's old path
+        Mosaic.saveMosaicState(self, 'mosaic:'+destPath.join('/'), state);
         // graft moved cell onto tree, preserving any internal structure 
-        Mosaic.setPath(movecell, [...mosaicPath, ...prevpath.slice(divergeDepth)]);
+        Mosaic.setPath(movecell, destPath);
       }
 
       if (toIndex === -1) {
@@ -214,7 +218,7 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
     if (target.classList.contains(Mosaic.NODE_CLASS)) {
       break;
     }
-    if (target.classList.contains('jp-InputPrompt')) {
+    if (target.classList.contains('jp-InputPrompt') || target.classList.contains('mosaic-tab-bar')) {
       side = 'tab';
     }
     target = target.parentElement;
@@ -234,7 +238,8 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
     const widget = (self as any).cellsArray[index];
     widget.node.classList.add(DROP_TARGET_CLASS);
 
-    // mosaic: show line on side its going to insert on
+    // mosaic: show line on side its
+    //  going to insert on
     widget.node.dataset.mosaicDropSide = side;
 
     target = widget.node;

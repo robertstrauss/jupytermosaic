@@ -92,6 +92,7 @@ export class MosaicNotebook extends Notebook {
     protected onCellRemoved(index: number, cell: Cell): void {
         super.onCellRemoved(index, cell);
 
+        console.log('index', index);
         const [found, ] = this.getLeaf(index);
         if (found !== null) {
             const [stem, leaf] = found;
@@ -99,6 +100,7 @@ export class MosaicNotebook extends Notebook {
                 stem.tiles.removeValue(leaf);
             } else {
                 console.warn('failed to remove', index, cell);
+                console.log('found', found, 'sm', (cell as any).superMosaic);
             }
         }
     }

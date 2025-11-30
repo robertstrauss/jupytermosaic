@@ -1,9 +1,11 @@
+import { Drag } from '@lumino/dragdrop';
+import { MimeData } from '@lumino/coreutils';
 import { Notebook, NotebookPanel, NotebookWindowedLayout, NotebookActions } from '@jupyterlab/notebook';
 import { WindowedList } from '@jupyterlab/ui-components';
 import { Message } from '@lumino/messaging';
 // import { ChildMessage } from '@lumino/widgets';
 import { PromiseDelegate } from '@lumino/coreutils';
-import { Cell, CodeCell, MarkdownCell } from '@jupyterlab/cells';
+import { Cell, CodeCell, MarkdownCell, ICellModel } from '@jupyterlab/cells';
 import { ArrayExt } from '@lumino/algorithm';
 import { ObservableList, IObservableList } from '@jupyterlab/observables';
 
@@ -112,6 +114,9 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     protected _mode: 'row' | 'col' | 'tabbed';
     protected _tabBar: HTMLElement | null = null;
     protected _activeTile: Tile | null = null;
+    private _selectedTiles = new Set<Tile>();
+
+    private _lastSelectedTile: Tile | null = null;
     public runButton: HTMLElement | null = null;
 
     // can be hidden in super-windowed-list, like cell.
@@ -226,6 +231,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             case 'remove': {
                 if (this.mode === 'tabbed') {
                     for (const tile of msg.oldValues) {
+                        console.warn('remove tab', (tile as any)?.prompt);
                         this.removeTab(tile);
                     }
                 }
@@ -243,9 +249,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             case 'set':
             case 'add': {
                 if (this.mode === 'tabbed') {
-                    for (const tile of msg.newValues) {
-                        this.addTab(tile);
-                    }
+                    this._updateTabs();
                     if (!this._activeTile && this.tiles.length > 0) {
                         this.setActiveTab(this.tiles.get(0));
                     }
@@ -587,25 +591,14 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         }
         this._tabBar = document.createElement('div');
         this._tabBar.classList.add(Mosaic.TAB_BAR_CLASS);
-        this.innerElement.insertBefore(this._tabBar, this.viewportNode);
-
-        for (const tile of this.tiles) {
-            this.addTab(tile);
-        }
-
-        const addButton = document.createElement('div');
-        addButton.textContent = '+';
-        addButton.classList.add('mosaic-add-tab-button');
-        addButton.onclick = () => this.addNewCell();
-        this._tabBar.appendChild(addButton);
-
+        this.node.prepend(this._tabBar);
+        
         // After update, all widgets are attached. Hide all except the first.
         requestAnimationFrame(() => {
-            for (let i = 1; i < this.layout.widgets.length; i++) {
-                this.layout.widgets[i].hide();
-            }
             if (this.tiles.length > 0) {
                 this.setActiveTab(this.tiles.get(0));
+            } else {
+                this._updateTabs();
             }
         });
     }
@@ -619,84 +612,210 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         for (const tile of this.tiles) {
             tile.show();
         }
+        this._clearSelection(false);
+        this._lastSelectedTile = null;
         this._activeTile = null;
     }
 
-    addTab(tile: Tile): void {
+    private _updateTabs(): void {
         if (!this._tabBar) {
+            console.log('no tab bar');
             return;
         }
 
-        const tab = document.createElement('div');
-        tab.classList.add(Mosaic.TAB_CLASS);
-        const title = document.createElement('pre');
-        tab.appendChild(title); // for some reason textContent assignment doesn't work in firefox
-        title.textContent = this.getTileTitle(tile);
-        tab.onclick = () => this.setActiveTab(tile);
-        (tile as any).__tab = tab;
-        
-        const addButton = this._tabBar.querySelector('.mosaic-add-tab-button');
-        if (addButton) {
-            this._tabBar.insertBefore(tab, addButton);
-        } else {
+        // Clear existing tabs
+        while (this._tabBar.firstChild) {
+            this._tabBar.removeChild(this._tabBar.firstChild);
+        }
+    
+        // Re-create tabs from state
+        for (const tile of this.tiles) {
+            const tab = document.createElement('div');
+            tab.classList.add(Mosaic.TAB_CLASS);
+            const title = document.createElement('pre');
+            tab.appendChild(title);
+            title.textContent = this.getTileTitle(tile);
+    
+            if (this._selectedTiles.has(tile)) {
+                tab.classList.add('mosaic-tab-selected');
+            }
+            if (this._activeTile === tile) {
+                tab.classList.add(Mosaic.TAB_ACTIVE_CLASS);
+                tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                tile.show();
+            } else {
+                tile.hide();
+            }
+
+            tab.addEventListener('mousedown', (event: MouseEvent) => {
+                let wasDrag = false;
+                const onMouseMove = (moveEvent: MouseEvent) => {
+                    const dx = Math.abs(moveEvent.clientX - event.clientX);
+                    const dy = Math.abs(moveEvent.clientY - event.clientY);
+                    if (dx > 4 || dy > 4) { // Threshold to detect a drag
+                        wasDrag = true;
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+                        this.onTabDragStart(tile, event);
+                    }
+                };
+                const onMouseUp = (upEvent: MouseEvent) => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    if (!wasDrag) {
+                        this.handleTabClick(tile, upEvent);
+                    }
+                };
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp, { once: true });
+            });
+    
+            (tile as any).__tab = tab;
             this._tabBar.appendChild(tab);
         }
+    
+        // Add the '+' button
+        const addButton = document.createElement('div');
+        addButton.textContent = '+';
+        addButton.classList.add('mosaic-add-tab-button');
+        addButton.onclick = () => this.addNewCell();
+        this._tabBar.appendChild(addButton);
+    }
+    
+    handleTabClick(tile: Tile, event: MouseEvent): void {
+        if (event.shiftKey && this._lastSelectedTile) {
+            // Extend selection
+            const lastIndex = this.tiles.indexOf(this._lastSelectedTile);
+            const currentIndex = this.tiles.indexOf(tile);
+            const [start, end] = [lastIndex, currentIndex].sort((a, b) => a - b);
+            
+            this._clearSelection(false); // Don't re-render yet
+            
+            for (let i = start; i <= end; i++) {
+                const tileInRange = this.tiles.get(i);
+                this._selectedTiles.add(tileInRange);
+                (tileInRange as any).__tab?.classList.add('mosaic-tab-selected');
+            }
+        } else {
+            // Single selection
+            this._clearSelection(false); // Don't re-render yet
+            // this._selectedTiles.add(tile);
+            this._lastSelectedTile = tile;
+        }
+        
+        this.setActiveTab(tile, false);
     }
 
-    removeTab(tile: Tile): void {
-        if ((tile as any).__tab) {
-            (tile as any).__tab.remove();
+    private _clearSelection(update = true): void {
+        for (const tile of this._selectedTiles) {
+            (tile as any).__tab?.classList.remove('mosaic-tab-selected');
+        }
+        this._selectedTiles.clear();
+        if (update) {
+            this._updateTabs();
         }
     }
 
-    setActiveTab(tile: Tile): void {
-        if (this._activeTile === tile && !tile.isHidden) {
+    onTabDragStart(draggedTile: Tile, event: MouseEvent): void {
+        // If the dragged tab is not selected, select only it.
+        if (!this._selectedTiles.has(draggedTile)) {
+            this._clearSelection(false);
+            this._selectedTiles.add(draggedTile);
+            this._lastSelectedTile = draggedTile;
+            this._updateTabs();
+        }
+    
+        // Gather all cells from all selected tiles.
+        let cellsToDrag: Cell[] = [];
+        this._selectedTiles.forEach(tile => {
+            cellsToDrag = cellsToDrag.concat(this._getAllCells(tile));
+        });
+    
+        if (cellsToDrag.length === 0) {
             return;
         }
-
-        if (this._activeTile) {
-            ((this._activeTile as any).__tab as HTMLElement)?.classList.remove(Mosaic.TAB_ACTIVE_CLASS);
-            this._activeTile.hide();
+    
+        const mimeData = new MimeData();
+        mimeData.setData('internal:cells', cellsToDrag);
+        mimeData.setData('application/vnd.jupyter.cells', cellsToDrag.map(c => c.model.toJSON()));
+    
+        const drag = new Drag({
+            mimeData,
+            source: this.mosaicNotebook, // The source should be the notebook
+            dragImage: this._createDragImage(this._selectedTiles.size)
+        });
+    
+        drag.start(event.clientX, event.clientY);
+    }
+    
+    private _getAllCells(tile: Tile): Cell[] {
+        if (tile instanceof Cell) {
+            return [tile];
         }
+        if (tile instanceof Mosaic) {
+            let cells: Cell[] = [];
+            for (const subTile of tile.tiles) {
+                cells = cells.concat(this._getAllCells(subTile));
+            }
+            return cells;
+        }
+        return [];
+    }
 
+    private _createDragImage(count: number): HTMLElement {
+        const dragImage = document.createElement('div');
+        dragImage.className = 'jp-dragImage';
+        dragImage.textContent = `${count} item${count > 1 ? 's' : ''}`;
+        return dragImage;
+    }
+    
+    removeTab(tile: Tile): void {
+        this._selectedTiles.delete(tile);
+        if (this._lastSelectedTile === tile) {
+            this._lastSelectedTile = null;
+        }
+        this._updateTabs();
+    }
+
+    setActiveTab(tile: Tile, update_last = true): void {
+        if (update_last) {
+            this._lastSelectedTile = tile;
+        }
+        if (this._activeTile === tile) {
+            return;
+        }
+        
         this._activeTile = tile;
 
-        if (this._activeTile) {
-            ((this._activeTile as any).__tab as HTMLElement)?.classList.add(Mosaic.TAB_ACTIVE_CLASS);
-            this._activeTile.show();
-
-            if (this.notebook) {
-                let cellToActivate: Cell | null = null;
-                if (this._activeTile instanceof Cell) {
-                    cellToActivate = this._activeTile;
-                } else if (this._activeTile instanceof Mosaic) {
-                    // find first cell in this mosaic
-                    const [leafInfo, ] = this._activeTile.getLeaf(0);
-                    if (leafInfo) {
-                        cellToActivate = leafInfo[1];
-                    }
+        if (this.notebook && this._activeTile) {
+            let cellToActivate: Cell | null = null;
+            if (this._activeTile instanceof Cell) {
+                cellToActivate = this._activeTile;
+            } else if (this._activeTile instanceof Mosaic) {
+                // find first cell in this mosaic
+                const [leafInfo, ] = this._activeTile.getLeaf(0);
+                if (leafInfo) {
+                    cellToActivate = leafInfo[1];
                 }
+            }
 
-                if (cellToActivate) {
-                    const index = this.notebook.widgets.indexOf(cellToActivate);
-                    if (index > -1) {
-                        this.notebook.activeCellIndex = index;
-                    }
+            if (cellToActivate) {
+                const index = this.notebook.widgets.indexOf(cellToActivate);
+                if (index > -1) {
+                    this.notebook.activeCellIndex = index;
                 }
             }
         }
+        this._updateTabs();
     }
 
     getTileTitle(tile: Tile): string {
-        console.log('getting title for', tile);
         if (tile instanceof Mosaic) {
-            console.log('mosaic.', tile.getTileTitle(tile.getLeaf(0)[0]![1]));
             return `${tile.tiles.length} items: ${tile.getTileTitle(tile.getLeaf(0)[0]![1])}`;
         } else {
             let title = '';
             if (tile instanceof CodeCell) {
-                console.log('code cell. prompt', (tile as any).prompt);
-                title = (`[${(tile as any).prompt}]: `) || '';
+                title = (`[${(tile as any).prompt || ' '}]: `) || '';
             }
             const content = tile.model.sharedModel.getSource();
             if (content.length > 15) {
@@ -704,7 +823,6 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             } else {
                 title += content.split('\n')[0];
             }
-            console.log('title:', title);
             if (title.trim() === '') {
                 title = 'Cell';
             }
@@ -724,9 +842,59 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     }
 
     addNewCell(): void {
-        this.setActiveTab(this.getLeaf(-1)[0]![1]);
-        NotebookActions.insertBelow(this.notebook!);
-        this.update();
+        const mosaicNotebook = this.mosaicNotebook;
+        if (!mosaicNotebook || !mosaicNotebook.model) {
+            return;
+        }
+        const model = mosaicNotebook.model;
+
+        // Define a function to handle the addition of the new cell
+        const handleNewCell = (sender: any, args: IObservableList.IChangedArgs<ICellModel>) => {
+            if (args.type === 'add') {
+                // Assuming the last added cell is the one we just created.
+                const newCellModel = args.newValues[args.newValues.length - 1];
+                
+                // Disconnect the signal handler
+                model.cells.changed.disconnect(handleNewCell);
+
+                const newCellWidget = mosaicNotebook.widgets.find(w => w.model === newCellModel);
+
+                if (newCellWidget) {
+                    // Add to current mosaic group's tiles
+                    this.splice(this.tiles.length, 0, newCellWidget as LeafCell);
+                    
+                    // Update cell metadata to reflect its new path in the mosaic
+                    Mosaic.setPath(newCellWidget, this.path);
+                    
+                    // Set the new cell as the active tab
+                    this.setActiveTab(newCellWidget as LeafCell);
+                }
+            }
+        };
+
+        // Connect to the cells changed signal BEFORE triggering the action
+        model.cells.changed.connect(handleNewCell);
+
+        // Set the active cell in the notebook to the last cell of the current tab group
+        // so that `insertBelow` works as expected.
+        if (this._activeTile && this._activeTile instanceof Cell) {
+            const index = mosaicNotebook.widgets.indexOf(this._activeTile);
+            if (index > -1) {
+                mosaicNotebook.activeCellIndex = index;
+            }
+        } else if (this.tiles.length > 0) {
+            // Fallback to the last cell in the group if the active tile isn't a cell
+            const lastTile = this.tiles.get(this.tiles.length - 1);
+             if (lastTile instanceof Cell) {
+                const index = mosaicNotebook.widgets.indexOf(lastTile);
+                if (index > -1) {
+                    mosaicNotebook.activeCellIndex = index;
+                }
+             }
+        }
+
+        // Trigger the action to insert a new cell
+        NotebookActions.insertBelow(mosaicNotebook);
     }
     protected updateOverflowShadow(): void {
         // tag things scrolled all the way to one side, so CSS styling shows shadow on overflowing elements
