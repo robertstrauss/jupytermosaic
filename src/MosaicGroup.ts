@@ -1086,7 +1086,8 @@ export namespace Mosaic {
         return notebook!.model!.getMetadata(id) || {};
     }
     export function saveMosaicState(notebook: Notebook, id: string, state: any) {
-        notebook!.model!.setMetadata(id, state); 
+        const oldstate = Mosaic.loadMosaicState(notebook, id);
+        notebook!.model!.setMetadata(id, {...oldstate, ...state}); 
     }
     export interface IOptions extends Notebook.IOptions{
         direction: FlexDirection;

@@ -116,8 +116,6 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
             Mosaic.setPath(targetCell, mosaicPath); // destination cell is part of this new group
             if (side == 'tab') {
               Mosaic.saveMosaicState(self, 'mosaic:'+mosaicPath.join('/'), {tabbed: true});
-              console.log('saved tabbed!');
-              console.log('loaded:', Mosaic.loadMosaicState(self, 'mosaic:'+mosaicPath.join('/')));
             }
       }
 

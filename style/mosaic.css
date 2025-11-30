@@ -414,30 +414,14 @@ div .jp-Notebook .jp-WindowedPanel-viewport {
   display: block;
 } 
 
-/* .mosaic-top-cell-handles  */
-/* .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after, */
-/* .mosaic-top-cell-handles  */
-/* .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after, */
-/* .mosaic-group-outer:has(> div > div > .mosaic-tabgroup).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after, */
-.mosaic-group-outer.mosaic-tabgroup:has(.jp-mod-dropTarget[data-mosaic-drop-side="tab"])::after
-/* .mosaic-tabgroup.mosaic-row > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after { */ {
+.mosaic-group-outer.mosaic-tabgroup:has(> .jp-WindowedPanel-outer > .jp-WindowedPanel-inner > .mosaic-group-inner > .jp-mod-dropTarget[data-mosaic-drop-side="tab"])::after,
+.jp-WindowedPanel-viewport:not(.mosaic-group-inner) .jp-Cell.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after {
   top: var(--jp-cell-padding);
   right: var(--jp-cell-padding);
-  /* width: var(--mosaic-tab-bar-width); */
   width: 50%;
   height: 1rem;
   display: block;
 } 
-/* body:not(.mosaic-top-cell-handles)  .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-group-outer:has(> div > div > .mosaic-tabgroup.mosaic-col).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-tabgroup.mosaic-col > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after {
-  bottom: var(--jp-cell-padding);
-  left: var(--jp-cell-padding);
-  width: var(--mosaic-tab-bar-width);
-  height: var(--mosaic-tab-bar-height);
-  display: block;
-} */
 
 
 .mosaic-tabgroup {
@@ -460,8 +444,6 @@ body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosa
 .mosaic-tab-bar {
     display: flex;
     flex-direction: row;
-    /* background-color: var(--jp-layout-color2); */
-    /* border-bottom: 1px solid var(--jp-border-color1); */
     flex-shrink: 0;
     overflow-x: auto;
     align-items: center;
