@@ -74,27 +74,33 @@
   /* --shadow-extent: 20px; */
 }
 .mosaic-col .mosaic-scrolling {
-  scroll-timeline: --shift-shadow-vert y;
-  scroll-timeline: --shift-shadow-vert vertical;
+  /* scroll-timeline: --shift-shadow-vert y;
+  scroll-timeline: --shift-shadow-vert vertical; */
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='top']::after {
   /* overshadow mostly the bottom, where more content lurks */
-    box-shadow: inset 0px -35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
-                inset 0px   0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity));
-    box-shadow-color: var(--jp-layout-color3);
+    /* box-shadow: inset 0px -35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
+                inset 0px   0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
 }
 
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='bottom']::after {
   /* overshadow mostly the top, where more content lurks */
-    box-shadow: inset 0px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
-                inset 0px 35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity));
+    /* box-shadow: inset 0px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
+                inset 0px 35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
 }
 
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)::after {
   /* overshadow both top and bottom, where more content lurks */
-  box-shadow: inset 0px -35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)), 
-              inset 0px 35px  20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity));
-  transition: 0.8s;
+  background: radial-gradient(
+    farthest-side at 50% 100%,
+    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 0%,
+    rgba(var(--overflow-shadow-color), 0) 20%,
+    rgba(var(--overflow-shadow-color), 0) 80%,
+    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 100%
+  );
+  /* box-shadow: inset 0px -35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)), 
+              inset 0px 35px  20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
+  /* transition: 0.8s; */
   /* animation: adjust-position-vert linear forwards;
   animation-timeline: --shift-shadow-vert; */
 }
@@ -126,19 +132,33 @@
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="left"]::after {
   /* overshadow mostly the right, where more content lurks */
-  box-shadow: inset -35px -0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
-              inset   0px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity));
+  /* box-shadow: inset -35px -0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
+              inset   0px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="right"]::after {
   /* overshadow mostly the left, where more content lurks */
-  box-shadow: inset 0px   0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
-              inset 35px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity));
+  /* box-shadow: inset 0px   0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
+              inset 35px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
 }
 .mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)::after {
   /* a shadow coming in on the left and right to show it extends beyond these sides */
-    box-shadow: inset -35px 0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)), 
+  background: radial-gradient(
+    ellipse at left center,
+    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 0%,
+    rgba(var(--overflow-shadow-color), 0) 20%,
+    rgba(var(--overflow-shadow-color), 0) 80%,
+    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 100%
+  ),
+  radial-gradient(
+    ellipse at right center,
+    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 0%,
+    rgba(var(--overflow-shadow-color), 0) 20%,
+    rgba(var(--overflow-shadow-color), 0) 80%,
+    rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)) 100%
+  );
+    /* box-shadow: inset -35px 0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)), 
                 inset  35px 0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity));
-    transition: 0.8s;
+    transition: 0.8s; */
 }
 /* @keyframes adjust-position-horiz {
 	0% {
@@ -164,18 +184,31 @@
 } */
 
 
+
+.jp-Notebook .jp-Cell {
+  margin: var(--cell-margin);
+}
+body:not(.mosaic-skeuomorphic) .jp-Notebook {
+  --cell-margin: 0;
+}
 /** floating vs flat layout style */
 /** takes away white middle column so cells are floating in the grey area */
 .mosaic-skeuomorphic .jp-Notebook {
     background: transparent;
     box-shadow: none;
+    --cell-margin: 5px;
 }
 /** makes cells floating bubbles with round corners */
 .mosaic-skeuomorphic .jp-Notebook .jp-Cell {
-    background: white;
-    box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.5);
+    /* background-color: var(--jp-layout-color3); */
+    /* make the cells slightly lighter than background */
+    background-color: rgba(255, 255, 255, 0.03);
+    box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
     border-radius: 10px !important;
-    margin: 5px;
+}
+.mosaic-skeuomorphic .jp-Notebook .jp-ThemedContainer :not(.jp-Cell) {
+  /* make the background darker than usual to differentiate from the cells */
+  background-color: rgb(from var(--jp-layout-color3) calc(r - 50) calc(g - 50) calc(b - 50));
 }
 
 div .jp-Notebook .jp-WindowedPanel-viewport {
@@ -183,17 +216,23 @@ div .jp-Notebook .jp-WindowedPanel-viewport {
 }
 
 
-.mosaic-group-outer:not(:first-child) {
+/** offset  run buttons of nested groups from overlapping */
+.mosaic-group-outer:not(:nth-child(1)) {
+  --parent-run-btn-offset: 0;
   --run-btn-offset: 0;
 }
-.mosaic-group-outer:first-child > .mosaic-group-run-btn{
-  /** offset  run buttons of nested groups from overlapping */
-  --run-btn-offset: calc(var(--run-btn-offset) + 24px);
+.mosaic-group-inner:first-child {
+  --parent-run-btn-offset: var(--run-btn-offset);
 }
+.mosaic-group-outer:nth-child(1){ /* 2nd because windowedpanel scrollbar is always first */
+  /* --parent-run-btn-offset: var(--run-btn-offset); */
+  --run-btn-offset: calc(var(--parent-run-btn-offset)+1px)
+}
+
 .mosaic-group-run-btn {
   position: absolute;
   top: 0;
-  left: var(--run-btn-offset);
+  left: calc(var(--run-btn-offset)*25);
   width: 24px;
   height: 24px;
   background-color: rgba(120, 120, 120, 0.3);
@@ -337,11 +376,142 @@ div .jp-Notebook .jp-WindowedPanel-viewport {
   display: block;
 } 
 
-.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after{
-  top: 0px;
-  right: 0px;
-  width: 50%;
-  height: 30px;
+.mosaic-top-cell-handles .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
+.mosaic-top-cell-handles .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
+.mosaic-group-outer:has(> div > div > .mosaic-tabgroup.mosaic-row).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
+.mosaic-tabgroup.mosaic-row > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after {
+  top: var(--jp-cell-padding);
+  right: var(--jp-cell-padding);
+  width: var(--mosaic-tab-bar-width);
+  height: var(--mosaic-tab-bar-height);
   display: block;
 } 
+body:not(.mosaic-top-cell-handles)  .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
+body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
+.mosaic-group-outer:has(> div > div > .mosaic-tabgroup.mosaic-col).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
+.mosaic-tabgroup.mosaic-col > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after {
+  bottom: var(--jp-cell-padding);
+  left: var(--jp-cell-padding);
+  width: var(--mosaic-tab-bar-width);
+  height: var(--mosaic-tab-bar-height);
+  display: block;
+}
+
+
+
+
+body {
+  --mosaic-tab-bar-width: 100px;
+  --mosaic-tab-bar-height: 30px;
+  --mosaic-tab-bar-gap: 2px;
+}
+
+.jp-Notebook .mosaic-tabgroup.mosaic-row .jp-Cell {
+  height: var(--mosaic-tab-bar-height);
+  gap: var(--mosaic-tab-bar-gap);
+}
+
+.jp-Notebook .mosaic-tabgroup.mosaic-col .jp-Cell {
+  width: var(--mosaic-tab-bar-height);
+  gap: var(--mosaic-tab-bar-gap);
+}
+.mosaic-tabgroup > .jp-Cell:not(.jp-mod-active) *:not(:has(.jp-InputPrompt), .jp-InputPrompt) {
+  display: none;
+}
+.mosaic-tabgroup > .jp-Cell {
+  /* Make active cell editor anchor to group containing cell, to be full size when selected */
+  /* position: static; */
+  display: contents;
+  & .jp-Cell-inputWrapper {
+    /* position: static; */
+    display: contents;
+    & .jp-Cell-inputArea {
+      /* position: static; */
+      display: contents;
+      /* & .jp-InputArea-editor{ */
+        /* position: absolute; */
+      /* } */
+    }
+  }
+}
+.jp-Notebook .mosaic-tabgroup.mosaic-row {
+  display: grid;
+  grid-template-rows: auto 1fr; /* auto proportion space between tabs, but second row filled by active cell content */
+  grid-template-areas:
+    "tab-bar"
+    "active-cell";
+  /* grid-auto-flow: column;
+  grid-auto-columns: 1fr; */
+}
+.jp-Notebook .mosaic-tabgroup.mosaic-col {
+  display: grid;
+  grid-template-columns: auto 1fr; /* auto proportion space between tabs, but second row filled by active cell content */
+  grid-template-areas:
+    "tab-bar active-cell";
+  /* grid-auto-flow: row;
+  grid-auto-rows: 1fr; */
+}
+.mosaic-tabgroup.mosaic-row .jp-Cell.jp-mod-active {
+  & .jp-Cell-inputWrapper > .jp-Cell-inputArea {
+    & .jp-InputPrompt:first-of-type {
+      /* create a subgrid context to essentially flexbox the tabs */
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+    }
+    & .jp-InputPrompt {
+      grid-area: tab-bar;
+    }
+    & .jp-InputArea-editor {
+      /* top: calc(var(--mosaic-tab-bar-height) + 2*var(--cell-margin));
+      left: var(--jp-cell-padding);
+      right: var(--jp-cell-padding); */
+      /* bottom: var(--jp-cell-padding); */
+      /* height: max-content; */
+      /* flex: 0 0 auto; */
+      /* width: 100%; of full row, due to display: contents on parents */
+      grid-area: active-cell;
+    }
+  }
+  & .jp-Cell-outputWrapper {
+    grid-area: active-cell;
+  }
+}
+
+.mosaic-tabgroup.mosaic-col .jp-Cell.jp-mod-active > .jp-Cell-inputWrapper > .jp-Cell-inputArea {
+  & .jp-InputPrompt:first-of-type {
+      /* create a subgrid context to essentially flexbox the tabs */
+      display: grid;
+      grid-auto-flow: row;
+      grid-auto-rows: 1fr; 
+  }
+  & .jp-InputPrompt {
+    grid-area: tab-bar;
+    width: var(--mosaic-tab-bar-width);
+  }
+  & .jp-InputArea-editor, & .jp-OutputArea {
+  /* top: var(--jp-cell-padding);
+  left: calc(var(--mosaic-tab-bar-width) + 2*var(--cell-margin));
+  right: var(--jp-cell-padding); */
+  /* bottom: var(--jp-cell-padding); */
+  /* height: max-content; */
+  /* flex: 0 0 auto; */
+    grid-area: active-cell;
+    /* width: calc(100% - var(--mosaic-tab-bar-width) - 2*var(--cell-margin));
+    right: 0px;  */
+  }
+}
+/* .mosaic-tabgroup.mosaic-row::after {
+  position: relative;
+  display: block;
+  content: "";
+  top: var(--mosaic-tab-bar-height + 2*var(--cell-margin));
+  left: 0;
+  right: 0;
+} */
+
+
+
+/* .mosaic-tabgroup .jp-Cell:not(.jp-mod-active) > .jp-Cell-inputWrapper > .jp-Cell-inputArea > .jp-InputArea-editor {
+  display: none;
+} */

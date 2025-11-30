@@ -103,7 +103,6 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
         mosaicPath = Mosaic.getPath(targetCell) || [];
       }
 
-      
       // create a new group to subdivide depending on side of cells its dropped on
       // const [targetGroup, ] = self.treeGetExisting(mosaicPath); // group to insert things in
       const targetAxis = (mosaicPath.length % 2) === 0 ? 'col' : 'row';
@@ -114,8 +113,12 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
             // means we subdivide. Create a new group:
             const newID = Mosaic.newUGID();
             mosaicPath = [...mosaicPath, newID];
-            targetCell.model.setMetadata(Mosaic.METADATA_NAME, mosaicPath); // destination cell is part of this new group
-            Mosaic.saveMosaicState(self, newID, {tabbed: true});
+            Mosaic.setPath(targetCell, mosaicPath); // destination cell is part of this new group
+            if (side == 'tab') {
+              Mosaic.saveMosaicState(self, 'mosaic:'+mosaicPath.join('/'), {tabbed: true});
+              console.log('saved tabbed!');
+              console.log('loaded:', Mosaic.loadMosaicState(self, 'mosaic:'+mosaicPath.join('/')));
+            }
       }
 
       // get the deepest common branch of all cells to move
@@ -155,6 +158,7 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
         toIndex += 1; // drop on bottom or right of cell to go after it
       }
 
+
       // self check is needed for consistency with the view.
       if (toIndex !== self.widgets.length - 1 && toIndex !== -1 && toIndex > fromIndex) {
         toIndex -= 1;
@@ -162,27 +166,24 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       // Don't move if we are within the block of selected cells.
       if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
         firstChangedIndex = Math.min(fromIndex, firstChangedIndex);
-        // console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
+        console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
         for (let i = 0; i < toMove.length+1; i++) {
-          // console.log('mos insert', 'Cell:'+ (self.widgets[firstChangedIndex+i] as any).prompt);
+          if (firstChangedIndex+i >= self.widgets.length) break;
+          console.log('mos insert', 'Cell:'+ (self.widgets[firstChangedIndex+i] as any).prompt);
           self.mosaicInsert(firstChangedIndex+i);
-          // self.mosaicInsert(movedcell); // TODO - make before/after, with/new integrate within Notebook/model?
         }
         return;
       }
+      else if (toIndex > fromIndex) firstChangedIndex -= toMove.length;
 
       // Move the cells one by one
       self.moveCell(fromIndex, toIndex, toMove.length);
 
-      // moveCell usually triggers onCellInserted which does the mosaicInsertion itself,
-      // except for when creating a new group without reordering the cells, so we do it manually here
-      // cells taken out from before the destination just shift the destination back.
-      // orig jupyter code subtracted 1 already if toIndex > fromIndex, so we add 1
-      if (toIndex > fromIndex) firstChangedIndex -= toMove.length; 
-      // if (afterlike) firstChangedIndex -= 1; // include target cell even if dropped after it
-      // console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
+      // // if (afterlike) firstChangedIndex -= 1; // include target cell even if dropped after it
+      // // console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
       for (let i = 0; i < toMove.length+1; i++) { // go for toMove.length+1 : do the moved cells and target cell
-        // console.log('mos insert', 'Cell:'+(self.widgets[firstChangedIndex+i] as any).prompt);
+        if (firstChangedIndex+i >= self.widgets.length) break;
+        console.log('mos insert', 'Cell:'+(self.widgets[firstChangedIndex+i] as any).prompt);
         self.mosaicInsert(firstChangedIndex+i);
       }
 

@@ -226,6 +226,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
             }
         }
 
+        console.log(this.id, 'wl indices', this.tiles.map((t:any) => t.node.dataset.windowedListIndex), this.layout.widgets.map((t:any) => t.node.dataset.windowedListIndex));
         requestAnimationFrame(() => this.update());
 
         // trigger update on super tree for this item
@@ -675,6 +676,14 @@ export namespace Mosaic {
         return cell.model!.getMetadata(Mosaic.METADATA_NAME) as Array<string>;
     }
     export function setPath(cell:Cell, path:Array<string>): void {
+        // console.log('path updated', Mosaic.getPath(cell), path);
+        // if (Mosaic.getPath(cell)?.join('/') !== path.join('/')) {
+        //     setTimeout(() => {
+        //         const nb = (cell as LeafCell).superMosaic?.notebook;
+        //         const index = nb?.widgets.findIndex(c => c === cell);
+        //         if (index !== undefined) (nb as MosaicNotebook).mosaicInsert(index);
+        //     }, 250);
+        // }
         return cell.model!.setMetadata(Mosaic.METADATA_NAME, path);
     }
     export function setParent(tile:Tile, mosaic: Mosaic | null) {
@@ -685,7 +694,8 @@ export namespace Mosaic {
         tile.superMosaic = mosaic;
         // tile.parent = mosaic; // important: need to check parentage before removing, in case it was just moved to another list.
     }
-    export function divergeDepth(path1: Array<string>, path2: Array<string>): number {
+    export function divergeDepth(path1: Array<string> | undefined, path2: Array<string> | undefined): number {
+        if (path1 == undefined || path2 == undefined) return 0;
         for (let i = 0; i < path1.length; i++) {
             if (path2.length <= i || path1[i] !== path2[i]) return i;
         }

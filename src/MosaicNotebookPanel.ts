@@ -140,11 +140,13 @@ export class MosaicNotebook extends Notebook {
         if (refDiverge < path.length) {
             // grow the cell's own branch and attach at referrence index
             const stem = base.growBranch(path.slice(refDiverge), [idx]);
+            console.log('grew', stem);
             stem.splice(0, 0, cell);
             // console.log('grafted', 'branch:'+stem.path, 'to', base.path, 'at', idx);
             return [stem, idx];
         } else {
             // cell attaches directly to reference's branch
+            console.log('attaching to', base);
             base.splice(idx, 0, cell);
             // console.log('grafted', 'Cell:'+(cell as any).prompt, 'to', base.groupID, 'at', idx);
             return [base, idx];
@@ -171,9 +173,9 @@ export class MosaicNotebook extends Notebook {
         Mosaic.setParent(cell, null);
         cell.parent = null;
 
-        let prevPath = prevCell?.superMosaic?.path || [];//Mosaic.getPath(prevCell)! : [];
+        let prevPath = prevCell?.superMosaic?.path;//Mosaic.getPath(prevCell)! : [];
         let path = Mosaic.getPath(cell); // use saved MD path to get where it goes, not where it is
-        let nextPath = nextCell?.superMosaic?.path || [];//Mosaic.getPath(nextCell)! : [];
+        let nextPath = nextCell?.superMosaic?.path;//Mosaic.getPath(nextCell)! : [];
 
         if (index === 0 && !nextCell) { // first cell added, grow its branch and add it.
             const branch = this.growBranch(path || []);
@@ -182,9 +184,11 @@ export class MosaicNotebook extends Notebook {
             return [branch, 0];
         }
 
+        console.log('Cell:', (cell as any).prompt, 'prev, this, next path', prevPath, path, nextPath, prevCell, cell, nextCell);
+
         if (path === undefined) {
             // missing mosaic position metadata, join the previous cell
-            if (prevCell) path = prevPath; //return this.graft(cell, prevPath, prevCell, prevPath, prevPath.length, +1);
+            if (prevCell && prevPath) path = prevPath; //return this.graft(cell, prevPath, prevCell, prevPath, prevPath.length, +1);
             else path = []; // return this.graft(cell, [], nextCell, nextPath, 0, 0);
         }
 
@@ -196,7 +200,7 @@ export class MosaicNotebook extends Notebook {
         // if we've left the groups of the other cells, let them collapse if underpopulated
         if (prevCell && prevCell.superMosaic) {
             let prevGroup: any = prevCell;
-            for ( let i = prevDiverge; i < prevPath.length; i++ ) {
+            for ( let i = prevDiverge; i < (prevPath?.length || -1); i++ ) {
                 prevGroup = prevGroup!.superMosaic!;
                 prevGroup?.checkEmpty();
             }
@@ -206,7 +210,7 @@ export class MosaicNotebook extends Notebook {
         }
         if (nextCell && nextCell.superMosaic) {
             let nextGroup: any = nextCell;
-            for ( let i = nextDiverge; i < nextPath.length; i++ ) {
+            for ( let i = nextDiverge; i < (nextPath?.length || -1); i++ ) {
                 nextGroup = nextGroup!.superMosaic!;
                 nextGroup?.checkEmpty();
             }
@@ -222,10 +226,12 @@ export class MosaicNotebook extends Notebook {
         }
         switch (Math.max(prevDiverge, nextDiverge)) { 
             case (prevDiverge): {
-                return this.graft(cell, path, prevCell, prevPath, prevDiverge, +1)
+                console.log('grafting to prev');
+                return this.graft(cell, path, prevCell, prevPath!, prevDiverge, +1)
             }
             case (nextDiverge): {
-                return this.graft(cell, path, nextCell, nextPath, nextDiverge, 0);
+                console.log('grafting to next');
+                return this.graft(cell, path, nextCell, nextPath!, nextDiverge, 0);
             }
             default: {
                 throw new Error('invalid path divergence!');
