@@ -107,7 +107,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     }
     
     
-    protected _superMosaic: Mosaic | MosaicNotebook | null = null;
+    protected _superMosaic: Mosaic | null = null;
     public tiles: ObservableTree<Tile>;
     public mosaics: Map<string, Mosaic>;
     protected _direction: FlexDirection;
@@ -198,10 +198,10 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         this.update();
     }
 
-    get superMosaic(): Mosaic | MosaicNotebook | null {
+    get superMosaic(): Mosaic | null {
         return this._superMosaic;
     }
-    set superMosaic(mosaic: Mosaic | MosaicNotebook | null) {
+    set superMosaic(mosaic: Mosaic | null) {
         if (this._superMosaic !== null && mosaic !== this._superMosaic) {
             this._superMosaic!.tiles.removeValue(this);
         }
@@ -741,7 +741,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     
         const drag = new Drag({
             mimeData,
-            source: this.mosaicNotebook, // The source should be the notebook
+            source: (this.notebook as any)._mosaic, 
             dragImage: this._createDragImage(this._selectedTiles.size)
         });
     
@@ -830,24 +830,12 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         }
     }
 
-    get mosaicNotebook(): MosaicNotebook | null {
-        let n: any = this;
-        while (n) {
-            if (n instanceof MosaicNotebook) {
-                return n;
-            }
-            n = n.superMosaic;
-        }
-        return null;
-    }
-
     addNewCell(): void {
-        const mosaicNotebook = this.mosaicNotebook;
-        if (!mosaicNotebook || !mosaicNotebook.model) {
+        const notebook = this.notebook;
+        if (!notebook || !notebook.model) {
             return;
         }
-        const model = mosaicNotebook.model;
-
+        const model = notebook.model;
         // Define a function to handle the addition of the new cell
         const handleNewCell = (sender: any, args: IObservableList.IChangedArgs<ICellModel>) => {
             if (args.type === 'add') {
@@ -857,7 +845,8 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                 // Disconnect the signal handler
                 model.cells.changed.disconnect(handleNewCell);
 
-                const newCellWidget = mosaicNotebook.widgets.find(w => w.model === newCellModel);
+                const newCellWidgetIndex = ArrayExt.findFirstIndex(notebook.widgets, w => w.model === newCellModel);
+                const newCellWidget = notebook.widgets[newCellWidgetIndex];
 
                 if (newCellWidget) {
                     // Add to current mosaic group's tiles
@@ -878,23 +867,23 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         // Set the active cell in the notebook to the last cell of the current tab group
         // so that `insertBelow` works as expected.
         if (this._activeTile && this._activeTile instanceof Cell) {
-            const index = mosaicNotebook.widgets.indexOf(this._activeTile);
+            const index = notebook.widgets.indexOf(this._activeTile);
             if (index > -1) {
-                mosaicNotebook.activeCellIndex = index;
+                notebook.activeCellIndex = index;
             }
         } else if (this.tiles.length > 0) {
             // Fallback to the last cell in the group if the active tile isn't a cell
             const lastTile = this.tiles.get(this.tiles.length - 1);
              if (lastTile instanceof Cell) {
-                const index = mosaicNotebook.widgets.indexOf(lastTile);
+                const index = notebook.widgets.indexOf(lastTile);
                 if (index > -1) {
-                    mosaicNotebook.activeCellIndex = index;
+                    notebook.activeCellIndex = index;
                 }
              }
         }
 
         // Trigger the action to insert a new cell
-        NotebookActions.insertBelow(mosaicNotebook);
+        NotebookActions.insertBelow(notebook);
     }
     protected updateOverflowShadow(): void {
         // tag things scrolled all the way to one side, so CSS styling shows shadow on overflowing elements
@@ -945,7 +934,8 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                 const size = (dim == 'row' ? 
                             entry.borderBoxSize[0].inlineSize : 
                             entry.borderBoxSize[0].blockSize
-                        ) + (2*parseFloat(getComputedStyle(entry.target).margin));
+                        );// + (2*parseFloat(getComputedStyle(entry.target).margin));
+                console.log('resizer size', dim, size, entry.target, entry);
                 // Update size only if item is attached to the DOM
                 if (entry.target.isConnected && size > 0) {
                     // Rely on the data attribute as some nodes may be hidden instead of detach
@@ -982,17 +972,18 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
                 return;
             }
             let estimatedTotalHeight = this.viewModel.getEstimatedTotalHeight();
+            console.log('estimated total height', this.path, estimatedTotalHeight);
             if (this.direction == 'row') {
                 estimatedTotalHeight += 2*Mosaic.CSS.rowPaddingTop;
             }
             // Update inner container height
             this.innerElement.style.height = `${estimatedTotalHeight}px`;
 
-            // let estimatedTotalWidth = this.viewModel.getEstimatedTotalWidth();
-            // if (this.direction == 'col') {
-            //     estimatedTotalWidth += 2*Mosaic.CSS.colPaddingLeft;
-            // }
-            // this.innerElement.style.width = `${estimatedTotalWidth}px`
+            let estimatedTotalWidth = this.viewModel.getEstimatedTotalWidth();
+            if (this.direction == 'col') {
+                estimatedTotalWidth += 2*Mosaic.CSS.colPaddingLeft;
+            }
+            this.innerElement.style.width = `${estimatedTotalWidth}px`
 
             if (   (this.viewportNode.scrollWidth > this.viewportNode.clientWidth)
                 || (this.viewportNode.scrollHeight > this.viewportNode.clientHeight)

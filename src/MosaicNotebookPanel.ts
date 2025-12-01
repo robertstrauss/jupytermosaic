@@ -5,14 +5,18 @@ import { WindowedLayout } from '@jupyterlab/ui-components';
 // import { EditorServices } from
 
 import { mosaicDrop, mosaicDragOver } from './mosaicdrag';
-import { FlexDirection, LeafCell, Mosaic, ObservableTree, Tile } from './MosaicGroup';
-import { MosaicViewModel } from './MosaicViewModel';
+import { FlexDirection, LeafCell, Mosaic, Tile } from './MosaicGroup';
+// import { MosaicViewModel } from './MosaicViewModel';
 
 export namespace MosaicNotebookPanel {
     export class ContentFactory extends NotebookPanel.ContentFactory {
         createNotebook(options: Notebook.IOptions) {
-            const mosaic = new MosaicNotebook(options);
-            return mosaic;
+            const notebook = super.createNotebook(options);
+            const mosaic = new MosaicNotebook(notebook, options);
+            (notebook as any)._viewModel = (mosaic as any).viewModel;
+            (notebook as any)._mosaic = mosaic;
+            notebook.addClass('mosaic-Notebook');
+            return notebook;
         }
     }
 }
@@ -20,77 +24,112 @@ export namespace MosaicNotebookPanel {
 
 
 
-export class MosaicNotebook extends Notebook {
+export class MosaicNotebook extends Mosaic {
 
-    public superMosaic = null;
-    public path = [];
-    public tiles: ObservableTree<Tile>;
-    protected mosaics: Map<string, Mosaic>;
+    protected _superMosaic = this;
+    get superMosaic() {
+        return this._superMosaic;
+    }
+    get path() {
+        return [];
+    }
+    get notebook() {
+        return this._notebook;
+    }
+    // public tiles: ObservableTree<Tile>;
+    // public mosaics: Map<string, Mosaic>;
     protected options: Mosaic.IOptions;
-    public notebook: Notebook = this;
-    public direction: FlexDirection = 'col';
+    protected _direction: FlexDirection = 'col';
 
-    constructor(options: Notebook.IOptions) {
-        super(options);
-        this.tiles = new ObservableTree();
-        this.mosaics = new Map<string, Mosaic>();
-        this.options = {...options, direction: 'col', notebook: this};
-        this.notebook = this; // adopted mosaic methods refer to notebook property
+    constructor(protected _notebook: Notebook, options: Notebook.IOptions) {
+        super('', 'col');
+        // this.tiles = new ObservableTree();
+        // this.mosaics = new Map<string, Mosaic>();
+        this.options = {...options, direction: 'col', notebook: this._notebook};
+
+        // const mvm = new MosaicViewModel(this.tiles, 'col', {
+        //         overscanCount: options.notebookConfig?.overscanCount  ??
+        //             Mosaic.defaultConfig.overscanCount,
+        //         windowingActive: true
+        //     });
+        // Object.defineProperty(this.viewModel, 'widgetCount', {get: mvm._getWidgetCount.bind(mvm)});
+        // this.viewModel.estimateWidgetSize = mvm._estimateWidgetSize.bind(mvm);
+        // (this.viewModel as any).getEstimatedTotalHeight = mvm.getEstimatedTotalHeight.bind(mvm);
+        // (this.viewModel as any).getEstimatedTotalWidth = mvm.getEstimatedTotalWidth.bind(mvm);
+        // this.viewModel.getEstimatedTotalSize = mvm.getEstimatedTotalSize.bind(mvm);
+        // this.viewModel.widgetRenderer = mvm._widgetRenderer.bind(mvm);
 
 
-        const mvm = new MosaicViewModel(this.tiles, 'col', {
-                overscanCount: options.notebookConfig?.overscanCount  ??
-                    Mosaic.defaultConfig.overscanCount,
-                windowingActive: true
-            });
-        Object.defineProperty(this.viewModel, 'widgetCount', {get: mvm._getWidgetCount.bind(mvm)});
-        this.viewModel.estimateWidgetSize = mvm._estimateWidgetSize.bind(mvm);
-        this.viewModel.widgetRenderer = mvm._widgetRenderer.bind(mvm);
+        (this._notebook as any)._evtDrop = (e:any) => mosaicDrop(this._notebook, e);
+        (this._notebook as any)._evtDragOver = (e:any) => mosaicDragOver(this._notebook, e);
 
+        (this._notebook as any)._updateForDeferMode = this._myupdateForDeferMode.bind(this);
 
-        (this as any)._evtDrop = (e:any) => mosaicDrop(this, e);
-        (this as any)._evtDragOver = (e:any) => mosaicDragOver(this, e);
+        (this._notebook as any)._updateTotalSize = this.updateTotalSize.bind(this);
 
-        (this as any)._updateForDeferMode = this._myupdateForDeferMode;
+        // this.tiles.changed.connect(this.onTreeChanged, this);
 
-        this.tiles.changed.connect(this.onTreeChanged, this);
+        const origOCR = (this._notebook as any).onCellRemoved;
+        (this._notebook as any).onCellRemoved = ((index: number, cell: Cell) => {
+            origOCR.call(this._notebook, index, cell);
+            this.onCellRemoved(index, cell);
+        }).bind(this);
+        const origOCI = (this._notebook as any).onCellInserted;
+        (this._notebook as any).onCellInserted = ((index: number, cell: Cell) => {
+            origOCI.call(this._notebook, index, cell);
+            this.mosaicInsert(index);
+        }).bind(this);
+        // this._notebook.modelChanged.connect( (notebook, args) => {
+        //     this.model = notebook.model;
+        //     if (this._notebook.model) {
+        //         this._notebook.model.cells.changed.connect((list, change) => {
+        //             if (change.type === 'remove') {
+        //                 change.oldValues.forEach( (cell) => {
+        //                     // const index = this._notebook.cells.indexOf(cell);
+        //                     this.onCellRemoved(0, cell);
+        //                 });
+        //             }
+        //         });
+        //     }
+        // });
 
     }
 
-    addTile = Mosaic.prototype.addTile.bind(this);
-    growBranch = Mosaic.prototype.growBranch.bind(this);
-    splice = Mosaic.prototype.splice.bind(this);
-    // treeGet = Mosaic.prototype.treeGet.bind(this);
-    treeGetExisting = Mosaic.prototype.treeGetExisting.bind(this);
-    // getBranchIndex = Mosaic.prototype.getBranchIndex.bind(this);
-    getLeaf = Mosaic.prototype.getLeaf.bind(this);
-    findGroup = Mosaic.prototype.findGroup.bind(this);
-    // findStem = Mosaic.prototype.findStem.bind(this);
-    renderCellOutputs = Mosaic.prototype.renderCellOutputs.bind(this);
-    onTreeChanged(tree: ObservableTree<Tile>, change:any) {
-        Mosaic.prototype.onTreeChanged.bind(this)(tree, change);
-        // console.log(this.tiles, Mosaic.showMosaic(this as any));
-        requestAnimationFrame(() => this.update());
-    }
+    // updateTotalSize = Mosaic.prototype.updateTotalSize.bind(this);
+    // addTile = Mosaic.prototype.addTile.bind(this);
+    // growBranch = Mosaic.prototype.growBranch.bind(this);
+    // splice = Mosaic.prototype.splice.bind(this);
+    //// treeGet = Mosaic.prototype.treeGet.bind(this);
+    // treeGetExisting = Mosaic.prototype.treeGetExisting.bind(this);
+    //// getBranchIndex = Mosaic.prototype.getBranchIndex.bind(this);
+    // getLeaf = Mosaic.prototype.getLeaf.bind(this);
+    // findGroup = Mosaic.prototype.findGroup.bind(this);
+    //// findStem = Mosaic.prototype.findStem.bind(this);
+    // renderCellOutputs = Mosaic.prototype.renderCellOutputs.bind(this);
+    // onTreeChanged(tree: ObservableTree<Tile>, change:any) {
+    //     Mosaic.prototype.onTreeChanged.bind(this)(tree, change);
+    //     // console.log(this.tiles, Mosaic.showMosaic(this as any));
+    //     requestAnimationFrame(() => this.update());
+    // }
     unwrap = ()=>{};
     checkEmpty = ()=>{};
 
-    get model() {
-        return super.model;
-    }
+    // get model() {
+    //     return super.model;
+    // }
     set model(model: INotebookModel | null) {
-        super.model = model;
+        // super.model = model;
         // viewModel List changes handled by mosaicgroup. Don't need observable list to trigger it
-        this.viewModel.itemsList = this.tiles;
+        (this._notebook as any).viewModel.itemsList = this.tiles;
     }
 
 
-    protected onCellInserted(index: number, cell: Cell): void {
-        super.onCellInserted(index, cell);
-        this.mosaicInsert(index);
-    }
+    // protected onCellInserted(index: number, cell: Cell): void {
+    //     super.onCellInserted(index, cell);
+    //     this.mosaicInsert(index);
+    // }
     protected onCellRemoved(index: number, cell: Cell): void {
-        super.onCellRemoved(index, cell);
+        // super.onCellRemoved(index, cell);
 
         console.log('index', index);
         const [found, ] = this.getLeaf(index);
@@ -124,9 +163,11 @@ export class MosaicNotebook extends Notebook {
         let base = refCell.superMosaic!;
         let reference: Tile = refCell as LeafCell;
         for (let i = refPath.length; i > refDiverge; i--) {
+            console.log('reference, ', reference, refCell, 'base', base);
             reference = base;
             base = reference.superMosaic! as Mosaic;
         }
+        console.log('reference, ', reference, refCell, 'base', base);
         let idx = base.tiles.indexOf(reference);
         // console.log('ref', base, reference, idx);
         if (idx < 0) {
@@ -162,9 +203,9 @@ export class MosaicNotebook extends Notebook {
          * can be though of as self-assembly: cell of index 'index' tries to graft itself to the branch of one of its neighbors
          * Call after super.onCellInserted, cell to insert should be in this.cellsArray at give index
         */
-        const prevCell = this.cellsArray[index-1] as LeafCell;
-        const cell = this.cellsArray[index] as LeafCell;
-        const nextCell = this.cellsArray[index+1] as LeafCell;
+        const prevCell = this.notebook!.widgets[index-1] as LeafCell;
+        const cell = this.notebook!.widgets[index] as LeafCell;
+        const nextCell = this.notebook!.widgets[index+1] as LeafCell;
 
         if (cell == null) {
             console.warn('no cell at index!', index);
@@ -221,10 +262,14 @@ export class MosaicNotebook extends Notebook {
             nextDiverge = nextCell.superMosaic ? Mosaic.divergeDepth(nextPath, path) : -1;
         }
 
-        // console.log('prev, next', prevPath, nextPath, prevDiverge, nextDiverge);
-        
+        console.log('prev, next', prevPath, nextPath, prevDiverge, nextDiverge);
+        console.log('cells', prevCell, cell, nextCell);
+        console.log('supermosaics', prevCell?.superMosaic, cell?.superMosaic, nextCell?.superMosaic);
         if (prevDiverge < 0 && nextDiverge < 0) {
-            throw new Error('both neighbors unattached! unable to graft');
+            console.warn('both neighbors unattached!');
+            const branch = this.growBranch(path || []);
+            branch.splice(0, 0, cell);
+            return [branch, 0];
         }
         switch (Math.max(prevDiverge, nextDiverge)) { 
             case (prevDiverge): {
@@ -236,7 +281,10 @@ export class MosaicNotebook extends Notebook {
                 return this.graft(cell, path, nextCell, nextPath!, nextDiverge, 0);
             }
             default: {
-                throw new Error('invalid path divergence!');
+                console.warn('invalid path divergence!');
+                const branch = this.growBranch(path || []);
+                branch.splice(0, 0, cell);
+                return [branch, 0];
             }
         }
     }

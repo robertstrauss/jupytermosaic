@@ -1,4 +1,4 @@
-import { NotebookActions } from '@jupyterlab/notebook';
+import { NotebookActions, Notebook } from '@jupyterlab/notebook';
 // import { DROP_TARGET_CLASS } from '@jupyterlab/notebook/src/constants'
 import { Drag } from '@lumino/dragdrop'
 import { Cell, MarkdownCell } from '@jupyterlab/cells'
@@ -11,10 +11,12 @@ const DROP_TARGET_CLASS = 'jp-mod-dropTarget';
 const JUPYTER_CELL_CLASS = 'jp-Cell';
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
-export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
+export function mosaicDrop(notebook: Notebook, event: Drag.Event) {
+  console.log('DROP');
     if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
       return;
     }
+    console.log('ok');
     event.preventDefault();
     event.stopPropagation();
     if (event.proposedAction === 'none') {
@@ -33,10 +35,10 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
     }
 
     // Model presence should be checked before calling event handlers
-    self.model!;
+    notebook.model!;
 
     const source: MosaicNotebook = event.source;
-    if (source === self) {
+    if (source.notebook === notebook) {
       // Handle the case where we are moving cells within
       // the same notebook.
       event.dropAction = 'move';
@@ -46,18 +48,18 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       // child cells as well as the markdown heading.
       const cell = toMove[toMove.length - 1];
       if (cell instanceof MarkdownCell && cell.headingCollapsed) {
-        const nextParent = NotebookActions.findNextParentHeading(cell, source);
+        const nextParent = NotebookActions.findNextParentHeading(cell, source.notebook!);
         if (nextParent > 0) {
-          const index = findIndex(source.widgets, (possibleCell: Cell) => {
+          const index = findIndex(source.notebook!.widgets, (possibleCell: Cell) => {
             return cell.model.id === possibleCell.model.id;
           });
-          toMove.push(...source.widgets.slice(index + 1, nextParent));
+          toMove.push(...source.notebook!.widgets.slice(index + 1, nextParent));
         }
       }
 
       // Compute the to/from indices for the move.
-      let fromIndex = ArrayExt.firstIndexOf(self.widgets, toMove[0]);
-      let toIndex = (self as any)._findCell(target);
+      let fromIndex = ArrayExt.firstIndexOf(notebook.widgets, toMove[0]);
+      let toIndex = (notebook as any)._findCell(target);
 
 
       /** < MODIFIED: MOSAIC > **/
@@ -68,14 +70,14 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
           if (target.classList.contains(Mosaic.NODE_CLASS)) {
             target.classList.remove(DROP_TARGET_CLASS);
             break;
-            // mosaicPath = self.findGroup(target);
+            // mosaicPath = notebook.findGroup(target);
             // if (mosaicPath !== null) break;
           }
           target = target.parentElement;
         }
         if (!target || !target.parentElement) { // found no group. dropping at end of notebook
           toIndex = -1;
-          target = self.viewportNode;
+          target = notebook.viewportNode;
           source.viewportNode.classList.remove(DROP_TARGET_CLASS);
         }
       }
@@ -89,22 +91,22 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       if (toIndex < 0) { // on group or end space, not cell
         if (target.classList.contains(Mosaic.NODE_CLASS)) { // selecting edge of group
           const cells = target.getElementsByClassName(JUPYTER_CELL_CLASS);
-          toIndex = (self as any)._findCell(cells[beforelike ? 0 : cells.length-1]) // get first or last cell, if going before or after
+          toIndex = (notebook as any)._findCell(cells[beforelike ? 0 : cells.length-1]) // get first or last cell, if going before or after
           if (toIndex < 0) return;
-          targetCell = self.widgets[toIndex];
+          targetCell = notebook.widgets[toIndex];
           mosaicPath = Mosaic.getPath(targetCell)!;
           // dropping on a group, we want to be beside it not inside, so back out 1 from the contained cell's path
           if (mosaicPath.length > 0) mosaicPath = mosaicPath.slice(0, mosaicPath.length-1)
         } else {
-          targetCell = self.widgets[self.widgets.length-1];
+          targetCell = notebook.widgets[notebook.widgets.length-1];
         }
       } else { // found a cell to drop on
-        targetCell = self.widgets[toIndex];
+        targetCell = notebook.widgets[toIndex];
         mosaicPath = Mosaic.getPath(targetCell) || [];
       }
 
       // create a new group to subdivide depending on side of cells its dropped on
-      // const [targetGroup, ] = self.treeGetExisting(mosaicPath); // group to insert things in
+      // const [targetGroup, ] = notebook.treeGetExisting(mosaicPath); // group to insert things in
       const targetAxis = (mosaicPath.length % 2) === 0 ? 'col' : 'row';
       if ( (targetAxis == 'row' && collike)
         || (targetAxis == 'col' && rowlike)
@@ -115,7 +117,7 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
             mosaicPath = [...mosaicPath, newID];
             Mosaic.setPath(targetCell, mosaicPath); // destination cell is part of this new group
             if (side == 'tab') {
-              Mosaic.saveMosaicState(self, 'mosaic:'+mosaicPath.join('/'), {tabbed: true});
+              Mosaic.saveMosaicState(notebook, 'mosaic:'+mosaicPath.join('/'), {tabbed: true});
             }
       }
 
@@ -138,20 +140,20 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       // assign the metadata to each cell to place it in the mosaic
       for (const movecell of toMove) {
         const prevpath = Mosaic.getPath(movecell)!;
-        const state = Mosaic.loadMosaicState(self, 'mosaic:'+prevpath.join('/')) || {};
+        const state = Mosaic.loadMosaicState(notebook, 'mosaic:'+prevpath.join('/')) || {};
         if (transposeGroup) prevpath.splice(divergeDepth, 0, transposeGroup);
         const destPath = [...mosaicPath, ...prevpath.slice(divergeDepth)];
         // copy over any previous saved state for this cell's old path
-        Mosaic.saveMosaicState(self, 'mosaic:'+destPath.join('/'), state);
+        Mosaic.saveMosaicState(notebook, 'mosaic:'+destPath.join('/'), state);
         // graft moved cell onto tree, preserving any internal structure 
         Mosaic.setPath(movecell, destPath);
       }
 
       if (toIndex === -1) {
         // If the drop is within the notebook but not on any cell,
-        // most often self means it is past the cell areas, so
+        // most often notebook means it is past the cell areas, so
         // set it to move the cells to the end of the notebook.
-        toIndex = self.widgets.length - 1;
+        toIndex = notebook.widgets.length - 1;
       }
 
       let firstChangedIndex = toIndex; // include destination cell in those rearranged by mosaic, even if unmoved in index
@@ -161,32 +163,32 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
       }
 
 
-      // self check is needed for consistency with the view.
-      if (toIndex !== self.widgets.length - 1 && toIndex !== -1 && toIndex > fromIndex) {
+      // notebook check is needed for consistency with the view.
+      if (toIndex !== notebook.widgets.length - 1 && toIndex !== -1 && toIndex > fromIndex) {
         toIndex -= 1;
       } 
       // Don't move if we are within the block of selected cells.
       if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
         firstChangedIndex = Math.min(fromIndex, firstChangedIndex);
-        console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
+        console.log('first changed cell', (notebook.widgets[firstChangedIndex] as any).prompt)
         for (let i = 0; i < toMove.length+1; i++) {
-          if (firstChangedIndex+i >= self.widgets.length) break;
-          console.log('mos insert', 'Cell:'+ (self.widgets[firstChangedIndex+i] as any).prompt);
-          self.mosaicInsert(firstChangedIndex+i);
+          if (firstChangedIndex+i >= notebook.widgets.length) break;
+          console.log('mos insert', 'Cell:'+ (notebook.widgets[firstChangedIndex+i] as any).prompt);
+          source.mosaicInsert(firstChangedIndex+i);
         }
         return;
       }
       else if (toIndex > fromIndex) firstChangedIndex -= toMove.length;
 
       // Move the cells one by one
-      self.moveCell(fromIndex, toIndex, toMove.length);
+      notebook.moveCell(fromIndex, toIndex, toMove.length);
 
       // // if (afterlike) firstChangedIndex -= 1; // include target cell even if dropped after it
-      // // console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
+      // // console.log('first changed cell', (notebook.widgets[firstChangedIndex] as any).prompt)
       for (let i = 0; i < toMove.length+1; i++) { // go for toMove.length+1 : do the moved cells and target cell
-        if (firstChangedIndex+i >= self.widgets.length) break;
-        console.log('mos insert', 'Cell:'+(self.widgets[firstChangedIndex+i] as any).prompt);
-        self.mosaicInsert(firstChangedIndex+i);
+        if (firstChangedIndex+i >= notebook.widgets.length) break;
+        console.log('mos insert', 'Cell:'+(notebook.widgets[firstChangedIndex+i] as any).prompt);
+        source.mosaicInsert(firstChangedIndex+i);
       }
 
     } else {
@@ -195,14 +197,14 @@ export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
 }
 
 
-export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
+export function mosaicDragOver(notebook: Notebook, event: Drag.Event): void {
   if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
     return;
   }
   event.preventDefault();
   event.stopPropagation();
   event.dropAction = event.proposedAction;
-  const elements = self.node.getElementsByClassName(DROP_TARGET_CLASS);
+  const elements = notebook.node.getElementsByClassName(DROP_TARGET_CLASS);
   if (elements.length) {
     (elements[0] as HTMLElement).classList.remove(DROP_TARGET_CLASS);
   }
@@ -224,7 +226,7 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
   target.classList.add(DROP_TARGET_CLASS);
   if (side == '') side = closestSide(event, target, 0.25);
 
-  let index = (self as any)._findCell(target);
+  let index = (notebook as any)._findCell(target);
 
   if (index === -1) {
     if (!target || !target.parentElement) { // nothing found, probably dropping off end of notebook.
@@ -233,7 +235,7 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
       target.dataset.mosaicDropSide = 'bottom';
     }
   } else {
-    const widget = (self as any).cellsArray[index];
+    const widget = (notebook as any).cellsArray[index];
     widget.node.classList.add(DROP_TARGET_CLASS);
 
     // mosaic: show line on side its
@@ -258,21 +260,21 @@ export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
         if ( ((event.clientX < group.getBoundingClientRect().left + 20) && (group.scrollLeft > 0)) ) {
           group.scrollBy({left: -20});
           // trigger new drag check since content moved under it due to scroll
-          requestAnimationFrame(() => {mosaicDragOver(self, event)});
+          requestAnimationFrame(() => {mosaicDragOver(notebook, event)});
           break;
         } else if ((event.clientX > group.getBoundingClientRect().right - 20) && (group.scrollLeft + group.clientWidth < group.scrollWidth)) {
           group.scrollBy({left: 20});
-          requestAnimationFrame(() => {mosaicDragOver(self, event)});
+          requestAnimationFrame(() => {mosaicDragOver(notebook, event)});
           break;
         }
       } else {
         if ( ((event.clientY < group.getBoundingClientRect().top + 20) && (group.scrollTop > 0)) ) {
           group.scrollBy({top: -20});
-          requestAnimationFrame(() => {mosaicDragOver(self, event)});
+          requestAnimationFrame(() => {mosaicDragOver(notebook, event)});
           break;
         } else if ((event.clientY > group.getBoundingClientRect().bottom - 20) && (group.scrollTop + group.clientHeight < group.scrollHeight)) {
           group.scrollBy({top: 20});
-          requestAnimationFrame(() => {mosaicDragOver(self, event)});
+          requestAnimationFrame(() => {mosaicDragOver(notebook, event)});
           break;
         }
       }

@@ -77,8 +77,8 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
     // get widgetSizers() {
     //     return (this as any)._widgetSizers;
     // }
-    setWidgetSize(sizes: { index: number; size: number; }[], dim: 'row' | 'col' | 'mode' = 'mode'): boolean {
-        if (dim == 'mode') dim = this.direction;
+    setWidgetSize(sizes: { index: number; size: number; }[], dim: 'row' | 'col' | 'auto' = 'auto'): boolean {
+        if (dim == 'auto') dim = this.direction;
 
         // just use the same code as super, but with a different widgetSizers list based on dim
         return super.setWidgetSize.bind(new Proxy(this, {
@@ -122,6 +122,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
             // const height = 39;
             if (typeof height === 'number') {
             //     // console.log('tile height', id, height);
+                console.log('giving height', height, 'for node', index, tile.node);
                 return height;
             }
 
@@ -262,6 +263,7 @@ export class MosaicViewModel extends NotebookViewModel {//WindowedListModel {
                         if (widget?.node && widget.node.isConnected && widget.node.style.display != 'none') {
                             const rect = widget.node.getBoundingClientRect();
                             size = (mode == 'row' ? rect.width : rect.height) + (parseFloat(getComputedStyle(widget.node).margin));
+                            console.log('rect, size for mode', mode, rect, size, 'marg', getComputedStyle(widget.node).margin, 'for node', i, widget.node);
                             measured = true;
                         } else {
                             size = (mode == 'row' ? 
