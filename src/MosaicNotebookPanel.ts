@@ -3,6 +3,7 @@ import { Cell } from '@jupyterlab/cells';
 import { WindowedLayout } from '@jupyterlab/ui-components';
 // import { ArrayExt } from '@lumino/algorithm';
 // import { EditorServices } from
+// import { DocumentRegistry } from '@jupyterlab/docregistry';
 
 import { mosaicDrop, mosaicDragOver } from './mosaicdrag';
 import { FlexDirection, LeafCell, Mosaic, Tile } from './MosaicGroup';
@@ -20,6 +21,20 @@ export namespace MosaicNotebookPanel {
         }
     }
 }
+
+
+// export class MosaicNotebookWidgetFactory extends NotebookWidgetFactory {
+//     protected createNewWidget(
+//         context: DocumentRegistry.IContext<INotebookModel>
+//     ): NotebookPanel {
+//         const content = new NotebookPanel({
+//             context,
+//             contentFactory: this.contentFactory,
+//             mimeTypeService: this.mimeTypeService
+//         });
+//         return content;
+//     }  
+// }
 
 
 
@@ -163,11 +178,9 @@ export class MosaicNotebook extends Mosaic {
         let base = refCell.superMosaic!;
         let reference: Tile = refCell as LeafCell;
         for (let i = refPath.length; i > refDiverge; i--) {
-            console.log('reference, ', reference, refCell, 'base', base);
             reference = base;
             base = reference.superMosaic! as Mosaic;
         }
-        console.log('reference, ', reference, refCell, 'base', base);
         let idx = base.tiles.indexOf(reference);
         // console.log('ref', base, reference, idx);
         if (idx < 0) {
@@ -208,7 +221,7 @@ export class MosaicNotebook extends Mosaic {
         const nextCell = this.notebook!.widgets[index+1] as LeafCell;
 
         if (cell == null) {
-            console.warn('no cell at index!', index);
+            console.error('no cell at index!', index);
             return [this, -1];
         }
 
@@ -281,7 +294,7 @@ export class MosaicNotebook extends Mosaic {
                 return this.graft(cell, path, nextCell, nextPath!, nextDiverge, 0);
             }
             default: {
-                console.warn('invalid path divergence!');
+                console.error('invalid path divergence!');
                 const branch = this.growBranch(path || []);
                 branch.splice(0, 0, cell);
                 return [branch, 0];

@@ -227,14 +227,16 @@ body:not(.mosaic-skeuomorphic) .mosaic-Notebook {
 .mosaic-skeuomorphic .mosaic-Notebook {
     background: transparent;
     box-shadow: none;
-    --cell-margin: 5px;
+    --cell-margin: 10px;
 }
 
 .mosaic-skeuomorphic .mosaic-Notebook .jp-Cell {
     background-color: rgba(255, 255, 255, 0.03);
 }
 /** makes cells floating bubbles with round corners */
-.mosaic-skeuomorphic .mosaic-Notebook .jp-Cell, .mosaic-skeuomorphic .mosaic-tab, .mosaic-skeuomorphic .mosaic-add-tab-button {
+.mosaic-skeuomorphic .mosaic-Notebook.jp-WindowedPanel:not(.mosaic-tabgroup) > .jp-WindowedPanel-outer > .jp-WindowedPanel-inner > .jp-WindowedPanel-viewport > .jp-Cell,
+.mosaic-skeuomorphic .mosaic-Notebook .jp-WindowedPanel:not(.mosaic-tabgroup) > .jp-WindowedPanel-outer > .jp-WindowedPanel-inner > .jp-WindowedPanel-viewport > .jp-Cell,
+ .mosaic-skeuomorphic .mosaic-tabgroup {
     /* background-color: var(--jp-layout-color3); */
     /* make the cells slightly lighter than background */
     box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
@@ -246,7 +248,7 @@ body:not(.mosaic-skeuomorphic) .mosaic-Notebook {
   background-color: rgb(from var(--jp-layout-color3) calc(r - 50) calc(g - 50) calc(b - 50));
 }
 
-div .mosaic-Notebook.jp-WindowedPanel-viewport {
+div .mosaic-Notebook .jp-WindowedPanel-viewport {
   padding: 0; /* get rid of padding of outer notebook, more useful to be flush with edge in mosaic mode */
 }
 
@@ -312,33 +314,33 @@ div .mosaic-Notebook.jp-WindowedPanel-viewport {
     height: 100%;
     max-height: 2.8rem !important;
 }
-.mosaic-Notebook .mosaic-top-cell-handles .jp-OutputArea-promptOverlay {
+.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-promptOverlay {
     text-align: left;
 }
-.mosaic-Notebook .mosaic-top-cell-handles .jp-Cell .jp-InputArea, .mosaic-Notebook .mosaic-top-cell-handles .jp-OutputArea {
+.mosaic-top-cell-handles .mosaic-Notebook .jp-Cell .jp-InputArea, .mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea {
     flex-direction: column !important;
 }
 /** 
  * make the output view full width of the cell 
  * (it usually leaves room for the output prompt, but we are putting that on top instead)
  */
-.mosaic-Notebook .mosaic-top-cell-handles .jp-OutputArea-child {
+.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-child {
     max-width: 100% !important;
 }
-.mosaic-Notebook .mosaic-top-cell-handles .prompt_container > .jp-InputPrompt {
+.mosaic-top-cell-handles .mosaic-Notebook .prompt_container > .jp-InputPrompt {
     text-align: left;
     position: relative;
     height: 2.8rem;
     width: 100%;
 }
-.mosaic-Notebook .mosaic-top-cell-handles .jp-InputPrompt {
+.mosaic-top-cell-handles .mosaic-Notebook .jp-InputPrompt {
     width: 100%;
     /* height: 100%; */
     text-align: left;
     flex: 0 0 auto;
     z-index: 2;
 }
-.mosaic-Notebook .mosaic-top-cell-handles .jp-InputArea-editor {
+.mosaic-top-cell-handles .mosaic-Notebook .jp-InputArea-editor {
   margin-left: 5px; /* spacing between collapser and editor */
 }
 
@@ -420,12 +422,12 @@ div .mosaic-Notebook.jp-WindowedPanel-viewport {
 } 
 
 
-.mosaic-tabgroup {
+/* .mosaic-tabgroup {
     border: 1px solid var(--jp-layout-color2);
     border-radius: 5px;
     margin: 5px;
     padding: 5px;
-}
+} */
 
 .mosaic-top-cell-handles .mosaic-tabgroup > .jp-WindowedPanel-outer > .jp-WindowedPanel-inner > .mosaic-group-inner > .jp-CodeCell .jp-InputPrompt {
     display: none; /* hide input prompt of cells inside tab groups, since prompt is already shown in tab title */
@@ -445,25 +447,26 @@ div .mosaic-Notebook.jp-WindowedPanel-viewport {
     align-items: center;
 }
 
-.mosaic-tab {
+.mosaic-tab, .mosaic-add-tab-button {
     background-color: rgba(0,0,0, 0.1);
     padding: 0.5rem 0.5rem;
     cursor: pointer;
     border-right: 1px solid var(--jp-border-color1);
+    border-bottom: 1px solid var(--jp-border-color1);
     white-space: nowrap;
     flex: 1 0 auto;
-    box-shadow: none;
+    box-shadow: inset 0px -5px 5px 0px rgba(0,0,0,0.3);
     min-width: 100px;
 }
 .mosaic-tab > pre {
     height: 1rem;
     margin: 0;
 }
-body:not(.mosaic-skeuomorphic) .mosaic-tab, body:not(.mosaic-skeuomorphic) .mosaic-add-tab-button {
+/* body:not(.mosaic-skeuomorphic) .mosaic-tab, body:not(.mosaic-skeuomorphic) .mosaic-add-tab-button {
   border-radius: 0;
   margin: 0;
   height: 1rem;
-}
+} */
 
 .mosaic-tab:not(.mosaic-tab-selected):hover {
     background-color: rgba(0,0,0,0.2);
@@ -471,19 +474,23 @@ body:not(.mosaic-skeuomorphic) .mosaic-tab, body:not(.mosaic-skeuomorphic) .mosa
 }
 
 .mosaic-tab-active {
-    background-color: rgba(255,255,255,0.05);
-    box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
+    /* background-color: rgba(255,255,255,0.05); */
+    background: rgba(0,0,0,0); /* blend in with cell */
+    /* box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7); */
+    box-shadow: none;
     /* font-weight: bold; */
     color: var(--jp-inprompt-font-color);
-    border: 1px solid var(--jp-brand-color1);
+    border: 1px 1px 0 1px solid var(--jp-brand-color1);
     border-left: 5px solid var(--jp-brand-color1);
 }
 
-.mosaic-add-tab-button {
-  border: 1px solid var(--jp-border-color1);
+.mosaic-Notebook .mosaic-add-tab-button {
+  /* border: 1px solid var(--jp-border-color1); */
   padding: 0.5rem 0.5rem;
-  width: 1rem; height: 1rem;
-  flex: 0 0 auto;
+  min-width: 1rem !important;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto !important;
   cursor: pointer;
   text-align: center;
   vertical-align: middle;

@@ -363,10 +363,9 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
         const idx = this.superMosaic.tiles.removeValue(this); // I am now dereferrenced, I should be garbage collected.
         // console.log('unwrapping:', this.path, Mosaic.showMosaic(this), 'index in super:', idx, this.superMosaic);
         if (this.tiles.length > 0) { // insert my contents (if any) where I was
-            console.log('im not empty');
             this.superMosaic.tiles.splice(idx, 0, ...this.tiles);
-            console.log('gave to parent:', Mosaic.showMosaic(this.superMosaic as Mosaic));
         }
+        this.dispose();
     }
 
     getLeaf(leafIx: number): [[Mosaic, LeafCell] | null, number] {
@@ -741,7 +740,7 @@ export class Mosaic extends WindowedList<MosaicViewModel> { // like a cell (elem
     
         const drag = new Drag({
             mimeData,
-            source: (this.notebook as any)._mosaic, 
+            source: this.notebook, 
             dragImage: this._createDragImage(this._selectedTiles.size)
         });
     

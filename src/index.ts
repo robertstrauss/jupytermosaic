@@ -13,7 +13,7 @@ import { LabIcon } from '@jupyterlab/ui-components';
 import { ILayoutRestorer } from '@jupyterlab/application';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
-import { MosaicNotebookPanel, MosaicNotebook } from './MosaicNotebookPanel';
+import { MosaicNotebookPanel } from './MosaicNotebookPanel';
 
 import MosaicIcon from '../style/icons/mosaic-icon.svg';
 
@@ -84,7 +84,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
     ////// Patch the tracker to allow two different kinds of widgets, open simultaneously and restored correctly
     ////// This is easier than creating a new NotebookTracker() and having to reattach all the command enabling hooks to the new namespace
-    const getNotebookFactoryName = (panel: NotebookPanel) => (panel.content instanceof MosaicNotebook ? MOSAIC_FACTORY : 'Notebook');
+    const getNotebookFactoryName = (panel: NotebookPanel) => ((panel.content as any)._mosaic ? MOSAIC_FACTORY : 'Notebook');
     (tracker as any)._pool._restore.args = (widget: NotebookPanel) => ({
                 path: widget.context.path,
                 factory: getNotebookFactoryName(widget),

@@ -4,7 +4,7 @@ import { Drag } from '@lumino/dragdrop'
 import { Cell, MarkdownCell } from '@jupyterlab/cells'
 import { ArrayExt, findIndex } from '@lumino/algorithm'
 import { Mosaic } from './MosaicGroup';
-import { MosaicNotebook } from './MosaicNotebookPanel';
+// import { MosaicNotebook } from './MosaicNotebookPanel';
 
 // import { MosaicNotebookViewModel } from './MosaicViewModel';
 const DROP_TARGET_CLASS = 'jp-mod-dropTarget';
@@ -12,11 +12,9 @@ const JUPYTER_CELL_CLASS = 'jp-Cell';
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
 export function mosaicDrop(notebook: Notebook, event: Drag.Event) {
-  console.log('DROP');
     if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
       return;
     }
-    console.log('ok');
     event.preventDefault();
     event.stopPropagation();
     if (event.proposedAction === 'none') {
@@ -37,8 +35,8 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event) {
     // Model presence should be checked before calling event handlers
     notebook.model!;
 
-    const source: MosaicNotebook = event.source;
-    if (source.notebook === notebook) {
+    const source: Notebook = event.source;
+    if (source === notebook) {
       // Handle the case where we are moving cells within
       // the same notebook.
       event.dropAction = 'move';
@@ -48,12 +46,12 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event) {
       // child cells as well as the markdown heading.
       const cell = toMove[toMove.length - 1];
       if (cell instanceof MarkdownCell && cell.headingCollapsed) {
-        const nextParent = NotebookActions.findNextParentHeading(cell, source.notebook!);
+        const nextParent = NotebookActions.findNextParentHeading(cell, source);
         if (nextParent > 0) {
-          const index = findIndex(source.notebook!.widgets, (possibleCell: Cell) => {
+          const index = findIndex(source.widgets, (possibleCell: Cell) => {
             return cell.model.id === possibleCell.model.id;
           });
-          toMove.push(...source.notebook!.widgets.slice(index + 1, nextParent));
+          toMove.push(...source.widgets.slice(index + 1, nextParent));
         }
       }
 
@@ -169,12 +167,13 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event) {
       } 
       // Don't move if we are within the block of selected cells.
       if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
+        console.log('between!!');
         firstChangedIndex = Math.min(fromIndex, firstChangedIndex);
         console.log('first changed cell', (notebook.widgets[firstChangedIndex] as any).prompt)
         for (let i = 0; i < toMove.length+1; i++) {
           if (firstChangedIndex+i >= notebook.widgets.length) break;
           console.log('mos insert', 'Cell:'+ (notebook.widgets[firstChangedIndex+i] as any).prompt);
-          source.mosaicInsert(firstChangedIndex+i);
+          (notebook as any)._mosaic.mosaicInsert(firstChangedIndex+i);
         }
         return;
       }
@@ -188,7 +187,7 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event) {
       for (let i = 0; i < toMove.length+1; i++) { // go for toMove.length+1 : do the moved cells and target cell
         if (firstChangedIndex+i >= notebook.widgets.length) break;
         console.log('mos insert', 'Cell:'+(notebook.widgets[firstChangedIndex+i] as any).prompt);
-        source.mosaicInsert(firstChangedIndex+i);
+        (notebook as any)._mosaic.mosaicInsert(firstChangedIndex+i);
       }
 
     } else {
