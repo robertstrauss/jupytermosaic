@@ -12,7 +12,7 @@ import { Cell, MarkdownCell } from '@jupyterlab/cells';
 import { Drag } from '@lumino/dragdrop';
 import { ArrayExt, findIndex } from '@lumino/algorithm';
 
-import { divergeDepth, groupKey, newGroupId } from './MosaicTree';
+import { IGutter, divergeDepth, groupKey, newGroupId } from './MosaicTree';
 import { PATH_KEY, mosaicOf } from './MosaicNotebook';
 
 const DROP_TARGET_CLASS = 'jp-mod-dropTarget';
@@ -22,6 +22,15 @@ const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 const AUTOSCROLL_MARGIN = 24;
 
 export type DropSide = 'top' | 'bottom' | 'left' | 'right';
+
+/**
+ * Where a drop will land: on one edge of a cell, or in the gutter between two
+ * adjacent groups. The gutter case is the only way to land *between* two whole
+ * groups rather than inside one of them.
+ */
+type DropTarget =
+  | { kind: 'cell'; index: number; side: DropSide }
+  | { kind: 'gutter'; gutter: IGutter };
 
 export function installMosaicDrag(notebook: Notebook): void {
   const anyNb = notebook as any;
@@ -80,23 +89,37 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event): void {
   if (!hit) {
     return;
   }
-  const { index: toIndexRaw, side } = hit;
-  let toIndex = toIndexRaw;
-  const targetCell = notebook.widgets[toIndex];
-  if (!targetCell || toMove.includes(targetCell)) {
-    return;
-  }
 
-  let destPath = pathOf(targetCell);
+  let destPath: string[];
+  let toIndex: number;
+  let after: boolean;
 
-  // A drop on the off-axis edge subdivides: the target cell and the incoming
-  // cells become the two children of a brand new group.
-  const targetAxis = destPath.length % 2 === 0 ? 'col' : 'row';
-  const wantsRow = side === 'left' || side === 'right';
-  if ((targetAxis === 'col') === wantsRow) {
-    const id = newGroupId();
-    destPath = [...destPath, id];
-    setPath(targetCell, destPath);
+  if (hit.kind === 'gutter') {
+    // Land between the two groups: the cells become children of the group that
+    // holds them both, at the seam.
+    destPath = hit.gutter.path;
+    toIndex = hit.gutter.cellAfter;
+    after = false;
+    if (toIndex < 0) {
+      return;
+    }
+  } else {
+    const targetCell = notebook.widgets[hit.index];
+    if (!targetCell || toMove.includes(targetCell)) {
+      return;
+    }
+    toIndex = hit.index;
+    after = hit.side === 'bottom' || hit.side === 'right';
+    destPath = pathOf(targetCell);
+
+    // A drop on the off-axis edge subdivides: the target cell and the incoming
+    // cells become the two children of a brand new group.
+    const targetAxis = destPath.length % 2 === 0 ? 'col' : 'row';
+    const wantsRow = hit.side === 'left' || hit.side === 'right';
+    if ((targetAxis === 'col') === wantsRow) {
+      destPath = [...destPath, newGroupId()];
+      setPath(targetCell, destPath);
+    }
   }
 
   // Preserve any structure internal to the moved selection.
@@ -133,7 +156,6 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event): void {
   // the final index of the *last* cell of the block, moving up the index of the
   // *first*. Getting this wrong shifts a multi-cell drag by n-1 positions.
   const fromIndex = ArrayExt.firstIndexOf(notebook.widgets, toMove[0]);
-  const after = side === 'bottom' || side === 'right';
   if (toIndex > fromIndex) {
     if (!after) {
       toIndex -= 1;
@@ -159,13 +181,20 @@ export function mosaicDragOver(notebook: Notebook, event: Drag.Event): void {
 
   clearDropTargets(notebook);
 
+  const mosaic = mosaicOf(notebook);
   const hit = hitTest(notebook, event.clientX, event.clientY);
-  if (hit) {
-    const toMove: Cell[] = event.mimeData.getData('internal:cells') ?? [];
-    const cell = notebook.widgets[hit.index];
-    if (cell && !toMove.includes(cell)) {
-      cell.node.classList.add(DROP_TARGET_CLASS);
-      cell.node.dataset.mosaicDropSide = hit.side;
+
+  if (hit?.kind === 'gutter') {
+    mosaic?.grid.highlightGutter(hit.gutter);
+  } else {
+    mosaic?.grid.highlightGutter(null);
+    if (hit) {
+      const toMove: Cell[] = event.mimeData.getData('internal:cells') ?? [];
+      const cell = notebook.widgets[hit.index];
+      if (cell && !toMove.includes(cell)) {
+        cell.node.classList.add(DROP_TARGET_CLASS);
+        cell.node.dataset.mosaicDropSide = hit.side;
+      }
     }
   }
 
@@ -195,14 +224,29 @@ function clearDropTargets(notebook: Notebook): void {
     el.classList.remove(DROP_TARGET_CLASS);
     delete (el as HTMLElement).dataset.mosaicDropSide;
   }
+  mosaicOf(notebook)?.grid.highlightGutter(null);
 }
 
-/** Which cell, and which of its edges, is under a client point. */
+/** What lies under a client point: a gutter, or a cell and one of its edges. */
 function hitTest(
   notebook: Notebook,
   clientX: number,
   clientY: number
-): { index: number; side: DropSide } | null {
+): DropTarget | null {
+  // Gutters win: they are narrow, and the cells beside them are always
+  // reachable by aiming a little further in.
+  const mosaic = mosaicOf(notebook);
+  if (mosaic) {
+    const rect = notebook.viewportNode.getBoundingClientRect();
+    const gutter = mosaic.grid.gutterAt(
+      clientX - rect.left,
+      clientY - rect.top
+    );
+    if (gutter) {
+      return { kind: 'gutter', gutter };
+    }
+  }
+
   let target = elementFromPoint(clientX, clientY);
   while (target && !target.classList.contains(JUPYTER_CELL_CLASS)) {
     target = target.parentElement;
@@ -211,7 +255,11 @@ function hitTest(
   if (target) {
     const index = notebook.widgets.findIndex(cell => cell.node === target);
     if (index >= 0) {
-      return { index, side: closestSide(clientX, clientY, target, 0.25) };
+      return {
+        kind: 'cell',
+        index,
+        side: closestSide(clientX, clientY, target, 0.25)
+      };
     }
   }
 
@@ -224,7 +272,7 @@ function nearestCell(
   notebook: Notebook,
   clientX: number,
   clientY: number
-): { index: number; side: DropSide } | null {
+): DropTarget | null {
   let best = -1;
   let bestDist = Infinity;
   for (let i = 0; i < notebook.widgets.length; i++) {
@@ -248,6 +296,7 @@ function nearestCell(
     return null;
   }
   return {
+    kind: 'cell',
     index: best,
     side: closestSide(clientX, clientY, notebook.widgets[best].node, 0.25)
   };

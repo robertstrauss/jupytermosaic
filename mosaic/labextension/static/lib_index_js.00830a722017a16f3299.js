@@ -29,6 +29,8 @@ __webpack_require__.r(__webpack_exports__);
  * that straddle each edge.
  */
 
+/** How far, in px, a drop may sit from a gutter's centre line and still hit. */
+const GUTTER_HIT_SLOP = 6;
 /** Fallback height (px) assumed for a cell that has never been measured. */
 const ESTIMATED_CELL_HEIGHT = 90;
 function intersect(a, b) {
@@ -61,6 +63,7 @@ class MosaicGrid {
         /** Local (group-space) start/end of each managed cell, by group key. */
         this._localOffsets = new Map();
         this._tabState = new Map();
+        this._gutterNodes = new Map();
         this._contentExtent = new Map();
         this._overlay = document.createElement('div');
         this._overlay.className = 'mosaic-overlay';
@@ -283,15 +286,24 @@ class MosaicGrid {
             }
         }
         // -- phase 1: tracks and flow placement --------------------------------
-        const cols = solution.colWeights.length
-            ? (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.flexFactors)(solution.colWeights)
-                .map(f => `minmax(var(--mosaic-cell-min-width), ${f.toFixed(4)}fr)`)
+        // Gutters are fixed-width tracks; the rest share the space by weight.
+        const factors = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.flexFactors)(solution.colTracks.filter(t => !t.gutter).map(t => t.weight));
+        let flexible = 0;
+        const cols = solution.colTracks.length
+            ? solution.colTracks
+                .map(track => track.gutter
+                ? 'var(--mosaic-gutter)'
+                : `minmax(var(--mosaic-cell-min-width), ${factors[flexible++].toFixed(4)}fr)`)
                 .join(' ')
             : '1fr';
         const floors = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.rowFloors)(solution, i => this._cellHeight(i));
-        const rows = floors.length
-            ? floors
-                .map(min => (min > 0 ? `minmax(${min.toFixed(2)}px, auto)` : 'auto'))
+        const rows = solution.rowTracks.length
+            ? solution.rowTracks
+                .map((track, i) => track.gutter
+                ? 'var(--mosaic-gutter)'
+                : floors[i] > 0
+                    ? `minmax(${floors[i].toFixed(2)}px, auto)`
+                    : 'auto')
                 .join(' ')
             : 'auto';
         this.viewport.style.gridTemplateColumns = cols;
@@ -332,6 +344,7 @@ class MosaicGrid {
             }
         }
         // -- phase 4: chrome ---------------------------------------------------
+        this._updateGutters(solution);
         this._updateChrome(solution);
     }
     /** Parse the browser's resolved track sizes into cumulative line offsets. */
@@ -682,6 +695,65 @@ class MosaicGrid {
             this._resizeObserver.observe(child);
         }
     }
+    /** A gutter's rectangle in grid coordinates. */
+    gutterRect(gutter) {
+        var _a, _b, _c, _d;
+        const along = gutter.axis === 'col' ? this._rowOffsets : this._colOffsets;
+        const across = gutter.axis === 'col' ? this._colOffsets : this._rowOffsets;
+        const a0 = (_a = along[gutter.line - 1]) !== null && _a !== void 0 ? _a : 0;
+        const a1 = (_b = along[gutter.line]) !== null && _b !== void 0 ? _b : a0;
+        const b0 = (_c = across[gutter.start - 1]) !== null && _c !== void 0 ? _c : 0;
+        const b1 = (_d = across[gutter.end - 1]) !== null && _d !== void 0 ? _d : b0;
+        return gutter.axis === 'col'
+            ? { x0: b0, x1: b1, y0: a0, y1: a1 }
+            : { x0: a0, x1: a1, y0: b0, y1: b1 };
+    }
+    /** The gutter under a viewport-local point, if any. */
+    gutterAt(x, y) {
+        var _a, _b;
+        for (const gutter of (_b = (_a = this._solution) === null || _a === void 0 ? void 0 : _a.gutters) !== null && _b !== void 0 ? _b : []) {
+            const r = this.gutterRect(gutter);
+            if (x >= r.x0 - GUTTER_HIT_SLOP &&
+                x <= r.x1 + GUTTER_HIT_SLOP &&
+                y >= r.y0 - GUTTER_HIT_SLOP &&
+                y <= r.y1 + GUTTER_HIT_SLOP) {
+                return gutter;
+            }
+        }
+        return null;
+    }
+    /** Highlight one gutter as the pending drop target, or clear the highlight. */
+    highlightGutter(gutter) {
+        for (const [key, el] of this._gutterNodes) {
+            el.classList.toggle('mosaic-gutter-active', gutter !== null && key === gutterKey(gutter));
+        }
+    }
+    /** Draw the rule that sits between two adjacent groups. */
+    _updateGutters(solution) {
+        const seen = new Set();
+        for (const gutter of solution.gutters) {
+            const key = gutterKey(gutter);
+            seen.add(key);
+            let el = this._gutterNodes.get(key);
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'mosaic-gutter';
+                this._gutterNodes.set(key, el);
+                this._overlay.appendChild(el);
+            }
+            const r = this.gutterRect(gutter);
+            el.dataset.mosaicAxis = gutter.axis;
+            el.style.transform = `translate(${r.x0}px, ${r.y0}px)`;
+            el.style.width = `${Math.max(0, r.x1 - r.x0)}px`;
+            el.style.height = `${Math.max(0, r.y1 - r.y0)}px`;
+        }
+        for (const [key, el] of [...this._gutterNodes]) {
+            if (!seen.has(key)) {
+                el.remove();
+                this._gutterNodes.delete(key);
+            }
+        }
+    }
     // -- chrome ---------------------------------------------------------------
     _updateChrome(solution) {
         const seen = new Set();
@@ -979,7 +1051,11 @@ class MosaicGrid {
         this._outerResizeObserver.disconnect();
         this._overlay.remove();
         this._chrome.clear();
+        this._gutterNodes.clear();
     }
+}
+function gutterKey(gutter) {
+    return `${(0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.groupKey)(gutter.path)}#${gutter.index}`;
 }
 function collect(node, out = []) {
     if (node.kind === 'cell') {
@@ -1065,6 +1141,7 @@ class MosaicNotebook {
         this.grid = new _MosaicGrid__WEBPACK_IMPORTED_MODULE_2__.MosaicGrid(notebook.viewportNode, anyNb._innerElement, notebook.outerNode, this);
         this._installViewModelOverrides();
         this._installScrollReroute();
+        this._installFooter();
         (0,_mosaicdrag__WEBPACK_IMPORTED_MODULE_4__.installMosaicDrag)(notebook);
         notebook.modelChanged.connect(this._onModelChanged, this);
         if (notebook.model) {
@@ -1337,6 +1414,36 @@ class MosaicNotebook {
             this.requestUpdate();
         };
     }
+    /**
+     * Make the footer's "click to add a cell" append a cell at the notebook root.
+     *
+     * Its stock behaviour is an insert below the last cell, and the new cell then
+     * inherits that cell's path -- so in a mosaic it joins whichever tile happens
+     * to be last, and there is no way to start a fresh row at the bottom.
+     */
+    _installFooter() {
+        var _a;
+        const footer = (_a = this.notebook.layout) === null || _a === void 0 ? void 0 : _a.footer;
+        if (!footer) {
+            return;
+        }
+        footer.onClick = () => {
+            const notebook = this.notebook;
+            if (!notebook.model) {
+                return;
+            }
+            if (notebook.widgets.length > 0) {
+                notebook.activeCellIndex = notebook.widgets.length - 1;
+            }
+            _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_0__.NotebookActions.insertBelow(notebook);
+            const inserted = notebook.widgets[notebook.widgets.length - 1];
+            if (inserted) {
+                this.setPath(inserted.model, []);
+            }
+            this.requestUpdate();
+            void _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_0__.NotebookActions.focusActiveCell(notebook);
+        };
+    }
     _onModelChanged(notebook) {
         const model = notebook.model;
         if (!model) {
@@ -1408,6 +1515,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   axisAtDepth: () => (/* binding */ axisAtDepth),
 /* harmony export */   buildTree: () => (/* binding */ buildTree),
 /* harmony export */   collectCells: () => (/* binding */ collectCells),
+/* harmony export */   contentTracks: () => (/* binding */ contentTracks),
 /* harmony export */   divergeDepth: () => (/* binding */ divergeDepth),
 /* harmony export */   findGroup: () => (/* binding */ findGroup),
 /* harmony export */   flexFactors: () => (/* binding */ flexFactors),
@@ -1517,6 +1625,7 @@ function solve(root) {
     const rects = [];
     const managedNodes = [];
     const groupRects = [];
+    const marks = [];
     const walk = (node, x0, x1, y0, y1, owner) => {
         xs.add(x0);
         xs.add(x1);
@@ -1536,7 +1645,8 @@ function solve(root) {
         }
         const total = totalWeight(node.children);
         let offset = 0;
-        for (const child of node.children) {
+        for (let i = 0; i < node.children.length; i++) {
+            const child = node.children[i];
             const share = (child.weight > 0 ? child.weight : 1) / total;
             const from = offset;
             const to = offset + share;
@@ -1547,23 +1657,43 @@ function solve(root) {
             else {
                 walk(child, x0 + (x1 - x0) * from, x0 + (x1 - x0) * to, y0, y1, owner);
             }
+            // A seam between two groups has no cell on it to drop onto, so it needs a
+            // gutter. A seam touching a cell does not: that cell is the drop target.
+            const next = node.children[i + 1];
+            if (child.kind === 'group' && (next === null || next === void 0 ? void 0 : next.kind) === 'group') {
+                marks.push({
+                    node,
+                    coord: node.axis === 'col' ? y0 + (y1 - y0) * to : x0 + (x1 - x0) * to,
+                    from: node.axis === 'col' ? x0 : y0,
+                    to: node.axis === 'col' ? x1 : y1,
+                    index: i + 1
+                });
+            }
         }
     };
     walk(root, 0, 1, 0, 1, null);
     const xLines = [...xs].sort((a, b) => a - b);
     const yLines = [...ys].sort((a, b) => a - b);
-    const xIndex = new Map(xLines.map((v, i) => [v, i + 1])); // CSS lines are 1-based
-    const yIndex = new Map(yLines.map((v, i) => [v, i + 1]));
-    const colWeights = [];
-    for (let i = 0; i + 1 < xLines.length; i++) {
-        colWeights.push(xLines[i + 1] - xLines[i]);
+    const xAt = new Map(xLines.map((v, i) => [v, i]));
+    const yAt = new Map(yLines.map((v, i) => [v, i]));
+    const xGutters = new Set();
+    const yGutters = new Set();
+    for (const mark of marks) {
+        const at = (mark.node.axis === 'col' ? yAt : xAt).get(mark.coord);
+        if (at !== undefined) {
+            (mark.node.axis === 'col' ? yGutters : xGutters).add(at);
+        }
     }
-    const rowMinPx = new Array(Math.max(yLines.length - 1, 0)).fill(0);
+    const columns = buildAxis(xLines, xGutters);
+    const rows = buildAxis(yLines, yGutters);
+    const rowMinPx = new Array(rows.tracks.length).fill(0);
+    // A node ends where the gutter before it begins, and starts where that
+    // gutter ends, so the two sides of a seam use different line maps.
     const place = (r) => ({
-        rowStart: yIndex.get(r.y0),
-        rowEnd: yIndex.get(r.y1),
-        colStart: xIndex.get(r.x0),
-        colEnd: xIndex.get(r.x1)
+        rowStart: rows.start[yAt.get(r.y0)],
+        rowEnd: rows.end[yAt.get(r.y1)],
+        colStart: columns.start[xAt.get(r.x0)],
+        colEnd: columns.end[xAt.get(r.x1)]
     });
     const placements = new Map();
     const managed = [];
@@ -1584,9 +1714,9 @@ function solve(root) {
         // A managed group holds its own extent open along its scroll axis, spread
         // across the row tracks it spans. `auto` still wins if siblings are taller.
         if (node.axis === 'col') {
-            const span = Math.max(placement.rowEnd - placement.rowStart, 1);
-            for (let t = placement.rowStart - 1; t < placement.rowEnd - 1; t++) {
-                rowMinPx[t] = Math.max(rowMinPx[t], node.size / span);
+            const spanned = contentTracks(rows.tracks, placement.rowStart, placement.rowEnd);
+            for (const t of spanned) {
+                rowMinPx[t] = Math.max(rowMinPx[t], node.size / spanned.length);
             }
         }
     }
@@ -1606,14 +1736,78 @@ function solve(root) {
     for (const { node, rect } of groupRects) {
         groupPlacements.set(groupKey(node.path), { node, placement: place(rect) });
     }
+    const gutters = [];
+    for (const mark of marks) {
+        const along = mark.node.axis === 'col' ? rows : columns;
+        const across = mark.node.axis === 'col' ? columns : rows;
+        const alongAt = (mark.node.axis === 'col' ? yAt : xAt).get(mark.coord);
+        const fromAt = (mark.node.axis === 'col' ? xAt : yAt).get(mark.from);
+        const toAt = (mark.node.axis === 'col' ? xAt : yAt).get(mark.to);
+        if (alongAt === undefined || fromAt === undefined || toAt === undefined) {
+            continue;
+        }
+        const after = mark.node.children[mark.index];
+        const cells = after ? collectCells(after) : [];
+        gutters.push({
+            path: mark.node.path,
+            axis: mark.node.axis,
+            line: along.end[alongAt],
+            start: across.start[fromAt],
+            end: across.end[toAt],
+            index: mark.index,
+            cellAfter: cells.length > 0 ? cells[0] : -1
+        });
+    }
     return {
-        colWeights,
+        colTracks: columns.tracks,
+        rowTracks: rows.tracks,
         rowMinPx,
         placements,
         managed,
         managedOwner,
-        groupPlacements
+        groupPlacements,
+        gutters
     };
+}
+/**
+ * Lay out one axis, inserting a gutter track at each seam that needs one.
+ *
+ * Because a gutter takes a track of its own, the line a node ends at is no
+ * longer the line the next node starts at, so two maps come back: `end` for a
+ * node finishing at a logical line and `start` for one beginning there.
+ */
+function buildAxis(lines, gutters) {
+    const tracks = [];
+    const start = new Array(lines.length);
+    const end = new Array(lines.length);
+    let line = 1;
+    for (let i = 0; i < lines.length; i++) {
+        if (i > 0 && i < lines.length - 1 && gutters.has(i)) {
+            end[i] = line;
+            tracks.push({ gutter: true, weight: 0 });
+            line += 1;
+            start[i] = line;
+        }
+        else {
+            end[i] = line;
+            start[i] = line;
+        }
+        if (i < lines.length - 1) {
+            tracks.push({ gutter: false, weight: lines[i + 1] - lines[i] });
+            line += 1;
+        }
+    }
+    return { tracks, start, end };
+}
+/** Indices of the non-gutter tracks a placement spans. */
+function contentTracks(tracks, startLine, endLine) {
+    const out = [];
+    for (let t = startLine - 1; t < endLine - 1 && t < tracks.length; t++) {
+        if (!tracks[t].gutter) {
+            out.push(t);
+        }
+    }
+    return out.length > 0 ? out : [Math.max(0, startLine - 1)];
 }
 /** Managed groups strictly beneath a node, outermost first. */
 function nestedManaged(node, out = []) {
@@ -1684,9 +1878,9 @@ function rowFloors(solution, cellHeight) {
         if (solution.managedOwner.has(index)) {
             continue;
         }
-        const span = Math.max(placement.rowEnd - placement.rowStart, 1);
-        const share = cellHeight(index) / span;
-        for (let t = placement.rowStart - 1; t < placement.rowEnd - 1; t++) {
+        const spanned = contentTracks(solution.rowTracks, placement.rowStart, placement.rowEnd);
+        const share = cellHeight(index) / spanned.length;
+        for (const t of spanned) {
             floors[t] = Math.max((_a = floors[t]) !== null && _a !== void 0 ? _a : 0, share);
         }
     }
@@ -2091,21 +2285,35 @@ function mosaicDrop(notebook, event) {
     if (!hit) {
         return;
     }
-    const { index: toIndexRaw, side } = hit;
-    let toIndex = toIndexRaw;
-    const targetCell = notebook.widgets[toIndex];
-    if (!targetCell || toMove.includes(targetCell)) {
-        return;
+    let destPath;
+    let toIndex;
+    let after;
+    if (hit.kind === 'gutter') {
+        // Land between the two groups: the cells become children of the group that
+        // holds them both, at the seam.
+        destPath = hit.gutter.path;
+        toIndex = hit.gutter.cellAfter;
+        after = false;
+        if (toIndex < 0) {
+            return;
+        }
     }
-    let destPath = pathOf(targetCell);
-    // A drop on the off-axis edge subdivides: the target cell and the incoming
-    // cells become the two children of a brand new group.
-    const targetAxis = destPath.length % 2 === 0 ? 'col' : 'row';
-    const wantsRow = side === 'left' || side === 'right';
-    if ((targetAxis === 'col') === wantsRow) {
-        const id = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.newGroupId)();
-        destPath = [...destPath, id];
-        setPath(targetCell, destPath);
+    else {
+        const targetCell = notebook.widgets[hit.index];
+        if (!targetCell || toMove.includes(targetCell)) {
+            return;
+        }
+        toIndex = hit.index;
+        after = hit.side === 'bottom' || hit.side === 'right';
+        destPath = pathOf(targetCell);
+        // A drop on the off-axis edge subdivides: the target cell and the incoming
+        // cells become the two children of a brand new group.
+        const targetAxis = destPath.length % 2 === 0 ? 'col' : 'row';
+        const wantsRow = hit.side === 'left' || hit.side === 'right';
+        if ((targetAxis === 'col') === wantsRow) {
+            destPath = [...destPath, (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.newGroupId)()];
+            setPath(targetCell, destPath);
+        }
     }
     // Preserve any structure internal to the moved selection.
     let sharedPath = pathOf(toMove[0]);
@@ -2137,7 +2345,6 @@ function mosaicDrop(notebook, event) {
     // the final index of the *last* cell of the block, moving up the index of the
     // *first*. Getting this wrong shifts a multi-cell drag by n-1 positions.
     const fromIndex = _lumino_algorithm__WEBPACK_IMPORTED_MODULE_2__.ArrayExt.firstIndexOf(notebook.widgets, toMove[0]);
-    const after = side === 'bottom' || side === 'right';
     if (toIndex > fromIndex) {
         if (!after) {
             toIndex -= 1;
@@ -2161,13 +2368,20 @@ function mosaicDragOver(notebook, event) {
     event.stopPropagation();
     event.dropAction = event.proposedAction;
     clearDropTargets(notebook);
+    const mosaic = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_4__.mosaicOf)(notebook);
     const hit = hitTest(notebook, event.clientX, event.clientY);
-    if (hit) {
-        const toMove = (_a = event.mimeData.getData('internal:cells')) !== null && _a !== void 0 ? _a : [];
-        const cell = notebook.widgets[hit.index];
-        if (cell && !toMove.includes(cell)) {
-            cell.node.classList.add(DROP_TARGET_CLASS);
-            cell.node.dataset.mosaicDropSide = hit.side;
+    if ((hit === null || hit === void 0 ? void 0 : hit.kind) === 'gutter') {
+        mosaic === null || mosaic === void 0 ? void 0 : mosaic.grid.highlightGutter(hit.gutter);
+    }
+    else {
+        mosaic === null || mosaic === void 0 ? void 0 : mosaic.grid.highlightGutter(null);
+        if (hit) {
+            const toMove = (_a = event.mimeData.getData('internal:cells')) !== null && _a !== void 0 ? _a : [];
+            const cell = notebook.widgets[hit.index];
+            if (cell && !toMove.includes(cell)) {
+                cell.node.classList.add(DROP_TARGET_CLASS);
+                cell.node.dataset.mosaicDropSide = hit.side;
+            }
         }
     }
     autoScroll(notebook, event);
@@ -2189,13 +2403,25 @@ function autoScroll(notebook, event) {
     mosaic.grid.nudgeScroll(event.clientX, event.clientY, AUTOSCROLL_MARGIN);
 }
 function clearDropTargets(notebook) {
+    var _a;
     for (const el of Array.from(notebook.node.getElementsByClassName(DROP_TARGET_CLASS))) {
         el.classList.remove(DROP_TARGET_CLASS);
         delete el.dataset.mosaicDropSide;
     }
+    (_a = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_4__.mosaicOf)(notebook)) === null || _a === void 0 ? void 0 : _a.grid.highlightGutter(null);
 }
-/** Which cell, and which of its edges, is under a client point. */
+/** What lies under a client point: a gutter, or a cell and one of its edges. */
 function hitTest(notebook, clientX, clientY) {
+    // Gutters win: they are narrow, and the cells beside them are always
+    // reachable by aiming a little further in.
+    const mosaic = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_4__.mosaicOf)(notebook);
+    if (mosaic) {
+        const rect = notebook.viewportNode.getBoundingClientRect();
+        const gutter = mosaic.grid.gutterAt(clientX - rect.left, clientY - rect.top);
+        if (gutter) {
+            return { kind: 'gutter', gutter };
+        }
+    }
     let target = elementFromPoint(clientX, clientY);
     while (target && !target.classList.contains(JUPYTER_CELL_CLASS)) {
         target = target.parentElement;
@@ -2203,7 +2429,11 @@ function hitTest(notebook, clientX, clientY) {
     if (target) {
         const index = notebook.widgets.findIndex(cell => cell.node === target);
         if (index >= 0) {
-            return { index, side: closestSide(clientX, clientY, target, 0.25) };
+            return {
+                kind: 'cell',
+                index,
+                side: closestSide(clientX, clientY, target, 0.25)
+            };
         }
     }
     // Not over a cell: fall back to the nearest cell in the grid, so drops in the
@@ -2234,6 +2464,7 @@ function nearestCell(notebook, clientX, clientY) {
         return null;
     }
     return {
+        kind: 'cell',
         index: best,
         side: closestSide(clientX, clientY, notebook.widgets[best].node, 0.25)
     };
@@ -2292,4 +2523,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.70cbf76805a45d29b493.js.map
+//# sourceMappingURL=lib_index_js.00830a722017a16f3299.js.map

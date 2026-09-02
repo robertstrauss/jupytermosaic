@@ -1,5 +1,6 @@
 import {
   DEFAULT_SCROLL_SIZE,
+  ISolution,
   axisAtDepth,
   IGroupState,
   buildTree,
@@ -15,6 +16,10 @@ import {
 } from '../MosaicTree';
 
 const noState = (): IGroupState => ({});
+
+/** Content-track weights, ignoring any gutter tracks. */
+const weightsOf = (s: ISolution) =>
+  s.colTracks.filter(t => !t.gutter).map(t => t.weight);
 const unitWeight = () => 1;
 
 const tree = (
@@ -71,7 +76,7 @@ describe('buildTree', () => {
 describe('solve', () => {
   it('lays a plain notebook out as one column of rows', () => {
     const s = solve(tree([[], [], []]));
-    expect(s.colWeights).toHaveLength(1);
+    expect(weightsOf(s)).toHaveLength(1);
     expect(s.rowMinPx).toHaveLength(3);
     expect(s.placements.get(0)).toEqual({
       rowStart: 1,
@@ -84,7 +89,7 @@ describe('solve', () => {
 
   it('lays a row out across columns of a single band', () => {
     const s = solve(tree([['a'], ['a']]));
-    expect(s.colWeights).toHaveLength(2);
+    expect(weightsOf(s)).toHaveLength(2);
     expect(s.rowMinPx).toHaveLength(1);
     expect(s.placements.get(0)).toEqual({
       rowStart: 1,
@@ -99,7 +104,7 @@ describe('solve', () => {
     // A 2-wide row above a 3-wide row. Boundaries are 0, 1/3, 1/2, 2/3, 1 --
     // four tracks, not the six a least-common-multiple scheme would emit.
     const s = solve(tree([['a'], ['a'], ['b'], ['b'], ['b']]));
-    expect(s.colWeights).toHaveLength(4);
+    expect(weightsOf(s)).toHaveLength(4);
 
     expect(s.placements.get(0)).toMatchObject({ colStart: 1, colEnd: 3 });
     expect(s.placements.get(1)).toMatchObject({ colStart: 3, colEnd: 5 });
@@ -107,14 +112,17 @@ describe('solve', () => {
     expect(s.placements.get(3)).toMatchObject({ colStart: 2, colEnd: 4 });
     expect(s.placements.get(4)).toMatchObject({ colStart: 4, colEnd: 5 });
 
-    // The two rows still occupy separate bands.
+    // The two rows still occupy separate bands, now with a gutter between them
+    // because both children of the root are groups.
     expect(s.placements.get(0)!.rowStart).toBe(1);
-    expect(s.placements.get(2)!.rowStart).toBe(2);
+    expect(s.placements.get(2)!.rowStart).toBeGreaterThan(
+      s.placements.get(0)!.rowEnd
+    );
   });
 
   it('gives column weights that sum to one', () => {
     const s = solve(tree([['a'], ['a'], ['a']]));
-    const total = s.colWeights.reduce((a, b) => a + b, 0);
+    const total = weightsOf(s).reduce((a, b) => a + b, 0);
     expect(total).toBeCloseTo(1, 10);
   });
 
@@ -125,8 +133,8 @@ describe('solve', () => {
       noState
     );
     const s = solve(root);
-    expect(s.colWeights[0]).toBeCloseTo(0.75, 10);
-    expect(s.colWeights[1]).toBeCloseTo(0.25, 10);
+    expect(weightsOf(s)[0]).toBeCloseTo(0.75, 10);
+    expect(weightsOf(s)[1]).toBeCloseTo(0.25, 10);
   });
 
   it('makes a scrolling group opaque to the grid', () => {
@@ -384,8 +392,71 @@ describe('flexFactors', () => {
   it('gives a real layout factors that all reach one', () => {
     // A 2-wide row above a 3-wide row: four tracks of differing widths.
     const s = solve(tree([['a'], ['a'], ['b'], ['b'], ['b']]));
-    const factors = flexFactors(s.colWeights);
+    const factors = flexFactors(weightsOf(s));
     expect(Math.min(...factors)).toBeCloseTo(1, 10);
     expect(factors.every(f => f >= 1)).toBe(true);
+  });
+});
+
+describe('gutters', () => {
+  it('adds none when siblings are plain cells', () => {
+    expect(solve(tree([[], [], []])).gutters).toHaveLength(0);
+    expect(solve(tree([['a'], ['a']])).gutters).toHaveLength(0);
+  });
+
+  it('adds none where a cell sits beside a group', () => {
+    // Dropping on the cell already reaches the seam, so no gutter is needed.
+    const s = solve(tree([[], ['a'], ['a']]));
+    expect(s.gutters).toHaveLength(0);
+  });
+
+  it('adds one between two adjacent groups', () => {
+    // Two rows stacked in the root column: nothing lies on the seam between
+    // them, so there is otherwise no way to drop a cell in between.
+    const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
+    expect(s.gutters).toHaveLength(1);
+    const [gutter] = s.gutters;
+    expect(gutter.path).toEqual([]);
+    expect(gutter.axis).toBe('col');
+    expect(gutter.index).toBe(1);
+    // A drop lands immediately before the first cell of the following group.
+    expect(gutter.cellAfter).toBe(2);
+  });
+
+  it('gives the gutter a track of its own', () => {
+    const plain = solve(tree([['a'], ['a'], [], []]));
+    const gutted = solve(tree([['a'], ['a'], ['b'], ['b']]));
+    expect(plain.rowTracks.filter(t => t.gutter)).toHaveLength(0);
+    expect(gutted.rowTracks.filter(t => t.gutter)).toHaveLength(1);
+    // Same two bands of content either way, plus the gutter track.
+    expect(gutted.rowTracks).toHaveLength(3);
+  });
+
+  it('separates the two sides across the gutter track', () => {
+    const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
+    const above = s.placements.get(0)!;
+    const below = s.placements.get(2)!;
+    // The group above ends before the gutter and the one below starts after,
+    // leaving exactly one track between them.
+    expect(below.rowStart - above.rowEnd).toBe(1);
+    expect(s.rowTracks[above.rowEnd - 1].gutter).toBe(true);
+  });
+
+  it('runs a vertical gutter between two columns in a row', () => {
+    // A row whose two children are both columns.
+    const s = solve(tree([['r', 'a'], ['r', 'a'], ['r', 'b'], ['r', 'b']]));
+    const vertical = s.gutters.filter(g => g.axis === 'row');
+    expect(vertical).toHaveLength(1);
+    expect(vertical[0].path).toEqual(['r']);
+    expect(s.colTracks.filter(t => t.gutter)).toHaveLength(1);
+  });
+
+  it('keeps track floors off the gutter', () => {
+    const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
+    const floors = rowFloors(s, () => 100);
+    const gutterTrack = s.rowTracks.findIndex(t => t.gutter);
+    expect(floors[gutterTrack]).toBe(0);
+    // The content bands still carry the full cell height each.
+    expect(floors.filter((_, i) => i !== gutterTrack)).toEqual([100, 100]);
   });
 });

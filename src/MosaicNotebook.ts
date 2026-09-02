@@ -69,6 +69,7 @@ export class MosaicNotebook implements IGridHost {
 
     this._installViewModelOverrides();
     this._installScrollReroute();
+    this._installFooter();
     installMosaicDrag(notebook);
 
     notebook.modelChanged.connect(this._onModelChanged, this);
@@ -392,6 +393,36 @@ export class MosaicNotebook implements IGridHost {
         outer.scrollTo({ top: target, behavior: 'smooth' });
       }
       this.requestUpdate();
+    };
+  }
+
+  /**
+   * Make the footer's "click to add a cell" append a cell at the notebook root.
+   *
+   * Its stock behaviour is an insert below the last cell, and the new cell then
+   * inherits that cell's path -- so in a mosaic it joins whichever tile happens
+   * to be last, and there is no way to start a fresh row at the bottom.
+   */
+  private _installFooter(): void {
+    const footer = (this.notebook.layout as any)?.footer;
+    if (!footer) {
+      return;
+    }
+    footer.onClick = () => {
+      const notebook = this.notebook;
+      if (!notebook.model) {
+        return;
+      }
+      if (notebook.widgets.length > 0) {
+        notebook.activeCellIndex = notebook.widgets.length - 1;
+      }
+      NotebookActions.insertBelow(notebook);
+      const inserted = notebook.widgets[notebook.widgets.length - 1];
+      if (inserted) {
+        this.setPath(inserted.model, []);
+      }
+      this.requestUpdate();
+      void NotebookActions.focusActiveCell(notebook);
     };
   }
 

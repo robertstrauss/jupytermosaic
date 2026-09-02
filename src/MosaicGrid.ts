@@ -17,6 +17,7 @@
 
 import {
   IGroupNode,
+  IGutter,
   IManagedGroup,
   IPlacement,
   ISolution,
@@ -25,6 +26,9 @@ import {
   groupKey,
   rowFloors
 } from './MosaicTree';
+
+/** How far, in px, a drop may sit from a gutter's centre line and still hit. */
+const GUTTER_HIT_SLOP = 6;
 
 /** Fallback height (px) assumed for a cell that has never been measured. */
 const ESTIMATED_CELL_HEIGHT = 90;
@@ -348,15 +352,32 @@ export class MosaicGrid {
     }
 
     // -- phase 1: tracks and flow placement --------------------------------
-    const cols = solution.colWeights.length
-      ? flexFactors(solution.colWeights)
-          .map(f => `minmax(var(--mosaic-cell-min-width), ${f.toFixed(4)}fr)`)
+    // Gutters are fixed-width tracks; the rest share the space by weight.
+    const factors = flexFactors(
+      solution.colTracks.filter(t => !t.gutter).map(t => t.weight)
+    );
+    let flexible = 0;
+    const cols = solution.colTracks.length
+      ? solution.colTracks
+          .map(track =>
+            track.gutter
+              ? 'var(--mosaic-gutter)'
+              : `minmax(var(--mosaic-cell-min-width), ${factors[
+                  flexible++
+                ].toFixed(4)}fr)`
+          )
           .join(' ')
       : '1fr';
     const floors = rowFloors(solution, i => this._cellHeight(i));
-    const rows = floors.length
-      ? floors
-          .map(min => (min > 0 ? `minmax(${min.toFixed(2)}px, auto)` : 'auto'))
+    const rows = solution.rowTracks.length
+      ? solution.rowTracks
+          .map((track, i) =>
+            track.gutter
+              ? 'var(--mosaic-gutter)'
+              : floors[i] > 0
+                ? `minmax(${floors[i].toFixed(2)}px, auto)`
+                : 'auto'
+          )
           .join(' ')
       : 'auto';
     this.viewport.style.gridTemplateColumns = cols;
@@ -405,6 +426,7 @@ export class MosaicGrid {
     }
 
     // -- phase 4: chrome ---------------------------------------------------
+    this._updateGutters(solution);
     this._updateChrome(solution);
   }
 
@@ -830,6 +852,77 @@ export class MosaicGrid {
     }
   }
 
+  /** A gutter's rectangle in grid coordinates. */
+  gutterRect(gutter: IGutter): IClip {
+    const along = gutter.axis === 'col' ? this._rowOffsets : this._colOffsets;
+    const across = gutter.axis === 'col' ? this._colOffsets : this._rowOffsets;
+    const a0 = along[gutter.line - 1] ?? 0;
+    const a1 = along[gutter.line] ?? a0;
+    const b0 = across[gutter.start - 1] ?? 0;
+    const b1 = across[gutter.end - 1] ?? b0;
+
+    return gutter.axis === 'col'
+      ? { x0: b0, x1: b1, y0: a0, y1: a1 }
+      : { x0: a0, x1: a1, y0: b0, y1: b1 };
+  }
+
+  /** The gutter under a viewport-local point, if any. */
+  gutterAt(x: number, y: number): IGutter | null {
+    for (const gutter of this._solution?.gutters ?? []) {
+      const r = this.gutterRect(gutter);
+      if (
+        x >= r.x0 - GUTTER_HIT_SLOP &&
+        x <= r.x1 + GUTTER_HIT_SLOP &&
+        y >= r.y0 - GUTTER_HIT_SLOP &&
+        y <= r.y1 + GUTTER_HIT_SLOP
+      ) {
+        return gutter;
+      }
+    }
+    return null;
+  }
+
+  /** Highlight one gutter as the pending drop target, or clear the highlight. */
+  highlightGutter(gutter: IGutter | null): void {
+    for (const [key, el] of this._gutterNodes) {
+      el.classList.toggle(
+        'mosaic-gutter-active',
+        gutter !== null && key === gutterKey(gutter)
+      );
+    }
+  }
+
+  private _gutterNodes = new Map<string, HTMLElement>();
+
+  /** Draw the rule that sits between two adjacent groups. */
+  private _updateGutters(solution: ISolution): void {
+    const seen = new Set<string>();
+
+    for (const gutter of solution.gutters) {
+      const key = gutterKey(gutter);
+      seen.add(key);
+      let el = this._gutterNodes.get(key);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'mosaic-gutter';
+        this._gutterNodes.set(key, el);
+        this._overlay.appendChild(el);
+      }
+      const r = this.gutterRect(gutter);
+      el.dataset.mosaicAxis = gutter.axis;
+      el.style.transform = `translate(${r.x0}px, ${r.y0}px)`;
+      el.style.width = `${Math.max(0, r.x1 - r.x0)}px`;
+      el.style.height = `${Math.max(0, r.y1 - r.y0)}px`;
+    }
+
+    for (const [key, el] of [...this._gutterNodes]) {
+      if (!seen.has(key)) {
+        el.remove();
+        this._gutterNodes.delete(key);
+      }
+    }
+  }
+
   // -- chrome ---------------------------------------------------------------
 
   private _updateChrome(solution: ISolution): void {
@@ -1167,7 +1260,12 @@ export class MosaicGrid {
     this._outerResizeObserver.disconnect();
     this._overlay.remove();
     this._chrome.clear();
+    this._gutterNodes.clear();
   }
+}
+
+function gutterKey(gutter: IGutter): string {
+  return `${groupKey(gutter.path)}#${gutter.index}`;
 }
 
 function collect(node: MosaicNode, out: number[] = []): number[] {

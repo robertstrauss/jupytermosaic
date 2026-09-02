@@ -13,6 +13,10 @@
   --mosaic-cell-min-width: 160px;
   --mosaic-gap: 8px;
 
+  /* Width of the drop gutter between two adjacent groups. */
+  --mosaic-gutter: 10px;
+  --mosaic-gutter-rule: rgb(0 0 0 / 50%);
+
   /* Sampled once by WindowedList on attach and folded into the document
      height, so this must not vary with the layout-style setting. */
   --mosaic-edge-padding: 8px;
@@ -108,6 +112,54 @@
 svg[data-icon='mosaic:add-left'],
 svg[data-icon='mosaic:add-right'] {
   transform: rotate(-90deg);
+}
+
+/* -- gutters between adjacent groups -------------------------------------- */
+
+/* A seam between two groups has no cell on it to drop onto, so it gets a track
+   of its own. The rule also distinguishes a row of columns from a column of
+   rows at a glance. Seams that touch a cell need neither: that cell is already
+   the drop target. */
+.mosaic-gutter {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mosaic-gutter::after {
+  content: '';
+  background-color: var(--mosaic-gutter-rule);
+}
+
+.mosaic-gutter[data-mosaic-axis='col']::after {
+  width: 100%;
+  height: 2px;
+}
+
+.mosaic-gutter[data-mosaic-axis='row']::after {
+  width: 2px;
+  height: 100%;
+}
+
+.mosaic-gutter-active::after {
+  background-color: var(--jp-brand-color1);
+}
+
+.mosaic-gutter-active[data-mosaic-axis='col']::after {
+  height: 4px;
+}
+
+.mosaic-gutter-active[data-mosaic-axis='row']::after {
+  width: 4px;
+}
+
+/* The rule reads against either theme: dark on light, light on dark. */
+:where(body[data-jp-theme-light='false']) .mosaic-Notebook {
+  --mosaic-gutter-rule: rgb(255 255 255 / 50%);
 }
 
 /* -- simulated scrollbars ------------------------------------------------- */

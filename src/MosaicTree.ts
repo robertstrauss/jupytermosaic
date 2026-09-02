@@ -74,9 +74,44 @@ export interface IManagedGroup {
   cells: number[];
 }
 
+/** One grid track: either a content track or a drop gutter between groups. */
+export interface ITrack {
+  gutter: boolean;
+  /** Share of the axis, for content tracks only. */
+  weight: number;
+}
+
+/**
+ * A gutter between two adjacent sibling groups.
+ *
+ * Two groups meeting edge to edge have no cell along the seam to drop onto, so
+ * there is otherwise no way to land between them -- a drop necessarily joins a
+ * cell inside one of them. A gutter is a real grid track, so it takes space,
+ * accepts a drop, and carries the rule that distinguishes a row of columns from
+ * a column of rows. Cells adjacent to a group need none: dropping on the cell
+ * already reaches the seam.
+ */
+export interface IGutter {
+  /** Path of the group whose children the gutter separates. */
+  path: string[];
+  /** Axis of that group: 'col' stacks children, so the gutter is horizontal. */
+  axis: Axis;
+  /** Grid line the gutter track starts at; it spans one track. */
+  line: number;
+  /** The group's extent across the other axis, as grid lines. */
+  start: number;
+  end: number;
+  /** Index, among the group's children, of the child after the gutter. */
+  index: number;
+  /** First cell of the child after the gutter, for placing a drop. */
+  cellAfter: number;
+}
+
 export interface ISolution {
-  /** Column track weights, one per track, in `fr` units. */
-  colWeights: number[];
+  /** Column tracks, in order, including gutters. */
+  colTracks: ITrack[];
+  /** Row tracks, in order, including gutters. */
+  rowTracks: ITrack[];
   /** Minimum height contributed to each row track, in px (0 = pure `auto`). */
   rowMinPx: number[];
   /** Grid placement for every cell that the grid positions directly. */
@@ -87,6 +122,8 @@ export interface ISolution {
   managedOwner: Map<number, IManagedGroup>;
   /** Placement of every group node, keyed by {@link groupKey}. Drives chrome. */
   groupPlacements: Map<string, { node: IGroupNode; placement: IPlacement }>;
+  /** Seams between adjacent sibling groups. */
+  gutters: IGutter[];
 }
 
 /** The axis a group at the given depth divides along. Root (depth 0) is a column. */
@@ -193,6 +230,13 @@ export function solve(root: IGroupNode): ISolution {
   const rects: IRect[] = [];
   const managedNodes: { node: IGroupNode; rect: IRect }[] = [];
   const groupRects: { node: IGroupNode; rect: IRect }[] = [];
+  const marks: {
+    node: IGroupNode;
+    coord: number;
+    from: number;
+    to: number;
+    index: number;
+  }[] = [];
 
   const walk = (
     node: MosaicNode,
@@ -225,7 +269,8 @@ export function solve(root: IGroupNode): ISolution {
 
     const total = totalWeight(node.children);
     let offset = 0;
-    for (const child of node.children) {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
       const share = (child.weight > 0 ? child.weight : 1) / total;
       const from = offset;
       const to = offset + share;
@@ -236,6 +281,20 @@ export function solve(root: IGroupNode): ISolution {
       } else {
         walk(child, x0 + (x1 - x0) * from, x0 + (x1 - x0) * to, y0, y1, owner);
       }
+
+      // A seam between two groups has no cell on it to drop onto, so it needs a
+      // gutter. A seam touching a cell does not: that cell is the drop target.
+      const next = node.children[i + 1];
+      if (child.kind === 'group' && next?.kind === 'group') {
+        marks.push({
+          node,
+          coord:
+            node.axis === 'col' ? y0 + (y1 - y0) * to : x0 + (x1 - x0) * to,
+          from: node.axis === 'col' ? x0 : y0,
+          to: node.axis === 'col' ? x1 : y1,
+          index: i + 1
+        });
+      }
     }
   };
 
@@ -243,20 +302,29 @@ export function solve(root: IGroupNode): ISolution {
 
   const xLines = [...xs].sort((a, b) => a - b);
   const yLines = [...ys].sort((a, b) => a - b);
-  const xIndex = new Map(xLines.map((v, i) => [v, i + 1])); // CSS lines are 1-based
-  const yIndex = new Map(yLines.map((v, i) => [v, i + 1]));
+  const xAt = new Map(xLines.map((v, i) => [v, i]));
+  const yAt = new Map(yLines.map((v, i) => [v, i]));
 
-  const colWeights: number[] = [];
-  for (let i = 0; i + 1 < xLines.length; i++) {
-    colWeights.push(xLines[i + 1] - xLines[i]);
+  const xGutters = new Set<number>();
+  const yGutters = new Set<number>();
+  for (const mark of marks) {
+    const at = (mark.node.axis === 'col' ? yAt : xAt).get(mark.coord);
+    if (at !== undefined) {
+      (mark.node.axis === 'col' ? yGutters : xGutters).add(at);
+    }
   }
-  const rowMinPx = new Array(Math.max(yLines.length - 1, 0)).fill(0);
 
+  const columns = buildAxis(xLines, xGutters);
+  const rows = buildAxis(yLines, yGutters);
+  const rowMinPx = new Array(rows.tracks.length).fill(0);
+
+  // A node ends where the gutter before it begins, and starts where that
+  // gutter ends, so the two sides of a seam use different line maps.
   const place = (r: IRect): IPlacement => ({
-    rowStart: yIndex.get(r.y0)!,
-    rowEnd: yIndex.get(r.y1)!,
-    colStart: xIndex.get(r.x0)!,
-    colEnd: xIndex.get(r.x1)!
+    rowStart: rows.start[yAt.get(r.y0)!],
+    rowEnd: rows.end[yAt.get(r.y1)!],
+    colStart: columns.start[xAt.get(r.x0)!],
+    colEnd: columns.end[xAt.get(r.x1)!]
   });
 
   const placements = new Map<number, IPlacement>();
@@ -281,9 +349,13 @@ export function solve(root: IGroupNode): ISolution {
     // A managed group holds its own extent open along its scroll axis, spread
     // across the row tracks it spans. `auto` still wins if siblings are taller.
     if (node.axis === 'col') {
-      const span = Math.max(placement.rowEnd - placement.rowStart, 1);
-      for (let t = placement.rowStart - 1; t < placement.rowEnd - 1; t++) {
-        rowMinPx[t] = Math.max(rowMinPx[t], node.size / span);
+      const spanned = contentTracks(
+        rows.tracks,
+        placement.rowStart,
+        placement.rowEnd
+      );
+      for (const t of spanned) {
+        rowMinPx[t] = Math.max(rowMinPx[t], node.size / spanned.length);
       }
     }
   }
@@ -310,14 +382,89 @@ export function solve(root: IGroupNode): ISolution {
     groupPlacements.set(groupKey(node.path), { node, placement: place(rect) });
   }
 
+  const gutters: IGutter[] = [];
+  for (const mark of marks) {
+    const along = mark.node.axis === 'col' ? rows : columns;
+    const across = mark.node.axis === 'col' ? columns : rows;
+    const alongAt = (mark.node.axis === 'col' ? yAt : xAt).get(mark.coord);
+    const fromAt = (mark.node.axis === 'col' ? xAt : yAt).get(mark.from);
+    const toAt = (mark.node.axis === 'col' ? xAt : yAt).get(mark.to);
+    if (alongAt === undefined || fromAt === undefined || toAt === undefined) {
+      continue;
+    }
+    const after = mark.node.children[mark.index];
+    const cells = after ? collectCells(after) : [];
+    gutters.push({
+      path: mark.node.path,
+      axis: mark.node.axis,
+      line: along.end[alongAt],
+      start: across.start[fromAt],
+      end: across.end[toAt],
+      index: mark.index,
+      cellAfter: cells.length > 0 ? cells[0] : -1
+    });
+  }
+
   return {
-    colWeights,
+    colTracks: columns.tracks,
+    rowTracks: rows.tracks,
     rowMinPx,
     placements,
     managed,
     managedOwner,
-    groupPlacements
+    groupPlacements,
+    gutters
   };
+}
+
+/**
+ * Lay out one axis, inserting a gutter track at each seam that needs one.
+ *
+ * Because a gutter takes a track of its own, the line a node ends at is no
+ * longer the line the next node starts at, so two maps come back: `end` for a
+ * node finishing at a logical line and `start` for one beginning there.
+ */
+function buildAxis(
+  lines: number[],
+  gutters: Set<number>
+): { tracks: ITrack[]; start: number[]; end: number[] } {
+  const tracks: ITrack[] = [];
+  const start = new Array<number>(lines.length);
+  const end = new Array<number>(lines.length);
+  let line = 1;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0 && i < lines.length - 1 && gutters.has(i)) {
+      end[i] = line;
+      tracks.push({ gutter: true, weight: 0 });
+      line += 1;
+      start[i] = line;
+    } else {
+      end[i] = line;
+      start[i] = line;
+    }
+    if (i < lines.length - 1) {
+      tracks.push({ gutter: false, weight: lines[i + 1] - lines[i] });
+      line += 1;
+    }
+  }
+
+  return { tracks, start, end };
+}
+
+/** Indices of the non-gutter tracks a placement spans. */
+export function contentTracks(
+  tracks: ITrack[],
+  startLine: number,
+  endLine: number
+): number[] {
+  const out: number[] = [];
+  for (let t = startLine - 1; t < endLine - 1 && t < tracks.length; t++) {
+    if (!tracks[t].gutter) {
+      out.push(t);
+    }
+  }
+  return out.length > 0 ? out : [Math.max(0, startLine - 1)];
 }
 
 /** Managed groups strictly beneath a node, outermost first. */
@@ -397,9 +544,13 @@ export function rowFloors(
     if (solution.managedOwner.has(index)) {
       continue;
     }
-    const span = Math.max(placement.rowEnd - placement.rowStart, 1);
-    const share = cellHeight(index) / span;
-    for (let t = placement.rowStart - 1; t < placement.rowEnd - 1; t++) {
+    const spanned = contentTracks(
+      solution.rowTracks,
+      placement.rowStart,
+      placement.rowEnd
+    );
+    const share = cellHeight(index) / spanned.length;
+    for (const t of spanned) {
       floors[t] = Math.max(floors[t] ?? 0, share);
     }
   }
