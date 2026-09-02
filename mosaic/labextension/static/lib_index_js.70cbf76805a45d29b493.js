@@ -1132,18 +1132,29 @@ class MosaicNotebook {
      *   selects everything linearly between the two cells.
      */
     navigate(direction, extend = false) {
-        const target = this.neighbour(this.notebook.activeCellIndex, direction);
+        const notebook = this.notebook;
+        const target = this.neighbour(notebook.activeCellIndex, direction);
         if (target === null) {
             return false;
         }
-        this.notebook.mode = 'command';
+        // Focus has to travel with the active cell. `Notebook._evtFocusIn` derives
+        // activeCellIndex from whichever cell holds DOM focus, so moving the index
+        // alone is undone by the next focus event -- leaving the selection repaint
+        // as the only visible effect and making every step take two presses. This
+        // mirrors what NotebookActions.selectBelow does around the same move.
+        const wasFocused = notebook.node.contains(document.activeElement);
+        notebook.mode = 'command';
         if (extend) {
-            this.notebook.extendContiguousSelectionTo(target);
+            notebook.extendContiguousSelectionTo(target);
         }
         else {
-            this.notebook.deselectAll();
-            this.notebook.activeCellIndex = target;
+            notebook.activeCellIndex = target;
+            notebook.deselectAll();
         }
+        if (wasFocused) {
+            notebook.activate();
+        }
+        void notebook.scrollToItem(notebook.activeCellIndex);
         return true;
     }
     /** Nearest cell beyond `index` in a direction, or null at the edge. */
@@ -2281,4 +2292,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.d07aed6f36523f21cd0d.js.map
+//# sourceMappingURL=lib_index_js.70cbf76805a45d29b493.js.map
