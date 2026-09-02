@@ -55,6 +55,7 @@
 .mosaic-overlay {
   position: absolute;
   inset: 0;
+  overflow: hidden;
   pointer-events: none;
   z-index: 3;
 }
@@ -97,6 +98,13 @@
 
 .mosaic-frame:hover .mosaic-frame-run {
   opacity: 1;
+}
+
+/* Insert-left/right reuse the insert-above/below icons, turned a quarter turn
+   so the arrow points the way the cell will be added. */
+svg[data-icon='mosaic:add-left'],
+svg[data-icon='mosaic:add-right'] {
+  transform: rotate(-90deg);
 }
 
 /* -- simulated scrollbars ------------------------------------------------- */

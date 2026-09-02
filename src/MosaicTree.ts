@@ -405,3 +405,82 @@ export function rowFloors(
   }
   return floors;
 }
+
+/** A step in the two-dimensional layout. */
+export type Direction = 'left' | 'right' | 'up' | 'down';
+
+/** A rectangle in viewport coordinates. */
+export interface IRect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Slack, in px, when deciding whether a candidate lies past our edge. */
+const NAV_TOLERANCE = 1;
+/** Candidates within this many px of the nearest count as equally near. */
+const NAV_BAND = 4;
+
+/**
+ * The cell to move to when stepping one place in a direction.
+ *
+ * Navigation is geometric rather than structural, which gives every case the
+ * user expects from a single rule: inside a column, up and down are the
+ * siblings above and below, while left and right cross into the neighbouring
+ * tile of the enclosing row at the nearest height. Inside a row the roles swap,
+ * with no special-casing for either.
+ *
+ * Candidates are gathered from the nearest band past our edge and then ranked
+ * by alignment on the other axis -- that second step is what makes a sideways
+ * step land on the nearest-height neighbour rather than the topmost one.
+ */
+export function nearestInDirection(
+  from: IRect,
+  candidates: { index: number; rect: IRect }[],
+  direction: Direction
+): number | null {
+  const horizontal = direction === 'left' || direction === 'right';
+  const backwards = direction === 'left' || direction === 'up';
+
+  const scored: { index: number; gap: number; offset: number }[] = [];
+  for (const { index, rect } of candidates) {
+    const gap = backwards
+      ? horizontal
+        ? from.x0 - rect.x1
+        : from.y0 - rect.y1
+      : horizontal
+        ? rect.x0 - from.x1
+        : rect.y0 - from.y1;
+    if (gap < -NAV_TOLERANCE) {
+      continue; // behind us, or merely overlapping
+    }
+    const offset = horizontal
+      ? Math.abs((rect.y0 + rect.y1) / 2 - (from.y0 + from.y1) / 2)
+      : Math.abs((rect.x0 + rect.x1) / 2 - (from.x0 + from.x1) / 2);
+    scored.push({ index, gap, offset });
+  }
+  if (scored.length === 0) {
+    return null;
+  }
+
+  const nearest = Math.min(...scored.map(c => c.gap));
+  const band = scored.filter(c => c.gap <= nearest + NAV_BAND);
+  band.sort((a, b) => a.offset - b.offset || a.index - b.index);
+  return band[0].index;
+}
+
+/**
+ * The path a new cell takes when inserted beside `refPath` along `wantAxis`.
+ *
+ * When the containing group already runs the right way the cell simply joins
+ * it; otherwise the reference cell is subdivided, and both cells move into the
+ * new group. Returns null when no subdivision is needed.
+ */
+export function subdividePath(
+  refPath: string[],
+  wantAxis: Axis,
+  id: string
+): string[] {
+  return axisAtDepth(refPath.length) === wantAxis ? refPath : [...refPath, id];
+}

@@ -15,10 +15,10 @@ import {
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { DocumentManager } from '@jupyterlab/docmanager';
 import { ILauncher } from '@jupyterlab/launcher';
-import { LabIcon } from '@jupyterlab/ui-components';
+import { LabIcon, addAboveIcon, addBelowIcon } from '@jupyterlab/ui-components';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
-import { MosaicNotebookPanel } from './MosaicNotebook';
+import { Direction, MosaicNotebookPanel, mosaicOf } from './MosaicNotebook';
 
 import MosaicIcon from '../style/icons/mosaic-icon.svg';
 
@@ -49,6 +49,20 @@ DocumentManager.prototype.openOrReveal = function (
 const MosaicLabIcon = new LabIcon({
   name: 'mosaic:favicon',
   svgstr: MosaicIcon.toString()
+});
+
+/**
+ * The insert-above/below icons under new names, so that the stylesheet can turn
+ * them a quarter turn: left and right then read as the same action on the other
+ * axis. LabIcon stamps the name onto the rendered svg as `data-icon`.
+ */
+const addLeftIcon = new LabIcon({
+  name: 'mosaic:add-left',
+  svgstr: addAboveIcon.svgstr
+});
+const addRightIcon = new LabIcon({
+  name: 'mosaic:add-right',
+  svgstr: addBelowIcon.svgstr
 });
 
 const PLUGIN_ID = 'mosaic:plugin';
@@ -144,6 +158,57 @@ const plugin: JupyterFrontEndPlugin<void> = {
       app.docRegistry.addWidgetExtension(MOSAIC_FACTORY, ext);
     }
     void docmanager;
+
+    // Navigation and insertion are two-dimensional in a mosaic notebook. These
+    // are registered as separate commands rather than replacing the notebook's
+    // own, so a plain Notebook panel keeps stock behaviour; the shortcuts in
+    // schema/plugin.json use a more specific selector to win only here.
+    const active = (): ReturnType<typeof mosaicOf> => {
+      const panel = tracker.currentWidget;
+      return panel ? mosaicOf(panel.content) : null;
+    };
+    const isMosaic = () => active() !== null;
+
+    const directions: Direction[] = ['left', 'right', 'up', 'down'];
+    for (const direction of directions) {
+      app.commands.addCommand(`mosaic:move-cursor-${direction}`, {
+        label: `Move Cursor ${direction[0].toUpperCase()}${direction.slice(1)}`,
+        caption: `Move the active cell selection ${direction}`,
+        isEnabled: isMosaic,
+        execute: () => {
+          active()?.navigate(direction);
+        }
+      });
+      app.commands.addCommand(`mosaic:extend-selection-${direction}`, {
+        label: `Extend Selection ${direction[0].toUpperCase()}${direction.slice(1)}`,
+        caption: `Extend the selected cells ${direction}`,
+        isEnabled: isMosaic,
+        execute: () => {
+          active()?.navigate(direction, true);
+        }
+      });
+    }
+
+    app.commands.addCommand('mosaic:insert-cell-left', {
+      label: 'Insert Cell Left',
+      caption: 'Insert a cell to the left, subdividing if needed',
+      icon: addLeftIcon,
+      isEnabled: isMosaic,
+      isVisible: isMosaic,
+      execute: () => {
+        active()?.insertBeside('left');
+      }
+    });
+    app.commands.addCommand('mosaic:insert-cell-right', {
+      label: 'Insert Cell Right',
+      caption: 'Insert a cell to the right, subdividing if needed',
+      icon: addRightIcon,
+      isEnabled: isMosaic,
+      isVisible: isMosaic,
+      execute: () => {
+        active()?.insertBeside('right');
+      }
+    });
 
     app.commands.addCommand('mosaic-notebook:create-new', {
       label: args =>

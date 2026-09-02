@@ -12,10 +12,82 @@
       "description": "Stylize cells as seperate, floating, and round, rather than the default flat, seamless view."
     },
     "topCellHandle": {
-        "type": "boolean",
-        "title": "Cell Handle Placement",
-        "default": false,
-        "description": "Put cell handles above code areas rather than beside it"
+      "type": "boolean",
+      "title": "Cell Handle Placement",
+      "default": false,
+      "description": "Put cell handles above code areas rather than beside it"
     }
-  }
+  },
+  "jupyter.lab.toolbars": {
+    "Cell": [
+      {
+        "name": "mosaic-insert-cell-left",
+        "command": "mosaic:insert-cell-left",
+        "rank": 41
+      },
+      {
+        "name": "mosaic-insert-cell-right",
+        "command": "mosaic:insert-cell-right",
+        "rank": 42
+      }
+    ]
+  },
+  "jupyter.lab.shortcuts": [
+    {
+      "command": "mosaic:move-cursor-left",
+      "keys": [
+        "H"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook:focus"
+    },
+    {
+      "command": "mosaic:extend-selection-left",
+      "keys": [
+        "Shift H"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook:focus"
+    },
+    {
+      "command": "mosaic:move-cursor-right",
+      "keys": [
+        ";"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook:focus"
+    },
+    {
+      "command": "mosaic:extend-selection-right",
+      "keys": [
+        "Shift ;"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook:focus"
+    },
+    {
+      "command": "mosaic:move-cursor-down",
+      "keys": [
+        "J"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook:focus"
+    },
+    {
+      "command": "mosaic:extend-selection-down",
+      "keys": [
+        "Shift J"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook:focus"
+    },
+    {
+      "command": "mosaic:move-cursor-up",
+      "keys": [
+        "K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook:focus"
+    },
+    {
+      "command": "mosaic:extend-selection-up",
+      "keys": [
+        "Shift K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook:focus"
+    }
+  ]
 }

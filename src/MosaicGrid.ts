@@ -113,6 +113,14 @@ export class MosaicGrid {
       }
     });
 
+    // The panel can be resized without any cell changing, and stale group
+    // boxes leave absolutely positioned chrome hanging past the new width --
+    // which the outer node then lets you scroll into.
+    this._outerResizeObserver = new ResizeObserver(() => {
+      this.host.requestUpdate();
+    });
+    this._outerResizeObserver.observe(this.outer);
+
     this._onWheel = this._onWheel.bind(this);
     this._onDblClick = this._onDblClick.bind(this);
     this.outer.addEventListener('wheel', this._onWheel, { passive: false });
@@ -121,6 +129,7 @@ export class MosaicGrid {
 
   private _overlay: HTMLElement;
   private _resizeObserver: ResizeObserver;
+  private _outerResizeObserver: ResizeObserver;
   private _observed = new Set<HTMLElement>();
   private _heights = new WeakMap<HTMLElement, number>();
   /** Per-group scroll offset, in px. Session state only -- never persisted. */
@@ -185,6 +194,33 @@ export class MosaicGrid {
       }
     }
     return start < 0 ? null : [start, stop];
+  }
+
+  /**
+   * A cell's rectangle in viewport coordinates.
+   *
+   * Prefers the laid-out DOM box, which is exact and already accounts for cells
+   * positioned inside a managed group; falls back to the cell's grid area when
+   * it is detached (windowed out) and has no box.
+   */
+  cellRect(index: number): IClip | null {
+    const el = this.host.cellNode(index);
+    if (el && el.isConnected && !el.dataset.mosaicHidden && el.offsetParent) {
+      return {
+        x0: el.offsetLeft,
+        y0: el.offsetTop,
+        x1: el.offsetLeft + el.offsetWidth,
+        y1: el.offsetTop + el.offsetHeight
+      };
+    }
+    const solution = this._solution;
+    const owner = solution?.managedOwner.get(index);
+    const placement = owner ? owner.placement : solution?.placements.get(index);
+    if (!placement) {
+      return null;
+    }
+    const box = this._boxOf(placement);
+    return { x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h };
   }
 
   /** Vertical extent of a cell in grid coordinates, or null if unplaced. */
@@ -1059,6 +1095,7 @@ export class MosaicGrid {
     this.outer.removeEventListener('wheel', this._onWheel);
     this.viewport.removeEventListener('dblclick', this._onDblClick);
     this._resizeObserver.disconnect();
+    this._outerResizeObserver.disconnect();
     this._overlay.remove();
     this._chrome.clear();
   }

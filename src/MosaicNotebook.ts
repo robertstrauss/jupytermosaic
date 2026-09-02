@@ -15,17 +15,25 @@ import {
 import { Cell, CodeCell, ICellModel, MarkdownCell } from '@jupyterlab/cells';
 import { WindowedList } from '@jupyterlab/ui-components';
 
+import { NotebookActions } from '@jupyterlab/notebook';
+
 import { IGridHost, MosaicGrid } from './MosaicGrid';
 import {
   IGroupNode,
   IGroupState,
   ISolution,
+  Direction,
   buildTree,
   collectCells,
   groupKey,
-  solve
+  nearestInDirection,
+  newGroupId,
+  solve,
+  subdividePath
 } from './MosaicTree';
 import { installMosaicDrag } from './mosaicdrag';
+
+export type { Direction };
 
 /** Cell metadata key holding the group path. */
 export const PATH_KEY = 'mosaic';
@@ -131,6 +139,133 @@ export class MosaicNotebook implements IGridHost {
     this.setGroupState(node.path, state as IGroupState);
   }
 
+  // -- navigation -----------------------------------------------------------
+
+  /**
+   * Move the active cell one step in a direction, spatially.
+   *
+   * Navigation is geometric rather than structural, which gives every case the
+   * user expects from one rule: in a column, up/down are the siblings above and
+   * below, while left/right cross into the neighbouring tile of the enclosing
+   * row at the nearest height; in a row those roles simply swap.
+   *
+   * @param extend Extend the selection instead of moving. The selection stays a
+   *   contiguous run in notebook order, so stepping sideways into another tile
+   *   selects everything linearly between the two cells.
+   */
+  navigate(direction: Direction, extend = false): boolean {
+    const target = this.neighbour(this.notebook.activeCellIndex, direction);
+    if (target === null) {
+      return false;
+    }
+    this.notebook.mode = 'command';
+    if (extend) {
+      this.notebook.extendContiguousSelectionTo(target);
+    } else {
+      this.notebook.deselectAll();
+      this.notebook.activeCellIndex = target;
+    }
+    return true;
+  }
+
+  /** Nearest cell beyond `index` in a direction, or null at the edge. */
+  neighbour(index: number, direction: Direction): number | null {
+    const from = this.grid.cellRect(index);
+    if (!from) {
+      return null;
+    }
+    const candidates = [];
+    for (let i = 0; i < this.cellCount(); i++) {
+      if (i === index) {
+        continue;
+      }
+      const rect = this.grid.cellRect(i);
+      if (rect) {
+        candidates.push({ index: i, rect });
+      }
+    }
+    return nearestInDirection(from, candidates, direction);
+  }
+
+  // -- insertion ------------------------------------------------------------
+
+  /**
+   * Insert a new cell beside the active one, subdividing when the direction is
+   * across the containing group's axis. Adding to the left of a cell in a
+   * column turns that cell into a row of two; adding below a cell in a row
+   * turns it into a column of two.
+   */
+  insertBeside(direction: Direction): void {
+    const notebook = this.notebook;
+    if (!notebook.model) {
+      return;
+    }
+    const index = notebook.activeCellIndex;
+    const reference = notebook.widgets[index];
+    if (!reference) {
+      return;
+    }
+
+    const path = this.pathOf(reference.model) ?? [];
+    const wantAxis =
+      direction === 'left' || direction === 'right' ? 'row' : 'col';
+    const destination = subdividePath(path, wantAxis, newGroupId());
+    if (destination !== path) {
+      // The containing group runs the wrong way, so the reference cell moves
+      // into the new subdivision alongside the cell we are about to add.
+      this.setPath(reference.model, destination);
+    }
+
+    const before = direction === 'left' || direction === 'up';
+    if (before) {
+      NotebookActions.insertAbove(notebook);
+    } else {
+      NotebookActions.insertBelow(notebook);
+    }
+
+    // Claim the new cell explicitly, ahead of the inference in `rebuild`.
+    const inserted = notebook.widgets[before ? index : index + 1];
+    if (inserted) {
+      this.setPath(inserted.model, destination);
+    }
+    this.requestUpdate();
+  }
+
+  /**
+   * Give any cell that arrived without a path one, based on its neighbour.
+   *
+   * Cells inserted by the notebook itself -- insert above/below, paste, split --
+   * carry no mosaic metadata, and would otherwise land at the notebook root and
+   * tear their neighbour's group in half. A cell landing next to a neighbour
+   * that sits in a row subdivides it into a column, which is what stacking a
+   * new cell above or below a tile looks like.
+   */
+  private _inferMissingPaths(): boolean {
+    const cells = this.notebook.widgets;
+    let changed = false;
+
+    for (let i = 0; i < cells.length; i++) {
+      if (this.pathOf(cells[i].model) !== undefined) {
+        continue;
+      }
+      const reference = cells[i - 1] ?? cells[i + 1];
+      if (!reference) {
+        this.setPath(cells[i].model, []);
+        changed = true;
+        continue;
+      }
+      const referencePath = this.pathOf(reference.model) ?? [];
+      // Stacking onto a cell that lives in a row means a new column.
+      const destination = subdividePath(referencePath, 'col', newGroupId());
+      if (destination !== referencePath) {
+        this.setPath(reference.model, destination);
+      }
+      this.setPath(cells[i].model, destination);
+      changed = true;
+    }
+    return changed;
+  }
+
   // -- layout ---------------------------------------------------------------
 
   /** Rebuild the tree from metadata and re-apply the grid. Idempotent. */
@@ -139,6 +274,8 @@ export class MosaicNotebook implements IGridHost {
     if (!model || this._disposed) {
       return;
     }
+    this._inferMissingPaths();
+
     const cells = this.notebook.widgets;
     const paths = cells.map(cell => this.pathOf(cell.model));
     const root = buildTree(

@@ -1,13 +1,16 @@
 import {
   DEFAULT_SCROLL_SIZE,
+  axisAtDepth,
   IGroupState,
   buildTree,
   collectCells,
   divergeDepth,
   findGroup,
   groupKey,
+  nearestInDirection,
   rowFloors,
-  solve
+  solve,
+  subdividePath
 } from '../MosaicTree';
 
 const noState = (): IGroupState => ({});
@@ -239,5 +242,100 @@ describe('rowFloors', () => {
     );
     // A tall cell inside the scrolling group must not stretch the outer band.
     expect(rowFloors(s, () => 900)).toEqual([150]);
+  });
+});
+
+describe('nearestInDirection', () => {
+  const rect = (x0: number, y0: number, x1: number, y1: number) => ({
+    x0,
+    y0,
+    x1,
+    y1
+  });
+
+  // A column of three cells on the left, beside a row of two on the right:
+  //
+  //   +----0----+----3----+
+  //   +----1----+         +
+  //   +----2----+----4----+
+  const column = [
+    { index: 0, rect: rect(0, 0, 100, 50) },
+    { index: 1, rect: rect(0, 50, 100, 100) },
+    { index: 2, rect: rect(0, 100, 100, 150) }
+  ];
+  const beside = [
+    { index: 3, rect: rect(100, 0, 200, 75) },
+    { index: 4, rect: rect(100, 75, 200, 150) }
+  ];
+  const all = [...column, ...beside];
+
+  it('steps to the next sibling down a column', () => {
+    expect(nearestInDirection(column[0].rect, all, 'down')).toBe(1);
+    expect(nearestInDirection(column[1].rect, all, 'up')).toBe(0);
+  });
+
+  it('stops at the edge', () => {
+    expect(nearestInDirection(column[0].rect, all, 'up')).toBeNull();
+    expect(nearestInDirection(beside[1].rect, all, 'right')).toBeNull();
+  });
+
+  it('crosses sideways to the neighbour nearest in height', () => {
+    // Cell 0 spans y 0-50, so of the two tiles to its right, 3 (y 0-75) is the
+    // closer in height; cell 2 (y 100-150) should reach 4 instead.
+    expect(nearestInDirection(column[0].rect, all, 'right')).toBe(3);
+    expect(nearestInDirection(column[2].rect, all, 'right')).toBe(4);
+  });
+
+  it('crosses back to the neighbour nearest in height', () => {
+    expect(nearestInDirection(beside[0].rect, all, 'left')).toBe(0);
+    expect(nearestInDirection(beside[1].rect, all, 'left')).toBe(2);
+  });
+
+  it('prefers the nearest band over the best-aligned distant cell', () => {
+    // A perfectly aligned cell far to the right must not beat a near one.
+    const near = { index: 1, rect: rect(110, 200, 150, 260) };
+    const farButAligned = { index: 2, rect: rect(400, 0, 500, 50) };
+    const from = rect(0, 0, 100, 50);
+    expect(nearestInDirection(from, [near, farButAligned], 'right')).toBe(1);
+  });
+
+  it('ignores cells that merely overlap the starting rect', () => {
+    const overlapping = { index: 1, rect: rect(50, 0, 150, 50) };
+    const from = rect(0, 0, 100, 50);
+    expect(nearestInDirection(from, [overlapping], 'right')).toBeNull();
+  });
+
+  it('breaks alignment ties by notebook order', () => {
+    const from = rect(0, 0, 100, 50);
+    const a = { index: 5, rect: rect(100, 0, 200, 50) };
+    const b = { index: 2, rect: rect(100, 0, 200, 50) };
+    expect(nearestInDirection(from, [a, b], 'right')).toBe(2);
+  });
+});
+
+describe('subdividePath', () => {
+  it('joins the containing group when it already runs the right way', () => {
+    // A cell at the root sits in a column, so adding below just joins it.
+    expect(subdividePath([], 'col', 'new')).toEqual([]);
+    // A cell one level down sits in a row, so adding to the side joins it.
+    expect(subdividePath(['a'], 'row', 'new')).toEqual(['a']);
+  });
+
+  it('subdivides when the direction crosses the group axis', () => {
+    // Adding to the left of a cell in a column makes a row of two.
+    expect(subdividePath([], 'row', 'new')).toEqual(['new']);
+    // Adding below a cell in a row makes a column of two.
+    expect(subdividePath(['a'], 'col', 'new')).toEqual(['a', 'new']);
+  });
+
+  it('produces a group whose axis matches the requested one', () => {
+    for (const depth of [0, 1, 2, 3]) {
+      const path = Array.from({ length: depth }, (_, i) => `g${i}`);
+      for (const axis of ['row', 'col'] as const) {
+        const result = subdividePath(path, axis, 'new');
+        // The new cell's containing group must run along the wanted axis.
+        expect(axisAtDepth(result.length)).toBe(axis);
+      }
+    }
   });
 });
