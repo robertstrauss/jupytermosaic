@@ -300,6 +300,14 @@ describe('nearestInDirection', () => {
     expect(nearestInDirection(from, [near, farButAligned], 'right')).toBe(1);
   });
 
+  it('accepts a neighbour whose edge exactly touches ours', () => {
+    // Track offsets carry the grid gap inside them, so boxes derived from the
+    // solved layout abut exactly. A neighbour at gap zero must be reachable.
+    const from = rect(0, 0, 100, 50);
+    const touching = { index: 1, rect: rect(100, 0, 200, 50) };
+    expect(nearestInDirection(from, [touching], 'right')).toBe(1);
+  });
+
   it('ignores cells that merely overlap the starting rect', () => {
     const overlapping = { index: 1, rect: rect(50, 0, 150, 50) };
     const from = rect(0, 0, 100, 50);

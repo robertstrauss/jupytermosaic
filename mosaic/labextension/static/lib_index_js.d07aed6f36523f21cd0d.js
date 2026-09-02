@@ -152,25 +152,49 @@ class MosaicGrid {
         return start < 0 ? null : [start, stop];
     }
     /**
-     * A cell's rectangle in viewport coordinates.
+     * A cell's rectangle, in grid coordinates.
      *
-     * Prefers the laid-out DOM box, which is exact and already accounts for cells
-     * positioned inside a managed group; falls back to the cell's grid area when
-     * it is detached (windowed out) and has no box.
+     * Every rect comes from the solved layout rather than the DOM. Reading laid
+     * out boxes for rendered cells and falling back to track offsets for the rest
+     * mixed two coordinate systems -- the DOM box includes the viewport's edge
+     * padding and the track offsets do not -- so in a windowed notebook the
+     * active cell's edge sat a padding's width past its true neighbour, which was
+     * then rejected as being behind it. That left only distant cells to pick
+     * from. Vertical steps survived it because a row's height dwarfs the padding.
      */
     cellRect(index) {
-        const el = this.host.cellNode(index);
-        if (el && el.isConnected && !el.dataset.mosaicHidden && el.offsetParent) {
-            return {
-                x0: el.offsetLeft,
-                y0: el.offsetTop,
-                x1: el.offsetLeft + el.offsetWidth,
-                y1: el.offsetTop + el.offsetHeight
-            };
-        }
+        var _a, _b;
         const solution = this._solution;
-        const owner = solution === null || solution === void 0 ? void 0 : solution.managedOwner.get(index);
-        const placement = owner ? owner.placement : solution === null || solution === void 0 ? void 0 : solution.placements.get(index);
+        if (!solution) {
+            return null;
+        }
+        if (solution.managedOwner.has(index)) {
+            // Cells in a managed group are laid out in the group's local space, and
+            // their offsets are recorded against the outermost such group.
+            const root = solution.managed.find(entry => entry.cells.includes(index));
+            if (root) {
+                const key = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.groupKey)(root.node.path);
+                const box = (_a = this._boxes.get(key)) !== null && _a !== void 0 ? _a : this._boxOf(root.placement);
+                const local = (_b = this._localOffsets.get(key)) === null || _b === void 0 ? void 0 : _b.get(index);
+                if (!local) {
+                    return { x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h };
+                }
+                return root.node.axis === 'col'
+                    ? {
+                        x0: box.x,
+                        x1: box.x + box.w,
+                        y0: box.y + local.start,
+                        y1: box.y + local.end
+                    }
+                    : {
+                        x0: box.x + local.start,
+                        x1: box.x + local.end,
+                        y0: box.y,
+                        y1: box.y + box.h
+                    };
+            }
+        }
+        const placement = solution.placements.get(index);
         if (!placement) {
             return null;
         }
@@ -2257,4 +2281,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.1994130cb8ec3e2bf5a9.js.map
+//# sourceMappingURL=lib_index_js.d07aed6f36523f21cd0d.js.map
