@@ -1,0 +1,16 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v4.4.0
+_src_path: https://github.com/jupyterlab/extension-template
+author_email: robert.strauss@pm.me
+author_name: Robert Rusty
+has_binder: false
+has_settings: false
+kind: frontend
+labextension_name: mosaic
+project_short_description: A tiling window manager like subdividable layout for jupyter
+    labs and notebooks. Create dashboards, side-by-side comparisons, presentable code,
+    and user interfaces as a 2d jupyter notebook.
+python_name: mosaic
+repository: https://github.com/robertstrauss/jupytermosaic
+test: true
+

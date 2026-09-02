@@ -1,5 +1,5 @@
 {
-  "jupyter.lab.setting-icon": "settings",
+  "jupyter.lab.setting-icon": "mosaic:favicon",
   "jupyter.lab.setting-icon-label": "Mosaic",
   "title": "Mosaic Notebook Settings",
   "description": "Controls global stylistic features of the mosaic notebook.",
