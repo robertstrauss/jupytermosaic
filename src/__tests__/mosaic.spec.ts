@@ -6,6 +6,7 @@ import {
   collectCells,
   divergeDepth,
   findGroup,
+  flexFactors,
   groupKey,
   nearestInDirection,
   rowFloors,
@@ -337,5 +338,46 @@ describe('subdividePath', () => {
         expect(axisAtDepth(result.length)).toBe(axis);
       }
     }
+  });
+});
+
+describe('flexFactors', () => {
+  // Regression: CSS Grid 12.7.1 clamps a below-one flex sum up to one, so once
+  // a column froze at its minimum width the remaining tracks took only part of
+  // the leftover space and the rest of the row sat blank -- snapping out to
+  // full width only once the container grew enough to unfreeze the track.
+  it('scales the smallest weight to one', () => {
+    expect(flexFactors([0.5, 0.5])).toEqual([1, 1]);
+    expect(flexFactors([0.9, 0.1])).toEqual([9, 1]);
+  });
+
+  it('keeps the sum at or above one however many tracks freeze', () => {
+    const factors = flexFactors([0.25, 0.25, 0.25, 0.25]);
+    // Any subset that still contains a track sums to at least one, so the
+    // flexible remainder always absorbs the leftover space.
+    for (let frozen = 0; frozen < factors.length; frozen++) {
+      const remaining = factors.slice(frozen);
+      expect(remaining.reduce((a, b) => a + b, 0)).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('preserves the ratios between tracks', () => {
+    const factors = flexFactors([0.6, 0.3, 0.1]);
+    expect(factors[0] / factors[1]).toBeCloseTo(2, 10);
+    expect(factors[1] / factors[2]).toBeCloseTo(3, 10);
+  });
+
+  it('survives degenerate weights', () => {
+    expect(flexFactors([])).toEqual([]);
+    expect(flexFactors([0, 0])).toEqual([1, 1]);
+    expect(flexFactors([0, 0.5])).toEqual([1, 1]);
+  });
+
+  it('gives a real layout factors that all reach one', () => {
+    // A 2-wide row above a 3-wide row: four tracks of differing widths.
+    const s = solve(tree([['a'], ['a'], ['b'], ['b'], ['b']]));
+    const factors = flexFactors(s.colWeights);
+    expect(Math.min(...factors)).toBeCloseTo(1, 10);
+    expect(factors.every(f => f >= 1)).toBe(true);
   });
 });

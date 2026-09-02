@@ -484,3 +484,26 @@ export function subdividePath(
 ): string[] {
   return axisAtDepth(refPath.length) === wantAxis ? refPath : [...refPath, id];
 }
+
+/**
+ * Turn normalised track weights into CSS `fr` factors.
+ *
+ * The weights from {@link solve} are fractions summing to one, which is wrong
+ * to hand to the grid directly. Per CSS Grid Layout 12.7.1, a track whose base
+ * size exceeds its share is frozen at that size and dropped from the flex sum,
+ * and if the remaining sum is below one the algorithm clamps it *to* one -- so
+ * the still-flexible tracks take only that fraction of the leftover space and
+ * the rest of the row shows as blank margin. Widening the container eventually
+ * unfreezes the track and the row snaps out to full width.
+ *
+ * Scaling so the smallest factor is one keeps the sum at or above one however
+ * many tracks freeze, so the flexible tracks always absorb all leftover space.
+ */
+export function flexFactors(weights: number[]): number[] {
+  const positive = weights.filter(w => w > 0);
+  if (positive.length === 0) {
+    return weights.map(() => 1);
+  }
+  const smallest = Math.min(...positive);
+  return weights.map(w => (w > 0 ? w / smallest : 1));
+}

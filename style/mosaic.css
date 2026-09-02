@@ -26,8 +26,11 @@
   display: grid;
   align-items: stretch;
   gap: var(--mosaic-gap);
-  padding: var(--mosaic-edge-padding);
+
+  /* The fitted width in MosaicGrid is a border-box figure: tracks plus the
+     edge padding. */
   box-sizing: border-box;
+  padding: var(--mosaic-edge-padding);
   left: 0;
   right: 0;
   width: auto;

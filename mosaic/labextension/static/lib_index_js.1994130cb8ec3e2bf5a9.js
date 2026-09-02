@@ -260,8 +260,8 @@ class MosaicGrid {
         }
         // -- phase 1: tracks and flow placement --------------------------------
         const cols = solution.colWeights.length
-            ? solution.colWeights
-                .map(w => `minmax(var(--mosaic-cell-min-width), ${w.toFixed(6)}fr)`)
+            ? (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.flexFactors)(solution.colWeights)
+                .map(f => `minmax(var(--mosaic-cell-min-width), ${f.toFixed(4)}fr)`)
                 .join(' ')
             : '1fr';
         const floors = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.rowFloors)(solution, i => this._cellHeight(i));
@@ -290,13 +290,7 @@ class MosaicGrid {
             }
         }
         // -- phase 2: read back resolved geometry ------------------------------
-        this._readTracks();
         this._fitWidth();
-        if (this.viewport.style.width) {
-            // Committing a width can re-resolve the tracks; re-read so the group
-            // boxes below are measured against what is actually on screen.
-            this._readTracks();
-        }
         // -- phase 3: managed interiors ----------------------------------------
         this._localOffsets.clear();
         this._boxes.clear();
@@ -341,27 +335,39 @@ class MosaicGrid {
     /**
      * Size the scrollable area to the grid, exactly.
      *
-     * Columns have a minimum width, so a narrow pane makes the grid wider than
+     * Columns have a minimum width, so a narrow panel makes the grid wider than
      * the panel. The viewport is absolutely positioned and pinned to both edges,
      * which clamps it to the panel and leaves that overflow unreachable. Widening
      * the inner element to the content gives the outer node a real scrollable
-     * width -- and, just as importantly, no more than that, so there is never
-     * blank space to scroll into that holds no cells.
+     * width -- and no more than that, so there is never blank space to scroll
+     * into that holds no cells.
+     *
+     * The measurement is always taken with any previously forced width released.
+     * Deciding from a width we ourselves imposed on an earlier pass made the
+     * fitted size ratchet: the tracks refill whatever width they are given, so
+     * the requirement could only ever grow, and the grid stayed pinned at a stale
+     * width while the panel grew past it.
+     *
+     * Leaves the track offsets current, so callers need not re-read them.
      */
     _fitWidth() {
         var _a;
-        const content = ((_a = this._colOffsets[this._colOffsets.length - 1]) !== null && _a !== void 0 ? _a : 0) + this._edgePadding;
-        const available = this.outer.clientWidth;
-        if (content > available + 1) {
+        this._release();
+        this._readTracks();
+        const tracks = (_a = this._colOffsets[this._colOffsets.length - 1]) !== null && _a !== void 0 ? _a : 0;
+        const content = tracks + this._edgePadding;
+        if (content > this.outer.clientWidth + 1) {
             this.inner.style.width = `${content}px`;
             this.viewport.style.right = 'auto';
             this.viewport.style.width = `${content}px`;
+            this._readTracks();
         }
-        else {
-            this.inner.style.width = '';
-            this.viewport.style.right = '0';
-            this.viewport.style.width = '';
-        }
+    }
+    /** Return the viewport to spanning the panel. */
+    _release() {
+        this.inner.style.width = '';
+        this.viewport.style.right = '0';
+        this.viewport.style.width = '';
     }
     _boxOf(placement) {
         var _a, _b, _c, _d;
@@ -1369,6 +1375,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   collectCells: () => (/* binding */ collectCells),
 /* harmony export */   divergeDepth: () => (/* binding */ divergeDepth),
 /* harmony export */   findGroup: () => (/* binding */ findGroup),
+/* harmony export */   flexFactors: () => (/* binding */ flexFactors),
 /* harmony export */   groupKey: () => (/* binding */ groupKey),
 /* harmony export */   nearestInDirection: () => (/* binding */ nearestInDirection),
 /* harmony export */   newGroupId: () => (/* binding */ newGroupId),
@@ -1704,6 +1711,28 @@ function nearestInDirection(from, candidates, direction) {
  */
 function subdividePath(refPath, wantAxis, id) {
     return axisAtDepth(refPath.length) === wantAxis ? refPath : [...refPath, id];
+}
+/**
+ * Turn normalised track weights into CSS `fr` factors.
+ *
+ * The weights from {@link solve} are fractions summing to one, which is wrong
+ * to hand to the grid directly. Per CSS Grid Layout 12.7.1, a track whose base
+ * size exceeds its share is frozen at that size and dropped from the flex sum,
+ * and if the remaining sum is below one the algorithm clamps it *to* one -- so
+ * the still-flexible tracks take only that fraction of the leftover space and
+ * the rest of the row shows as blank margin. Widening the container eventually
+ * unfreezes the track and the row snaps out to full width.
+ *
+ * Scaling so the smallest factor is one keeps the sum at or above one however
+ * many tracks freeze, so the flexible tracks always absorb all leftover space.
+ */
+function flexFactors(weights) {
+    const positive = weights.filter(w => w > 0);
+    if (positive.length === 0) {
+        return weights.map(() => 1);
+    }
+    const smallest = Math.min(...positive);
+    return weights.map(w => (w > 0 ? w / smallest : 1));
 }
 
 
@@ -2228,4 +2257,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.9f650ec45b635186f5d7.js.map
+//# sourceMappingURL=lib_index_js.1994130cb8ec3e2bf5a9.js.map
