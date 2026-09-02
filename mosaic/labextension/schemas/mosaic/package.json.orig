@@ -1,6 +1,6 @@
 {
     "name": "mosaic",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "A tiling window manager like subdividable layout for jupyter labs and notebooks. Create dashboards, side-by-side comparisons, presentable code, and user interfaces as a 2d jupyter notebook.",
     "keywords": [
         "jupyter",

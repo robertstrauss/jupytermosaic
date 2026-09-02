@@ -21,14 +21,38 @@
   "jupyter.lab.toolbars": {
     "Cell": [
       {
+        "name": "duplicate-cell",
+        "rank": 10
+      },
+      {
+        "name": "move-cell-up",
+        "rank": 20
+      },
+      {
+        "name": "move-cell-down",
+        "rank": 30
+      },
+      {
+        "name": "insert-cell-above",
+        "rank": 40
+      },
+      {
+        "name": "insert-cell-below",
+        "rank": 50
+      },
+      {
         "name": "mosaic-insert-cell-left",
         "command": "mosaic:insert-cell-left",
-        "rank": 41
+        "rank": 51
       },
       {
         "name": "mosaic-insert-cell-right",
         "command": "mosaic:insert-cell-right",
-        "rank": 42
+        "rank": 52
+      },
+      {
+        "name": "delete-cell",
+        "rank": 60
       }
     ]
   },

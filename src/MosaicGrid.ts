@@ -138,6 +138,7 @@ export class MosaicGrid {
   private _rowOffsets: number[] = [0];
   private _colOffsets: number[] = [0];
   private _boxes = new Map<string, IBox>();
+  private _edgePadding = 0;
   private _chrome = new Map<string, HTMLElement>();
   /** Every group we know a box for, including ones nested inside managed groups. */
   private _nodesByKey = new Map<string, IGroupNode>();
@@ -355,6 +356,12 @@ export class MosaicGrid {
 
     // -- phase 2: read back resolved geometry ------------------------------
     this._readTracks();
+    this._fitWidth();
+    if (this.viewport.style.width) {
+      // Committing a width can re-resolve the tracks; re-read so the group
+      // boxes below are measured against what is actually on screen.
+      this._readTracks();
+    }
 
     // -- phase 3: managed interiors ----------------------------------------
     this._localOffsets.clear();
@@ -401,6 +408,35 @@ export class MosaicGrid {
 
     this._rowOffsets = parse(style.gridTemplateRows, rowGap);
     this._colOffsets = parse(style.gridTemplateColumns, colGap);
+    this._edgePadding =
+      (parseFloat(style.paddingLeft) || 0) +
+      (parseFloat(style.paddingRight) || 0);
+  }
+
+  /**
+   * Size the scrollable area to the grid, exactly.
+   *
+   * Columns have a minimum width, so a narrow pane makes the grid wider than
+   * the panel. The viewport is absolutely positioned and pinned to both edges,
+   * which clamps it to the panel and leaves that overflow unreachable. Widening
+   * the inner element to the content gives the outer node a real scrollable
+   * width -- and, just as importantly, no more than that, so there is never
+   * blank space to scroll into that holds no cells.
+   */
+  private _fitWidth(): void {
+    const content =
+      (this._colOffsets[this._colOffsets.length - 1] ?? 0) + this._edgePadding;
+    const available = this.outer.clientWidth;
+
+    if (content > available + 1) {
+      this.inner.style.width = `${content}px`;
+      this.viewport.style.right = 'auto';
+      this.viewport.style.width = `${content}px`;
+    } else {
+      this.inner.style.width = '';
+      this.viewport.style.right = '0';
+      this.viewport.style.width = '';
+    }
   }
 
   private _boxOf(placement: IPlacement): IBox {

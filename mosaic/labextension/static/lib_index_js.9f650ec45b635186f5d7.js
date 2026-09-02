@@ -53,6 +53,7 @@ class MosaicGrid {
         this._rowOffsets = [0];
         this._colOffsets = [0];
         this._boxes = new Map();
+        this._edgePadding = 0;
         this._chrome = new Map();
         /** Every group we know a box for, including ones nested inside managed groups. */
         this._nodesByKey = new Map();
@@ -88,6 +89,13 @@ class MosaicGrid {
                 this.host.requestUpdate();
             }
         });
+        // The panel can be resized without any cell changing, and stale group
+        // boxes leave absolutely positioned chrome hanging past the new width --
+        // which the outer node then lets you scroll into.
+        this._outerResizeObserver = new ResizeObserver(() => {
+            this.host.requestUpdate();
+        });
+        this._outerResizeObserver.observe(this.outer);
         this._onWheel = this._onWheel.bind(this);
         this._onDblClick = this._onDblClick.bind(this);
         this.outer.addEventListener('wheel', this._onWheel, { passive: false });
@@ -142,6 +150,32 @@ class MosaicGrid {
             }
         }
         return start < 0 ? null : [start, stop];
+    }
+    /**
+     * A cell's rectangle in viewport coordinates.
+     *
+     * Prefers the laid-out DOM box, which is exact and already accounts for cells
+     * positioned inside a managed group; falls back to the cell's grid area when
+     * it is detached (windowed out) and has no box.
+     */
+    cellRect(index) {
+        const el = this.host.cellNode(index);
+        if (el && el.isConnected && !el.dataset.mosaicHidden && el.offsetParent) {
+            return {
+                x0: el.offsetLeft,
+                y0: el.offsetTop,
+                x1: el.offsetLeft + el.offsetWidth,
+                y1: el.offsetTop + el.offsetHeight
+            };
+        }
+        const solution = this._solution;
+        const owner = solution === null || solution === void 0 ? void 0 : solution.managedOwner.get(index);
+        const placement = owner ? owner.placement : solution === null || solution === void 0 ? void 0 : solution.placements.get(index);
+        if (!placement) {
+            return null;
+        }
+        const box = this._boxOf(placement);
+        return { x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h };
     }
     /** Vertical extent of a cell in grid coordinates, or null if unplaced. */
     cellSpan(index) {
@@ -257,6 +291,12 @@ class MosaicGrid {
         }
         // -- phase 2: read back resolved geometry ------------------------------
         this._readTracks();
+        this._fitWidth();
+        if (this.viewport.style.width) {
+            // Committing a width can re-resolve the tracks; re-read so the group
+            // boxes below are measured against what is actually on screen.
+            this._readTracks();
+        }
         // -- phase 3: managed interiors ----------------------------------------
         this._localOffsets.clear();
         this._boxes.clear();
@@ -294,6 +334,34 @@ class MosaicGrid {
         };
         this._rowOffsets = parse(style.gridTemplateRows, rowGap);
         this._colOffsets = parse(style.gridTemplateColumns, colGap);
+        this._edgePadding =
+            (parseFloat(style.paddingLeft) || 0) +
+                (parseFloat(style.paddingRight) || 0);
+    }
+    /**
+     * Size the scrollable area to the grid, exactly.
+     *
+     * Columns have a minimum width, so a narrow pane makes the grid wider than
+     * the panel. The viewport is absolutely positioned and pinned to both edges,
+     * which clamps it to the panel and leaves that overflow unreachable. Widening
+     * the inner element to the content gives the outer node a real scrollable
+     * width -- and, just as importantly, no more than that, so there is never
+     * blank space to scroll into that holds no cells.
+     */
+    _fitWidth() {
+        var _a;
+        const content = ((_a = this._colOffsets[this._colOffsets.length - 1]) !== null && _a !== void 0 ? _a : 0) + this._edgePadding;
+        const available = this.outer.clientWidth;
+        if (content > available + 1) {
+            this.inner.style.width = `${content}px`;
+            this.viewport.style.right = 'auto';
+            this.viewport.style.width = `${content}px`;
+        }
+        else {
+            this.inner.style.width = '';
+            this.viewport.style.right = '0';
+            this.viewport.style.width = '';
+        }
     }
     _boxOf(placement) {
         var _a, _b, _c, _d;
@@ -878,6 +946,7 @@ class MosaicGrid {
         this.outer.removeEventListener('wheel', this._onWheel);
         this.viewport.removeEventListener('dblclick', this._onDblClick);
         this._resizeObserver.disconnect();
+        this._outerResizeObserver.disconnect();
         this._overlay.remove();
         this._chrome.clear();
     }
@@ -927,6 +996,7 @@ __webpack_require__.r(__webpack_exports__);
  * cell metadata. Nothing ever reparents a cell widget, which is what made the
  * previous tree-of-WindowedLists approach lose cells on drag.
  */
+
 
 
 
@@ -1018,6 +1088,126 @@ class MosaicNotebook {
     saveGroupState(node, state) {
         this.setGroupState(node.path, state);
     }
+    // -- navigation -----------------------------------------------------------
+    /**
+     * Move the active cell one step in a direction, spatially.
+     *
+     * Navigation is geometric rather than structural, which gives every case the
+     * user expects from one rule: in a column, up/down are the siblings above and
+     * below, while left/right cross into the neighbouring tile of the enclosing
+     * row at the nearest height; in a row those roles simply swap.
+     *
+     * @param extend Extend the selection instead of moving. The selection stays a
+     *   contiguous run in notebook order, so stepping sideways into another tile
+     *   selects everything linearly between the two cells.
+     */
+    navigate(direction, extend = false) {
+        const target = this.neighbour(this.notebook.activeCellIndex, direction);
+        if (target === null) {
+            return false;
+        }
+        this.notebook.mode = 'command';
+        if (extend) {
+            this.notebook.extendContiguousSelectionTo(target);
+        }
+        else {
+            this.notebook.deselectAll();
+            this.notebook.activeCellIndex = target;
+        }
+        return true;
+    }
+    /** Nearest cell beyond `index` in a direction, or null at the edge. */
+    neighbour(index, direction) {
+        const from = this.grid.cellRect(index);
+        if (!from) {
+            return null;
+        }
+        const candidates = [];
+        for (let i = 0; i < this.cellCount(); i++) {
+            if (i === index) {
+                continue;
+            }
+            const rect = this.grid.cellRect(i);
+            if (rect) {
+                candidates.push({ index: i, rect });
+            }
+        }
+        return (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.nearestInDirection)(from, candidates, direction);
+    }
+    // -- insertion ------------------------------------------------------------
+    /**
+     * Insert a new cell beside the active one, subdividing when the direction is
+     * across the containing group's axis. Adding to the left of a cell in a
+     * column turns that cell into a row of two; adding below a cell in a row
+     * turns it into a column of two.
+     */
+    insertBeside(direction) {
+        var _a;
+        const notebook = this.notebook;
+        if (!notebook.model) {
+            return;
+        }
+        const index = notebook.activeCellIndex;
+        const reference = notebook.widgets[index];
+        if (!reference) {
+            return;
+        }
+        const path = (_a = this.pathOf(reference.model)) !== null && _a !== void 0 ? _a : [];
+        const wantAxis = direction === 'left' || direction === 'right' ? 'row' : 'col';
+        const destination = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.subdividePath)(path, wantAxis, (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.newGroupId)());
+        if (destination !== path) {
+            // The containing group runs the wrong way, so the reference cell moves
+            // into the new subdivision alongside the cell we are about to add.
+            this.setPath(reference.model, destination);
+        }
+        const before = direction === 'left' || direction === 'up';
+        if (before) {
+            _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_0__.NotebookActions.insertAbove(notebook);
+        }
+        else {
+            _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_0__.NotebookActions.insertBelow(notebook);
+        }
+        // Claim the new cell explicitly, ahead of the inference in `rebuild`.
+        const inserted = notebook.widgets[before ? index : index + 1];
+        if (inserted) {
+            this.setPath(inserted.model, destination);
+        }
+        this.requestUpdate();
+    }
+    /**
+     * Give any cell that arrived without a path one, based on its neighbour.
+     *
+     * Cells inserted by the notebook itself -- insert above/below, paste, split --
+     * carry no mosaic metadata, and would otherwise land at the notebook root and
+     * tear their neighbour's group in half. A cell landing next to a neighbour
+     * that sits in a row subdivides it into a column, which is what stacking a
+     * new cell above or below a tile looks like.
+     */
+    _inferMissingPaths() {
+        var _a, _b;
+        const cells = this.notebook.widgets;
+        let changed = false;
+        for (let i = 0; i < cells.length; i++) {
+            if (this.pathOf(cells[i].model) !== undefined) {
+                continue;
+            }
+            const reference = (_a = cells[i - 1]) !== null && _a !== void 0 ? _a : cells[i + 1];
+            if (!reference) {
+                this.setPath(cells[i].model, []);
+                changed = true;
+                continue;
+            }
+            const referencePath = (_b = this.pathOf(reference.model)) !== null && _b !== void 0 ? _b : [];
+            // Stacking onto a cell that lives in a row means a new column.
+            const destination = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.subdividePath)(referencePath, 'col', (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.newGroupId)());
+            if (destination !== referencePath) {
+                this.setPath(reference.model, destination);
+            }
+            this.setPath(cells[i].model, destination);
+            changed = true;
+        }
+        return changed;
+    }
     // -- layout ---------------------------------------------------------------
     /** Rebuild the tree from metadata and re-apply the grid. Idempotent. */
     rebuild() {
@@ -1025,6 +1215,7 @@ class MosaicNotebook {
         if (!model || this._disposed) {
             return;
         }
+        this._inferMissingPaths();
         const cells = this.notebook.widgets;
         const paths = cells.map(cell => this.pathOf(cell.model));
         const root = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.buildTree)(paths, index => { var _a; return Number((_a = cells[index]) === null || _a === void 0 ? void 0 : _a.model.getMetadata(WEIGHT_KEY)) || 1; }, path => this.groupState(path));
@@ -1179,9 +1370,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   divergeDepth: () => (/* binding */ divergeDepth),
 /* harmony export */   findGroup: () => (/* binding */ findGroup),
 /* harmony export */   groupKey: () => (/* binding */ groupKey),
+/* harmony export */   nearestInDirection: () => (/* binding */ nearestInDirection),
 /* harmony export */   newGroupId: () => (/* binding */ newGroupId),
 /* harmony export */   rowFloors: () => (/* binding */ rowFloors),
-/* harmony export */   solve: () => (/* binding */ solve)
+/* harmony export */   solve: () => (/* binding */ solve),
+/* harmony export */   subdividePath: () => (/* binding */ subdividePath)
 /* harmony export */ });
 /**
  * Pure layout model for Jupyter Mosaic. No DOM, no JupyterLab imports.
@@ -1457,6 +1650,61 @@ function rowFloors(solution, cellHeight) {
     }
     return floors;
 }
+/** Slack, in px, when deciding whether a candidate lies past our edge. */
+const NAV_TOLERANCE = 1;
+/** Candidates within this many px of the nearest count as equally near. */
+const NAV_BAND = 4;
+/**
+ * The cell to move to when stepping one place in a direction.
+ *
+ * Navigation is geometric rather than structural, which gives every case the
+ * user expects from a single rule: inside a column, up and down are the
+ * siblings above and below, while left and right cross into the neighbouring
+ * tile of the enclosing row at the nearest height. Inside a row the roles swap,
+ * with no special-casing for either.
+ *
+ * Candidates are gathered from the nearest band past our edge and then ranked
+ * by alignment on the other axis -- that second step is what makes a sideways
+ * step land on the nearest-height neighbour rather than the topmost one.
+ */
+function nearestInDirection(from, candidates, direction) {
+    const horizontal = direction === 'left' || direction === 'right';
+    const backwards = direction === 'left' || direction === 'up';
+    const scored = [];
+    for (const { index, rect } of candidates) {
+        const gap = backwards
+            ? horizontal
+                ? from.x0 - rect.x1
+                : from.y0 - rect.y1
+            : horizontal
+                ? rect.x0 - from.x1
+                : rect.y0 - from.y1;
+        if (gap < -NAV_TOLERANCE) {
+            continue; // behind us, or merely overlapping
+        }
+        const offset = horizontal
+            ? Math.abs((rect.y0 + rect.y1) / 2 - (from.y0 + from.y1) / 2)
+            : Math.abs((rect.x0 + rect.x1) / 2 - (from.x0 + from.x1) / 2);
+        scored.push({ index, gap, offset });
+    }
+    if (scored.length === 0) {
+        return null;
+    }
+    const nearest = Math.min(...scored.map(c => c.gap));
+    const band = scored.filter(c => c.gap <= nearest + NAV_BAND);
+    band.sort((a, b) => a.offset - b.offset || a.index - b.index);
+    return band[0].index;
+}
+/**
+ * The path a new cell takes when inserted beside `refPath` along `wantAxis`.
+ *
+ * When the containing group already runs the right way the cell simply joins
+ * it; otherwise the reference cell is subdivided, and both cells move into the
+ * new group. Returns null when no subdivision is needed.
+ */
+function subdividePath(refPath, wantAxis, id) {
+    return axisAtDepth(refPath.length) === wantAxis ? refPath : [...refPath, id];
+}
 
 
 /***/ }),
@@ -1518,6 +1766,19 @@ _jupyterlab_docmanager__WEBPACK_IMPORTED_MODULE_3__.DocumentManager.prototype.op
 const MosaicLabIcon = new _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_5__.LabIcon({
     name: 'mosaic:favicon',
     svgstr: _style_icons_mosaic_icon_svg__WEBPACK_IMPORTED_MODULE_8__.toString()
+});
+/**
+ * The insert-above/below icons under new names, so that the stylesheet can turn
+ * them a quarter turn: left and right then read as the same action on the other
+ * axis. LabIcon stamps the name onto the rendered svg as `data-icon`.
+ */
+const addLeftIcon = new _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_5__.LabIcon({
+    name: 'mosaic:add-left',
+    svgstr: _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_5__.addAboveIcon.svgstr
+});
+const addRightIcon = new _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_5__.LabIcon({
+    name: 'mosaic:add-right',
+    svgstr: _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_5__.addBelowIcon.svgstr
 });
 const PLUGIN_ID = 'mosaic:plugin';
 const MOSAIC_FACTORY = 'MosaicNotebook';
@@ -1591,6 +1852,58 @@ const plugin = {
             app.docRegistry.addWidgetExtension(MOSAIC_FACTORY, ext);
         }
         void docmanager;
+        // Navigation and insertion are two-dimensional in a mosaic notebook. These
+        // are registered as separate commands rather than replacing the notebook's
+        // own, so a plain Notebook panel keeps stock behaviour; the shortcuts in
+        // schema/plugin.json use a more specific selector to win only here.
+        const active = () => {
+            const panel = tracker.currentWidget;
+            return panel ? (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_7__.mosaicOf)(panel.content) : null;
+        };
+        const isMosaic = () => active() !== null;
+        const directions = ['left', 'right', 'up', 'down'];
+        for (const direction of directions) {
+            app.commands.addCommand(`mosaic:move-cursor-${direction}`, {
+                label: `Move Cursor ${direction[0].toUpperCase()}${direction.slice(1)}`,
+                caption: `Move the active cell selection ${direction}`,
+                isEnabled: isMosaic,
+                execute: () => {
+                    var _a;
+                    (_a = active()) === null || _a === void 0 ? void 0 : _a.navigate(direction);
+                }
+            });
+            app.commands.addCommand(`mosaic:extend-selection-${direction}`, {
+                label: `Extend Selection ${direction[0].toUpperCase()}${direction.slice(1)}`,
+                caption: `Extend the selected cells ${direction}`,
+                isEnabled: isMosaic,
+                execute: () => {
+                    var _a;
+                    (_a = active()) === null || _a === void 0 ? void 0 : _a.navigate(direction, true);
+                }
+            });
+        }
+        app.commands.addCommand('mosaic:insert-cell-left', {
+            label: 'Insert Cell Left',
+            caption: 'Insert a cell to the left, subdividing if needed',
+            icon: addLeftIcon,
+            isEnabled: isMosaic,
+            isVisible: isMosaic,
+            execute: () => {
+                var _a;
+                (_a = active()) === null || _a === void 0 ? void 0 : _a.insertBeside('left');
+            }
+        });
+        app.commands.addCommand('mosaic:insert-cell-right', {
+            label: 'Insert Cell Right',
+            caption: 'Insert a cell to the right, subdividing if needed',
+            icon: addRightIcon,
+            isEnabled: isMosaic,
+            isVisible: isMosaic,
+            execute: () => {
+                var _a;
+                (_a = active()) === null || _a === void 0 ? void 0 : _a.insertBeside('right');
+            }
+        });
         app.commands.addCommand('mosaic-notebook:create-new', {
             label: args => {
                 var _a, _b;
@@ -1915,4 +2228,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.fc3fc29470f8544ef4d0.js.map
+//# sourceMappingURL=lib_index_js.9f650ec45b635186f5d7.js.map

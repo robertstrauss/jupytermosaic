@@ -124,7 +124,7 @@ __webpack_require__.d(exports, {
 /******/ 		// This function allow to reference async chunks
 /******/ 		__webpack_require__.u = (chunkId) => {
 /******/ 			// return url for filenames based on template
-/******/ 			return "" + chunkId + "." + {"lib_index_js":"fc3fc29470f8544ef4d0","style_index_js":"b06829acc104b919a6fd"}[chunkId] + ".js";
+/******/ 			return "" + chunkId + "." + {"lib_index_js":"9f650ec45b635186f5d7","style_index_js":"fc0d6d673c14fb96d9f4"}[chunkId] + ".js";
 /******/ 		};
 /******/ 	})();
 /******/ 	
@@ -242,7 +242,7 @@ __webpack_require__.d(exports, {
 /******/ 			var promises = [];
 /******/ 			switch(name) {
 /******/ 				case "default": {
-/******/ 					register("mosaic", "0.1.0", () => (__webpack_require__.e("lib_index_js").then(() => (() => (__webpack_require__(/*! ./lib/index.js */ "./lib/index.js"))))));
+/******/ 					register("mosaic", "0.2.0", () => (__webpack_require__.e("lib_index_js").then(() => (() => (__webpack_require__(/*! ./lib/index.js */ "./lib/index.js"))))));
 /******/ 				}
 /******/ 				break;
 /******/ 			}
@@ -399,14 +399,14 @@ __webpack_require__.d(exports, {
 /******/ 		});
 /******/ 		var installedModules = {};
 /******/ 		var moduleToHandlerMapping = {
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/application": () => (loadSingletonVersion("default", "@jupyterlab/application", false, [1,4,0,0])),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/codeeditor": () => (loadSingletonVersion("default", "@jupyterlab/codeeditor", false, [1,4,0,0])),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/notebook": () => (loadSingletonVersion("default", "@jupyterlab/notebook", false, [1,4,0,0])),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/docmanager": () => (loadSingletonVersion("default", "@jupyterlab/docmanager", false, [1,4,0,0])),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/launcher": () => (loadSingletonVersion("default", "@jupyterlab/launcher", false, [1,4,0,0])),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/ui-components": () => (loadSingletonVersion("default", "@jupyterlab/ui-components", false, [1,4,0,0])),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/settingregistry": () => (loadSingletonVersion("default", "@jupyterlab/settingregistry", false, [1,4,0,0])),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/cells": () => (loadVersion("default", "@jupyterlab/cells", false, [1,4,0,0])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/application": () => (loadSingletonVersion("default", "@jupyterlab/application", false, [1,4,4,10])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/codeeditor": () => (loadSingletonVersion("default", "@jupyterlab/codeeditor", false, [1,4,4,10])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/notebook": () => (loadSingletonVersion("default", "@jupyterlab/notebook", false, [1,4,4,10])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/docmanager": () => (loadSingletonVersion("default", "@jupyterlab/docmanager", false, [1,4,4,10])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/launcher": () => (loadSingletonVersion("default", "@jupyterlab/launcher", false, [1,4,4,10])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/ui-components": () => (loadSingletonVersion("default", "@jupyterlab/ui-components", false, [1,4,4,10])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/settingregistry": () => (loadSingletonVersion("default", "@jupyterlab/settingregistry", false, [1,4,4,10])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/cells": () => (loadVersion("default", "@jupyterlab/cells", false, [1,4,4,10])),
 /******/ 			"webpack/sharing/consume/default/@lumino/algorithm": () => (loadSingletonVersion("default", "@lumino/algorithm", false, [1,2,0,0]))
 /******/ 		};
 /******/ 		// no consumes in initial chunks
@@ -561,4 +561,4 @@ __webpack_require__.d(exports, {
 /******/ 	
 /******/ })()
 ;
-//# sourceMappingURL=remoteEntry.82fe2b8573f53328bcab.js.map
+//# sourceMappingURL=remoteEntry.c5037f433e26bf528966.js.map
