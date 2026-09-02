@@ -20,6 +20,13 @@ const noState = (): IGroupState => ({});
 /** Content-track weights, ignoring any gutter tracks. */
 const weightsOf = (s: ISolution) =>
   s.colTracks.filter(t => !t.gutter).map(t => t.weight);
+
+const contentRows = (s: ISolution) =>
+  s.rowTracks.filter(t => !t.gutter).length;
+
+/** Row floors for the content tracks only, in order. */
+const contentFloors = (s: ISolution, height: (i: number) => number) =>
+  rowFloors(s, height).filter((_, i) => !s.rowTracks[i].gutter);
 const unitWeight = () => 1;
 
 const tree = (
@@ -90,14 +97,14 @@ describe('solve', () => {
   it('lays a row out across columns of a single band', () => {
     const s = solve(tree([['a'], ['a']]));
     expect(weightsOf(s)).toHaveLength(2);
-    expect(s.rowMinPx).toHaveLength(1);
-    expect(s.placements.get(0)).toEqual({
-      rowStart: 1,
-      rowEnd: 2,
-      colStart: 1,
-      colEnd: 2
-    });
-    expect(s.placements.get(1)!.colStart).toBe(2);
+    expect(contentRows(s)).toBe(1);
+
+    const first = s.placements.get(0)!;
+    const second = s.placements.get(1)!;
+    expect(second.rowStart).toBe(first.rowStart);
+    expect(second.rowEnd).toBe(first.rowEnd);
+    // Two cells, so no gutter between them: they share a line.
+    expect(second.colStart).toBe(first.colEnd);
   });
 
   it('splits tracks at every cut rather than at a common multiple', () => {
@@ -112,9 +119,9 @@ describe('solve', () => {
     expect(s.placements.get(3)).toMatchObject({ colStart: 2, colEnd: 4 });
     expect(s.placements.get(4)).toMatchObject({ colStart: 4, colEnd: 5 });
 
-    // The two rows still occupy separate bands, now with a gutter between them
-    // because both children of the root are groups.
-    expect(s.placements.get(0)!.rowStart).toBe(1);
+    // The two rows occupy separate bands, with a gutter between them because
+    // both children of the root are groups.
+    expect(contentRows(s)).toBe(2);
     expect(s.placements.get(2)!.rowStart).toBeGreaterThan(
       s.placements.get(0)!.rowEnd
     );
@@ -144,7 +151,7 @@ describe('solve', () => {
       path.join('/') === 'a/b' ? { mode: 'scroll', size: 150 } : {};
     const s = solve(tree([['a', 'b'], ['a', 'b'], ['a']], state));
 
-    expect(s.rowMinPx).toHaveLength(1);
+    expect(contentRows(s)).toBe(1);
     expect(s.managed).toHaveLength(1);
     expect(s.managed[0].node.path).toEqual(['a', 'b']);
     expect(s.managed[0].cells).toEqual([0, 1]);
@@ -162,7 +169,7 @@ describe('solve', () => {
         p.join('/') === 'a/b' ? { mode: 'scroll', size: 240 } : {}
       )
     );
-    expect(s.rowMinPx[0]).toBeCloseTo(240, 6);
+    expect(Math.max(...s.rowMinPx)).toBeCloseTo(240, 6);
   });
 
   it('spreads a scrolling group\'s size across the bands it spans', () => {
@@ -181,12 +188,13 @@ describe('solve', () => {
   it('reports a placement for every group so chrome can be drawn', () => {
     const s = solve(tree([['a'], ['a']]));
     expect(s.groupPlacements.has(groupKey([]))).toBe(true);
-    expect(s.groupPlacements.get(groupKey(['a']))!.placement).toEqual({
-      rowStart: 1,
-      rowEnd: 2,
-      colStart: 1,
-      colEnd: 3
-    });
+    const placement = s.groupPlacements.get(groupKey(['a']))!.placement;
+    // The row spans both columns, and sits between the notebook's edge gutters.
+    expect(placement.colStart).toBe(1);
+    expect(placement.colEnd).toBe(3);
+    expect(placement.rowEnd - placement.rowStart).toBe(1);
+    expect(s.rowTracks[placement.rowStart - 2].gutter).toBe(true);
+    expect(s.rowTracks[placement.rowEnd - 1].gutter).toBe(true);
   });
 
   it('nests managed groups innermost-owner-first', () => {
@@ -229,7 +237,7 @@ describe('rowFloors', () => {
 
   it('takes the tallest cell in a shared band', () => {
     const s = solve(tree([['a'], ['a']]));
-    expect(rowFloors(s, i => (i === 0 ? 40 : 130))).toEqual([130]);
+    expect(contentFloors(s, i => (i === 0 ? 40 : 130))).toEqual([130]);
   });
 
   it('spreads a cell that spans several bands across them', () => {
@@ -238,7 +246,7 @@ describe('rowFloors', () => {
     const spanning = s.placements.get(2)!;
     expect(spanning.rowEnd - spanning.rowStart).toBe(2);
 
-    const floors = rowFloors(s, i => (i === 2 ? 300 : 40));
+    const floors = contentFloors(s, i => (i === 2 ? 300 : 40));
     expect(floors).toHaveLength(2);
     expect(floors.reduce((a, b) => a + b, 0)).toBe(300);
   });
@@ -250,7 +258,7 @@ describe('rowFloors', () => {
       )
     );
     // A tall cell inside the scrolling group must not stretch the outer band.
-    expect(rowFloors(s, () => 900)).toEqual([150]);
+    expect(contentFloors(s, () => 900)).toEqual([150]);
   });
 });
 
@@ -399,37 +407,61 @@ describe('flexFactors', () => {
 });
 
 describe('gutters', () => {
-  it('adds none when siblings are plain cells', () => {
-    expect(solve(tree([[], [], []])).gutters).toHaveLength(0);
-    expect(solve(tree([['a'], ['a']])).gutters).toHaveLength(0);
+  const gutterCount = (paths: (string[] | undefined)[]) =>
+    solve(tree(paths)).gutters.length;
+
+  it('adds none to a notebook that is only cells', () => {
+    // Every seam touches a cell, and dropping on that cell reaches it.
+    expect(gutterCount([[], [], []])).toBe(0);
+    // A lone row still gets bracketed, so a new row can go above or below it.
+    expect(gutterCount([['a'], ['a']])).toBe(2);
   });
 
-  it('adds none where a cell sits beside a group', () => {
-    // Dropping on the cell already reaches the seam, so no gutter is needed.
-    const s = solve(tree([[], ['a'], ['a']]));
-    expect(s.gutters).toHaveLength(0);
+  it('adds none where a cell sits on the seam', () => {
+    // [cell, cell, group]: only the trailing edge lacks a cell to drop on.
+    const s = solve(tree([[], [], ['a'], ['a']]));
+    expect(s.gutters).toHaveLength(1);
+    // Only the trailing edge: it is the one seam with no cell on it.
+    expect(s.gutters[0].cellAfter).toBe(-1);
+    expect(s.gutters[0].cellBefore).toBe(3);
   });
 
   it('adds one between two adjacent groups', () => {
     // Two rows stacked in the root column: nothing lies on the seam between
-    // them, so there is otherwise no way to drop a cell in between.
+    // them, so there is otherwise no way to drop a cell in between. The
+    // notebook's own top and bottom are seams too, with a single neighbour.
     const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
-    expect(s.gutters).toHaveLength(1);
-    const [gutter] = s.gutters;
-    expect(gutter.path).toEqual([]);
-    expect(gutter.axis).toBe('col');
-    expect(gutter.index).toBe(1);
-    // A drop lands immediately before the first cell of the following group.
-    expect(gutter.cellAfter).toBe(2);
+    const between = s.gutters.find(g => g.index === 1)!;
+    expect(between.path).toEqual([]);
+    expect(between.axis).toBe('col');
+    // A drop lands between the last cell above and the first cell below.
+    expect(between.cellBefore).toBe(1);
+    expect(between.cellAfter).toBe(2);
   });
 
-  it('gives the gutter a track of its own', () => {
-    const plain = solve(tree([['a'], ['a'], [], []]));
+  it('brackets the notebook so a row can go above or below everything', () => {
+    const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
+
+    const leading = s.gutters.find(g => g.index === 0)!;
+    expect(leading.cellBefore).toBe(-1);
+    expect(leading.cellAfter).toBe(0);
+    // Nothing precedes it, so its track is the very first.
+    expect(leading.line).toBe(1);
+
+    const trailing = s.gutters.find(g => g.index === 2)!;
+    expect(trailing.cellAfter).toBe(-1);
+    expect(trailing.cellBefore).toBe(3);
+    expect(s.rowTracks[trailing.line - 1].gutter).toBe(true);
+    expect(trailing.line).toBe(s.rowTracks.length);
+  });
+
+  it('gives every gutter a track of its own', () => {
+    const plain = solve(tree([[], [], []]));
     const gutted = solve(tree([['a'], ['a'], ['b'], ['b']]));
     expect(plain.rowTracks.filter(t => t.gutter)).toHaveLength(0);
-    expect(gutted.rowTracks.filter(t => t.gutter)).toHaveLength(1);
-    // Same two bands of content either way, plus the gutter track.
-    expect(gutted.rowTracks).toHaveLength(3);
+    // Two bands of content, bracketed and separated.
+    expect(gutted.rowTracks.filter(t => t.gutter)).toHaveLength(3);
+    expect(gutted.rowTracks).toHaveLength(5);
   });
 
   it('separates the two sides across the gutter track', () => {
@@ -442,21 +474,21 @@ describe('gutters', () => {
     expect(s.rowTracks[above.rowEnd - 1].gutter).toBe(true);
   });
 
-  it('runs a vertical gutter between two columns in a row', () => {
+  it('runs vertical gutters between the columns of a row', () => {
     // A row whose two children are both columns.
     const s = solve(tree([['r', 'a'], ['r', 'a'], ['r', 'b'], ['r', 'b']]));
     const vertical = s.gutters.filter(g => g.axis === 'row');
-    expect(vertical).toHaveLength(1);
-    expect(vertical[0].path).toEqual(['r']);
-    expect(s.colTracks.filter(t => t.gutter)).toHaveLength(1);
+    // One between the columns, plus the row's own two ends.
+    expect(vertical).toHaveLength(3);
+    expect(vertical.every(g => g.path.join('/') === 'r')).toBe(true);
+    expect(s.colTracks.filter(t => t.gutter)).toHaveLength(3);
   });
 
-  it('keeps track floors off the gutter', () => {
+  it('keeps track floors off the gutters', () => {
     const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
     const floors = rowFloors(s, () => 100);
-    const gutterTrack = s.rowTracks.findIndex(t => t.gutter);
-    expect(floors[gutterTrack]).toBe(0);
-    // The content bands still carry the full cell height each.
-    expect(floors.filter((_, i) => i !== gutterTrack)).toEqual([100, 100]);
+    for (let i = 0; i < s.rowTracks.length; i++) {
+      expect(floors[i]).toBe(s.rowTracks[i].gutter ? 0 : 100);
+    }
   });
 });

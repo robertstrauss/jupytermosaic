@@ -1643,6 +1643,28 @@ function solve(root) {
             managedNodes.push({ node, rect });
             return;
         }
+        // The outer edges are seams too, with a single neighbour. A leading or
+        // trailing cell needs none: its own top or bottom edge is the drop target.
+        const first = node.children[0];
+        const last = node.children[node.children.length - 1];
+        if ((first === null || first === void 0 ? void 0 : first.kind) === 'group') {
+            marks.push({
+                node,
+                coord: node.axis === 'col' ? y0 : x0,
+                from: node.axis === 'col' ? x0 : y0,
+                to: node.axis === 'col' ? x1 : y1,
+                index: 0
+            });
+        }
+        if ((last === null || last === void 0 ? void 0 : last.kind) === 'group') {
+            marks.push({
+                node,
+                coord: node.axis === 'col' ? y1 : x1,
+                from: node.axis === 'col' ? x0 : y0,
+                to: node.axis === 'col' ? x1 : y1,
+                index: node.children.length
+            });
+        }
         const total = totalWeight(node.children);
         let offset = 0;
         for (let i = 0; i < node.children.length; i++) {
@@ -1747,7 +1769,9 @@ function solve(root) {
             continue;
         }
         const after = mark.node.children[mark.index];
-        const cells = after ? collectCells(after) : [];
+        const before = mark.node.children[mark.index - 1];
+        const afterCells = after ? collectCells(after) : [];
+        const beforeCells = before ? collectCells(before) : [];
         gutters.push({
             path: mark.node.path,
             axis: mark.node.axis,
@@ -1755,7 +1779,8 @@ function solve(root) {
             start: across.start[fromAt],
             end: across.end[toAt],
             index: mark.index,
-            cellAfter: cells.length > 0 ? cells[0] : -1
+            cellAfter: afterCells.length > 0 ? afterCells[0] : -1,
+            cellBefore: beforeCells.length > 0 ? beforeCells[beforeCells.length - 1] : -1
         });
     }
     return {
@@ -1782,7 +1807,7 @@ function buildAxis(lines, gutters) {
     const end = new Array(lines.length);
     let line = 1;
     for (let i = 0; i < lines.length; i++) {
-        if (i > 0 && i < lines.length - 1 && gutters.has(i)) {
+        if (gutters.has(i)) {
             end[i] = line;
             tracks.push({ gutter: true, weight: 0 });
             line += 1;
@@ -2289,12 +2314,18 @@ function mosaicDrop(notebook, event) {
     let toIndex;
     let after;
     if (hit.kind === 'gutter') {
-        // Land between the two groups: the cells become children of the group that
-        // holds them both, at the seam.
+        // Land on the seam: the cells become children of the group that owns it.
+        // A trailing gutter has nothing after it, so anchor to the cell before.
         destPath = hit.gutter.path;
-        toIndex = hit.gutter.cellAfter;
-        after = false;
-        if (toIndex < 0) {
+        if (hit.gutter.cellAfter >= 0) {
+            toIndex = hit.gutter.cellAfter;
+            after = false;
+        }
+        else if (hit.gutter.cellBefore >= 0) {
+            toIndex = hit.gutter.cellBefore;
+            after = true;
+        }
+        else {
             return;
         }
     }
@@ -2523,4 +2554,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.00830a722017a16f3299.js.map
+//# sourceMappingURL=lib_index_js.271194411668e57659cc.js.map

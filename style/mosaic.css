@@ -15,7 +15,7 @@
 
   /* Width of the drop gutter between two adjacent groups. */
   --mosaic-gutter: 10px;
-  --mosaic-gutter-rule: rgb(0 0 0 / 50%);
+  --mosaic-gutter-rule: rgb(0 0 0 / 20%);
 
   /* Sampled once by WindowedList on attach and folded into the document
      height, so this must not vary with the layout-style setting. */
@@ -137,11 +137,11 @@ svg[data-icon='mosaic:add-right'] {
 
 .mosaic-gutter[data-mosaic-axis='col']::after {
   width: 100%;
-  height: 2px;
+  height: 1px;
 }
 
 .mosaic-gutter[data-mosaic-axis='row']::after {
-  width: 2px;
+  width: 1px;
   height: 100%;
 }
 
@@ -159,7 +159,7 @@ svg[data-icon='mosaic:add-right'] {
 
 /* The rule reads against either theme: dark on light, light on dark. */
 :where(body[data-jp-theme-light='false']) .mosaic-Notebook {
-  --mosaic-gutter-rule: rgb(255 255 255 / 50%);
+  --mosaic-gutter-rule: rgb(255 255 255 / 20%);
 }
 
 /* -- simulated scrollbars ------------------------------------------------- */

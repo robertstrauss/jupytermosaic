@@ -103,8 +103,10 @@ export interface IGutter {
   end: number;
   /** Index, among the group's children, of the child after the gutter. */
   index: number;
-  /** First cell of the child after the gutter, for placing a drop. */
+  /** First cell of the child after the gutter, or -1 at a trailing edge. */
   cellAfter: number;
+  /** Last cell of the child before the gutter, or -1 at a leading edge. */
+  cellBefore: number;
 }
 
 export interface ISolution {
@@ -267,6 +269,29 @@ export function solve(root: IGroupNode): ISolution {
       return;
     }
 
+    // The outer edges are seams too, with a single neighbour. A leading or
+    // trailing cell needs none: its own top or bottom edge is the drop target.
+    const first = node.children[0];
+    const last = node.children[node.children.length - 1];
+    if (first?.kind === 'group') {
+      marks.push({
+        node,
+        coord: node.axis === 'col' ? y0 : x0,
+        from: node.axis === 'col' ? x0 : y0,
+        to: node.axis === 'col' ? x1 : y1,
+        index: 0
+      });
+    }
+    if (last?.kind === 'group') {
+      marks.push({
+        node,
+        coord: node.axis === 'col' ? y1 : x1,
+        from: node.axis === 'col' ? x0 : y0,
+        to: node.axis === 'col' ? x1 : y1,
+        index: node.children.length
+      });
+    }
+
     const total = totalWeight(node.children);
     let offset = 0;
     for (let i = 0; i < node.children.length; i++) {
@@ -393,7 +418,9 @@ export function solve(root: IGroupNode): ISolution {
       continue;
     }
     const after = mark.node.children[mark.index];
-    const cells = after ? collectCells(after) : [];
+    const before = mark.node.children[mark.index - 1];
+    const afterCells = after ? collectCells(after) : [];
+    const beforeCells = before ? collectCells(before) : [];
     gutters.push({
       path: mark.node.path,
       axis: mark.node.axis,
@@ -401,7 +428,9 @@ export function solve(root: IGroupNode): ISolution {
       start: across.start[fromAt],
       end: across.end[toAt],
       index: mark.index,
-      cellAfter: cells.length > 0 ? cells[0] : -1
+      cellAfter: afterCells.length > 0 ? afterCells[0] : -1,
+      cellBefore:
+        beforeCells.length > 0 ? beforeCells[beforeCells.length - 1] : -1
     });
   }
 
@@ -434,7 +463,7 @@ function buildAxis(
   let line = 1;
 
   for (let i = 0; i < lines.length; i++) {
-    if (i > 0 && i < lines.length - 1 && gutters.has(i)) {
+    if (gutters.has(i)) {
       end[i] = line;
       tracks.push({ gutter: true, weight: 0 });
       line += 1;

@@ -95,12 +95,16 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event): void {
   let after: boolean;
 
   if (hit.kind === 'gutter') {
-    // Land between the two groups: the cells become children of the group that
-    // holds them both, at the seam.
+    // Land on the seam: the cells become children of the group that owns it.
+    // A trailing gutter has nothing after it, so anchor to the cell before.
     destPath = hit.gutter.path;
-    toIndex = hit.gutter.cellAfter;
-    after = false;
-    if (toIndex < 0) {
+    if (hit.gutter.cellAfter >= 0) {
+      toIndex = hit.gutter.cellAfter;
+      after = false;
+    } else if (hit.gutter.cellBefore >= 0) {
+      toIndex = hit.gutter.cellBefore;
+      after = true;
+    } else {
       return;
     }
   } else {
