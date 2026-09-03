@@ -114,6 +114,14 @@ svg[data-icon='mosaic:add-right'] {
   transform: rotate(-90deg);
 }
 
+/* The stock footer is indented to line up with a linear notebook's cell
+   content, past the prompt and collapser. Cells here start at the grid's edge,
+   so it needs to span the same width they do. */
+.mosaic-Notebook .jp-Notebook-footer {
+  margin-left: var(--mosaic-edge-padding);
+  width: calc(100% - 2 * var(--mosaic-edge-padding));
+}
+
 /* -- gutters between adjacent groups -------------------------------------- */
 
 /* A seam between two groups has no cell on it to drop onto, so it gets a track

@@ -143,7 +143,7 @@ export class MosaicGrid {
   private _rowOffsets: number[] = [0];
   private _colOffsets: number[] = [0];
   private _boxes = new Map<string, IBox>();
-  private _edgePadding = 0;
+  private _padRight = 0;
   private _chrome = new Map<string, HTMLElement>();
   /** Every group we know a box for, including ones nested inside managed groups. */
   private _nodesByKey = new Map<string, IGroupNode>();
@@ -164,9 +164,13 @@ export class MosaicGrid {
     return this._rowOffsets;
   }
 
-  /** Total laid-out height of the grid in px. */
+  /**
+   * Height of the grid's tracks. Excludes the viewport padding, which
+   * `WindowedList._updateTotalSize` adds back on its own.
+   */
   get totalHeight(): number {
-    return this._rowOffsets[this._rowOffsets.length - 1] ?? 0;
+    const last = this._rowOffsets[this._rowOffsets.length - 1] ?? 0;
+    return Math.max(0, last - (this._rowOffsets[0] ?? 0));
   }
 
   get solution(): ISolution | null {
@@ -189,7 +193,10 @@ export class MosaicGrid {
     let stop = -1;
     for (const [index, placement] of solution.placements) {
       const y0 = this._rowOffsets[placement.rowStart - 1] ?? 0;
-      const y1 = this._rowOffsets[placement.rowEnd - 1] ?? this.totalHeight;
+      const y1 =
+        this._rowOffsets[placement.rowEnd - 1] ??
+        this._rowOffsets[this._rowOffsets.length - 1] ??
+        0;
       if (y1 >= top && y0 <= bottom) {
         if (start < 0 || index < start) {
           start = index;
@@ -262,7 +269,9 @@ export class MosaicGrid {
     }
     return [
       this._rowOffsets[placement.rowStart - 1] ?? 0,
-      this._rowOffsets[placement.rowEnd - 1] ?? this.totalHeight
+      this._rowOffsets[placement.rowEnd - 1] ??
+        this._rowOffsets[this._rowOffsets.length - 1] ??
+        0
     ];
   }
 
@@ -430,29 +439,36 @@ export class MosaicGrid {
     this._updateChrome(solution);
   }
 
-  /** Parse the browser's resolved track sizes into cumulative line offsets. */
+  /**
+   * Parse the browser's resolved track sizes into cumulative line offsets.
+   *
+   * Offsets start at the viewport's padding, not at zero: tracks begin at the
+   * content-box origin, while the overlay plane these coordinates drive is
+   * positioned against the border box. Starting at zero drew every rule and
+   * frame one padding too high and too far left.
+   */
   private _readTracks(): void {
     const style = getComputedStyle(this.viewport);
     const rowGap = parseFloat(style.rowGap) || 0;
     const colGap = parseFloat(style.columnGap) || 0;
+    const padTop = parseFloat(style.paddingTop) || 0;
+    const padLeft = parseFloat(style.paddingLeft) || 0;
+    this._padRight = parseFloat(style.paddingRight) || 0;
 
-    const parse = (value: string, gap: number): number[] => {
+    const parse = (value: string, gap: number, start: number): number[] => {
       const sizes = value
         .split(' ')
         .map(v => parseFloat(v))
         .filter(v => Number.isFinite(v));
-      const offsets = [0];
+      const offsets = [start];
       for (let i = 0; i < sizes.length; i++) {
         offsets.push(offsets[i] + sizes[i] + (i + 1 < sizes.length ? gap : 0));
       }
       return offsets;
     };
 
-    this._rowOffsets = parse(style.gridTemplateRows, rowGap);
-    this._colOffsets = parse(style.gridTemplateColumns, colGap);
-    this._edgePadding =
-      (parseFloat(style.paddingLeft) || 0) +
-      (parseFloat(style.paddingRight) || 0);
+    this._rowOffsets = parse(style.gridTemplateRows, rowGap, padTop);
+    this._colOffsets = parse(style.gridTemplateColumns, colGap, padLeft);
   }
 
   /**
@@ -477,8 +493,10 @@ export class MosaicGrid {
     this._release();
     this._readTracks();
 
-    const tracks = this._colOffsets[this._colOffsets.length - 1] ?? 0;
-    const content = tracks + this._edgePadding;
+    // Offsets already carry the leading padding, so only the trailing one is
+    // still missing from the border-box width the scroller needs.
+    const content =
+      (this._colOffsets[this._colOffsets.length - 1] ?? 0) + this._padRight;
     if (content > this.outer.clientWidth + 1) {
       this.inner.style.width = `${content}px`;
       this.viewport.style.right = 'auto';

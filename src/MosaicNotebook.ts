@@ -24,6 +24,8 @@ import {
   ISolution,
   Direction,
   buildTree,
+  cellPaths,
+  collapse,
   collectCells,
   groupKey,
   nearestInDirection,
@@ -254,6 +256,29 @@ export class MosaicNotebook implements IGridHost {
    * that sits in a row subdivides it into a column, which is what stacking a
    * new cell above or below a tile looks like.
    */
+  /**
+   * Persist repaired paths, so a corrupted notebook is fixed on disk and not
+   * merely on screen. Writing nothing when nothing moved keeps a clean notebook
+   * clean -- this runs on every rebuild, including the first after loading.
+   */
+  private _writeBackPaths(repaired: Map<number, string[]>): boolean {
+    const cells = this.notebook.widgets;
+    let changed = false;
+
+    for (const [index, path] of repaired) {
+      const cell = cells[index];
+      if (!cell) {
+        continue;
+      }
+      const current = this.pathOf(cell.model);
+      if (!current || current.join('/') !== path.join('/')) {
+        this.setPath(cell.model, path);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   private _inferMissingPaths(): boolean {
     const cells = this.notebook.widgets;
     let changed = false;
@@ -291,12 +316,29 @@ export class MosaicNotebook implements IGridHost {
     this._inferMissingPaths();
 
     const cells = this.notebook.widgets;
-    const paths = cells.map(cell => this.pathOf(cell.model));
-    const root = buildTree(
-      paths,
-      index => Number(cells[index]?.model.getMetadata(WEIGHT_KEY)) || 1,
-      path => this.groupState(path)
+    const weight = (index: number) =>
+      Number(cells[index]?.model.getMetadata(WEIGHT_KEY)) || 1;
+    const state = (path: string[]) => this.groupState(path);
+
+    // Repair the layout before drawing it. Redundant groups come from ordinary
+    // editing as well as from metadata that has drifted, and left alone they
+    // show up as tiles wrapped around a plain run of cells.
+    let root = buildTree(
+      cells.map(c => this.pathOf(c.model)),
+      weight,
+      state
     );
+    collapse(root);
+    if (this._writeBackPaths(cellPaths(root))) {
+      // Paths moved, so group state now hangs off different keys: rebuild from
+      // the repaired metadata rather than patching the tree's own paths.
+      root = buildTree(
+        cells.map(c => this.pathOf(c.model)),
+        weight,
+        state
+      );
+    }
+
     this._solution = solve(root);
     this.grid.update(this._solution);
     this.notebook.update();

@@ -55,7 +55,7 @@ class MosaicGrid {
         this._rowOffsets = [0];
         this._colOffsets = [0];
         this._boxes = new Map();
-        this._edgePadding = 0;
+        this._padRight = 0;
         this._chrome = new Map();
         /** Every group we know a box for, including ones nested inside managed groups. */
         this._nodesByKey = new Map();
@@ -117,10 +117,14 @@ class MosaicGrid {
     get rowOffsets() {
         return this._rowOffsets;
     }
-    /** Total laid-out height of the grid in px. */
+    /**
+     * Height of the grid's tracks. Excludes the viewport padding, which
+     * `WindowedList._updateTotalSize` adds back on its own.
+     */
     get totalHeight() {
-        var _a;
-        return (_a = this._rowOffsets[this._rowOffsets.length - 1]) !== null && _a !== void 0 ? _a : 0;
+        var _a, _b;
+        const last = (_a = this._rowOffsets[this._rowOffsets.length - 1]) !== null && _a !== void 0 ? _a : 0;
+        return Math.max(0, last - ((_b = this._rowOffsets[0]) !== null && _b !== void 0 ? _b : 0));
     }
     get solution() {
         return this._solution;
@@ -133,7 +137,7 @@ class MosaicGrid {
      * return its hull. Overshoot is bounded by the height of the tallest band.
      */
     hullForBand(top, bottom) {
-        var _a, _b;
+        var _a, _b, _c;
         const solution = this._solution;
         if (!solution || this._rowOffsets.length < 2) {
             return null;
@@ -142,7 +146,7 @@ class MosaicGrid {
         let stop = -1;
         for (const [index, placement] of solution.placements) {
             const y0 = (_a = this._rowOffsets[placement.rowStart - 1]) !== null && _a !== void 0 ? _a : 0;
-            const y1 = (_b = this._rowOffsets[placement.rowEnd - 1]) !== null && _b !== void 0 ? _b : this.totalHeight;
+            const y1 = (_c = (_b = this._rowOffsets[placement.rowEnd - 1]) !== null && _b !== void 0 ? _b : this._rowOffsets[this._rowOffsets.length - 1]) !== null && _c !== void 0 ? _c : 0;
             if (y1 >= top && y0 <= bottom) {
                 if (start < 0 || index < start) {
                     start = index;
@@ -206,14 +210,14 @@ class MosaicGrid {
     }
     /** Vertical extent of a cell in grid coordinates, or null if unplaced. */
     cellSpan(index) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         const placement = (_a = this._solution) === null || _a === void 0 ? void 0 : _a.placements.get(index);
         if (!placement) {
             return null;
         }
         return [
             (_b = this._rowOffsets[placement.rowStart - 1]) !== null && _b !== void 0 ? _b : 0,
-            (_c = this._rowOffsets[placement.rowEnd - 1]) !== null && _c !== void 0 ? _c : this.totalHeight
+            (_d = (_c = this._rowOffsets[placement.rowEnd - 1]) !== null && _c !== void 0 ? _c : this._rowOffsets[this._rowOffsets.length - 1]) !== null && _d !== void 0 ? _d : 0
         ];
     }
     /**
@@ -347,27 +351,34 @@ class MosaicGrid {
         this._updateGutters(solution);
         this._updateChrome(solution);
     }
-    /** Parse the browser's resolved track sizes into cumulative line offsets. */
+    /**
+     * Parse the browser's resolved track sizes into cumulative line offsets.
+     *
+     * Offsets start at the viewport's padding, not at zero: tracks begin at the
+     * content-box origin, while the overlay plane these coordinates drive is
+     * positioned against the border box. Starting at zero drew every rule and
+     * frame one padding too high and too far left.
+     */
     _readTracks() {
         const style = getComputedStyle(this.viewport);
         const rowGap = parseFloat(style.rowGap) || 0;
         const colGap = parseFloat(style.columnGap) || 0;
-        const parse = (value, gap) => {
+        const padTop = parseFloat(style.paddingTop) || 0;
+        const padLeft = parseFloat(style.paddingLeft) || 0;
+        this._padRight = parseFloat(style.paddingRight) || 0;
+        const parse = (value, gap, start) => {
             const sizes = value
                 .split(' ')
                 .map(v => parseFloat(v))
                 .filter(v => Number.isFinite(v));
-            const offsets = [0];
+            const offsets = [start];
             for (let i = 0; i < sizes.length; i++) {
                 offsets.push(offsets[i] + sizes[i] + (i + 1 < sizes.length ? gap : 0));
             }
             return offsets;
         };
-        this._rowOffsets = parse(style.gridTemplateRows, rowGap);
-        this._colOffsets = parse(style.gridTemplateColumns, colGap);
-        this._edgePadding =
-            (parseFloat(style.paddingLeft) || 0) +
-                (parseFloat(style.paddingRight) || 0);
+        this._rowOffsets = parse(style.gridTemplateRows, rowGap, padTop);
+        this._colOffsets = parse(style.gridTemplateColumns, colGap, padLeft);
     }
     /**
      * Size the scrollable area to the grid, exactly.
@@ -391,8 +402,9 @@ class MosaicGrid {
         var _a;
         this._release();
         this._readTracks();
-        const tracks = (_a = this._colOffsets[this._colOffsets.length - 1]) !== null && _a !== void 0 ? _a : 0;
-        const content = tracks + this._edgePadding;
+        // Offsets already carry the leading padding, so only the trailing one is
+        // still missing from the border-box width the scroller needs.
+        const content = ((_a = this._colOffsets[this._colOffsets.length - 1]) !== null && _a !== void 0 ? _a : 0) + this._padRight;
         if (content > this.outer.clientWidth + 1) {
             this.inner.style.width = `${content}px`;
             this.viewport.style.right = 'auto';
@@ -1301,6 +1313,27 @@ class MosaicNotebook {
      * that sits in a row subdivides it into a column, which is what stacking a
      * new cell above or below a tile looks like.
      */
+    /**
+     * Persist repaired paths, so a corrupted notebook is fixed on disk and not
+     * merely on screen. Writing nothing when nothing moved keeps a clean notebook
+     * clean -- this runs on every rebuild, including the first after loading.
+     */
+    _writeBackPaths(repaired) {
+        const cells = this.notebook.widgets;
+        let changed = false;
+        for (const [index, path] of repaired) {
+            const cell = cells[index];
+            if (!cell) {
+                continue;
+            }
+            const current = this.pathOf(cell.model);
+            if (!current || current.join('/') !== path.join('/')) {
+                this.setPath(cell.model, path);
+                changed = true;
+            }
+        }
+        return changed;
+    }
     _inferMissingPaths() {
         var _a, _b;
         const cells = this.notebook.widgets;
@@ -1335,8 +1368,18 @@ class MosaicNotebook {
         }
         this._inferMissingPaths();
         const cells = this.notebook.widgets;
-        const paths = cells.map(cell => this.pathOf(cell.model));
-        const root = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.buildTree)(paths, index => { var _a; return Number((_a = cells[index]) === null || _a === void 0 ? void 0 : _a.model.getMetadata(WEIGHT_KEY)) || 1; }, path => this.groupState(path));
+        const weight = (index) => { var _a; return Number((_a = cells[index]) === null || _a === void 0 ? void 0 : _a.model.getMetadata(WEIGHT_KEY)) || 1; };
+        const state = (path) => this.groupState(path);
+        // Repair the layout before drawing it. Redundant groups come from ordinary
+        // editing as well as from metadata that has drifted, and left alone they
+        // show up as tiles wrapped around a plain run of cells.
+        let root = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.buildTree)(cells.map(c => this.pathOf(c.model)), weight, state);
+        (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.collapse)(root);
+        if (this._writeBackPaths((0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.cellPaths)(root))) {
+            // Paths moved, so group state now hangs off different keys: rebuild from
+            // the repaired metadata rather than patching the tree's own paths.
+            root = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.buildTree)(cells.map(c => this.pathOf(c.model)), weight, state);
+        }
         this._solution = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.solve)(root);
         this.grid.update(this._solution);
         this.notebook.update();
@@ -1514,6 +1557,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   DEFAULT_SCROLL_SIZE: () => (/* binding */ DEFAULT_SCROLL_SIZE),
 /* harmony export */   axisAtDepth: () => (/* binding */ axisAtDepth),
 /* harmony export */   buildTree: () => (/* binding */ buildTree),
+/* harmony export */   cellPaths: () => (/* binding */ cellPaths),
+/* harmony export */   collapse: () => (/* binding */ collapse),
 /* harmony export */   collectCells: () => (/* binding */ collectCells),
 /* harmony export */   contentTracks: () => (/* binding */ contentTracks),
 /* harmony export */   divergeDepth: () => (/* binding */ divergeDepth),
@@ -1598,6 +1643,70 @@ function buildTree(paths, cellWeight, groupState) {
         node.children.push({ kind: 'cell', index, weight: cellWeight(index) });
     }
     return root;
+}
+/**
+ * Collapse redundant groups, in place.
+ *
+ * A group holding a single item says nothing the parent does not already say,
+ * and an empty one says nothing at all. Both arise from ordinary editing --
+ * dragging the second-to-last cell out of a tile leaves a singleton behind --
+ * and from metadata that has drifted, and they show up as tiles with rules
+ * around a plain run of cells.
+ *
+ * Unwrapping a singleton promotes its child one level, which flips the axis
+ * that child sits on. So when the child is itself a group, its *contents* are
+ * promoted instead: two levels up, back onto the axis they were laid out for.
+ * That is what keeps a row of columns from becoming a row of rows.
+ *
+ * Repeats until stable, since promoting can leave the parent a singleton too.
+ */
+function collapse(node) {
+    for (const child of node.children) {
+        if (child.kind === 'group') {
+            collapse(child);
+        }
+    }
+    for (;;) {
+        const next = [];
+        let changed = false;
+        for (const child of node.children) {
+            if (child.kind !== 'group' || child.children.length > 1) {
+                next.push(child);
+                continue;
+            }
+            changed = true;
+            const only = child.children[0];
+            if (!only) {
+                continue; // empty group: drop it
+            }
+            if (only.kind === 'group') {
+                next.push(...only.children);
+            }
+            else {
+                next.push(only);
+            }
+        }
+        node.children = next;
+        if (!changed) {
+            return;
+        }
+    }
+}
+/** The path each cell sits at, read back off a tree. */
+function cellPaths(root) {
+    const out = new Map();
+    const walk = (node, path) => {
+        for (const child of node.children) {
+            if (child.kind === 'cell') {
+                out.set(child.index, path);
+            }
+            else {
+                walk(child, [...path, child.id]);
+            }
+        }
+    };
+    walk(root, []);
+    return out;
 }
 /** Sum of child weights, guarding against a degenerate zero total. */
 function totalWeight(children) {
@@ -2554,4 +2663,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.271194411668e57659cc.js.map
+//# sourceMappingURL=lib_index_js.c58c7e2a05e8accdf19c.js.map

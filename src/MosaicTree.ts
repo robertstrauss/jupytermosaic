@@ -196,6 +196,73 @@ export function buildTree(
   return root;
 }
 
+/**
+ * Collapse redundant groups, in place.
+ *
+ * A group holding a single item says nothing the parent does not already say,
+ * and an empty one says nothing at all. Both arise from ordinary editing --
+ * dragging the second-to-last cell out of a tile leaves a singleton behind --
+ * and from metadata that has drifted, and they show up as tiles with rules
+ * around a plain run of cells.
+ *
+ * Unwrapping a singleton promotes its child one level, which flips the axis
+ * that child sits on. So when the child is itself a group, its *contents* are
+ * promoted instead: two levels up, back onto the axis they were laid out for.
+ * That is what keeps a row of columns from becoming a row of rows.
+ *
+ * Repeats until stable, since promoting can leave the parent a singleton too.
+ */
+export function collapse(node: IGroupNode): void {
+  for (const child of node.children) {
+    if (child.kind === 'group') {
+      collapse(child);
+    }
+  }
+
+  for (;;) {
+    const next: MosaicNode[] = [];
+    let changed = false;
+
+    for (const child of node.children) {
+      if (child.kind !== 'group' || child.children.length > 1) {
+        next.push(child);
+        continue;
+      }
+      changed = true;
+      const only = child.children[0];
+      if (!only) {
+        continue; // empty group: drop it
+      }
+      if (only.kind === 'group') {
+        next.push(...only.children);
+      } else {
+        next.push(only);
+      }
+    }
+
+    node.children = next;
+    if (!changed) {
+      return;
+    }
+  }
+}
+
+/** The path each cell sits at, read back off a tree. */
+export function cellPaths(root: IGroupNode): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+  const walk = (node: IGroupNode, path: string[]): void => {
+    for (const child of node.children) {
+      if (child.kind === 'cell') {
+        out.set(child.index, path);
+      } else {
+        walk(child, [...path, child.id]);
+      }
+    }
+  };
+  walk(root, []);
+  return out;
+}
+
 /** Sum of child weights, guarding against a degenerate zero total. */
 function totalWeight(children: MosaicNode[]): number {
   let total = 0;

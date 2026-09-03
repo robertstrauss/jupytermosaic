@@ -6,6 +6,8 @@ import {
   buildTree,
   collectCells,
   divergeDepth,
+  cellPaths,
+  collapse,
   findGroup,
   flexFactors,
   groupKey,
@@ -490,5 +492,71 @@ describe('gutters', () => {
     for (let i = 0; i < s.rowTracks.length; i++) {
       expect(floors[i]).toBe(s.rowTracks[i].gutter ? 0 : 100);
     }
+  });
+});
+
+describe('collapse', () => {
+  /** Collapse a set of cell paths and read back where the cells ended up. */
+  const repair = (paths: (string[] | undefined)[]) => {
+    const root = tree(paths);
+    collapse(root);
+    const out = cellPaths(root);
+    return paths.map((_, i) => out.get(i));
+  };
+
+  it('leaves a sound layout alone', () => {
+    expect(repair([[], [], []])).toEqual([[], [], []]);
+    expect(repair([['a'], ['a'], []])).toEqual([['a'], ['a'], []]);
+  });
+
+  it('unwraps a group holding a single cell', () => {
+    // 'a' adds nothing the root column does not already say.
+    expect(repair([['a'], [], []])).toEqual([[], [], []]);
+  });
+
+  it('unwraps a double wrap, keeping cells on their original axis', () => {
+    // This is the shape that drew rules around a plain run of cells: a
+    // singleton row wrapping a column of them. Promoting the column's contents
+    // two levels puts them back in the root column, not into a row.
+    const root = tree([
+      ['x', 'y'],
+      ['x', 'y'],
+      ['x', 'y']
+    ]);
+    collapse(root);
+    expect([...cellPaths(root).values()]).toEqual([[], [], []]);
+    expect(root.children.every(c => c.kind === 'cell')).toBe(true);
+  });
+
+  it('preserves direction when a wrapped group has real siblings', () => {
+    // 'a' holds a column 'a/b' and a cell. Nothing is redundant, so the column
+    // must survive -- collapsing it would flatten a row of two into three.
+    const paths = [
+      ['a', 'b'],
+      ['a', 'b'],
+      ['a']
+    ];
+    expect(repair(paths)).toEqual(paths);
+  });
+
+  it('repeats until stable', () => {
+    // Unwrapping the inner group leaves the outer one a singleton in turn.
+    expect(repair([['p', 'q', 'r']])).toEqual([[]]);
+  });
+
+  it('drops a group that a cell has left behind', () => {
+    // 'a' kept only one cell after the other was dragged away.
+    expect(repair([['a'], [], ['b'], ['b']])).toEqual([[], [], ['b'], ['b']]);
+  });
+
+  it('removes the fictitious gutters it was drawing', () => {
+    const corrupt = tree([['x', 'y'], ['x', 'y'], ['x', 'y']]);
+    // Four rules around a plain run of cells: the root's own two ends, plus
+    // the singleton row's.
+    expect(solve(corrupt).gutters).toHaveLength(4);
+
+    collapse(corrupt);
+    const repaired = tree([...cellPaths(corrupt).values()]);
+    expect(solve(repaired).gutters).toHaveLength(0);
   });
 });
