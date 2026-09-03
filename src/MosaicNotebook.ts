@@ -246,6 +246,9 @@ export class MosaicNotebook implements IGridHost {
     }
     this.persistRepair();
     this.requestUpdate();
+    // Keep focus on the cell we just made, for the same reason navigation does:
+    // the notebook reads the active cell back off whatever holds DOM focus.
+    notebook.activate();
   }
 
   /**

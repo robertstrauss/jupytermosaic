@@ -207,6 +207,31 @@ const plugin: JupyterFrontEndPlugin<void> = {
       });
     }
 
+    // Above/below get mosaic versions too. The stock commands leave the new
+    // cell's placement to be inferred from its neighbour, and for an insert
+    // *above* the neighbour it lands next to is the cell before it -- so 'a'
+    // behaved like 'b' on the previous cell, dropping the new cell at the foot
+    // of the preceding tile instead of over the current one.
+    const inserts: [string, Direction, string][] = [
+      ['above', 'up', 'Above'],
+      ['below', 'down', 'Below'],
+      ['left', 'left', 'Left'],
+      ['right', 'right', 'Right']
+    ];
+    for (const [name, direction, label] of inserts) {
+      if (name === 'left' || name === 'right') {
+        continue; // registered below, with icons for the cell toolbar
+      }
+      app.commands.addCommand(`mosaic:insert-cell-${name}`, {
+        label: `Insert Cell ${label}`,
+        caption: `Insert a cell ${name}, subdividing if needed`,
+        isEnabled: isMosaic,
+        execute: () => {
+          active()?.insertBeside(direction);
+        }
+      });
+    }
+
     app.commands.addCommand('mosaic:insert-cell-left', {
       label: 'Insert Cell Left',
       caption: 'Insert a cell to the left, subdividing if needed',

@@ -1335,6 +1335,9 @@ class MosaicNotebook {
         }
         this.persistRepair();
         this.requestUpdate();
+        // Keep focus on the cell we just made, for the same reason navigation does:
+        // the notebook reads the active cell back off whatever holds DOM focus.
+        notebook.activate();
     }
     /**
      * Note that the next cell to appear at the end belongs at the notebook root.
@@ -2406,6 +2409,31 @@ const plugin = {
                 }
             });
         }
+        // Above/below get mosaic versions too. The stock commands leave the new
+        // cell's placement to be inferred from its neighbour, and for an insert
+        // *above* the neighbour it lands next to is the cell before it -- so 'a'
+        // behaved like 'b' on the previous cell, dropping the new cell at the foot
+        // of the preceding tile instead of over the current one.
+        const inserts = [
+            ['above', 'up', 'Above'],
+            ['below', 'down', 'Below'],
+            ['left', 'left', 'Left'],
+            ['right', 'right', 'Right']
+        ];
+        for (const [name, direction, label] of inserts) {
+            if (name === 'left' || name === 'right') {
+                continue; // registered below, with icons for the cell toolbar
+            }
+            app.commands.addCommand(`mosaic:insert-cell-${name}`, {
+                label: `Insert Cell ${label}`,
+                caption: `Insert a cell ${name}, subdividing if needed`,
+                isEnabled: isMosaic,
+                execute: () => {
+                    var _a;
+                    (_a = active()) === null || _a === void 0 ? void 0 : _a.insertBeside(direction);
+                }
+            });
+        }
         app.commands.addCommand('mosaic:insert-cell-left', {
             label: 'Insert Cell Left',
             caption: 'Insert a cell to the left, subdividing if needed',
@@ -2835,4 +2863,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.40df254b5186a4f22040.js.map
+//# sourceMappingURL=lib_index_js.d70eb4bcc4b0034cd58b.js.map

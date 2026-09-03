@@ -65,11 +65,25 @@
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
+      "command": "mosaic:move-cursor-left",
+      "keys": [
+        "H"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
       "command": "mosaic:extend-selection-left",
       "keys": [
         "Shift H"
       ],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:extend-selection-left",
+      "keys": [
+        "Shift H"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:move-cursor-right",
@@ -79,11 +93,25 @@
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
+      "command": "mosaic:move-cursor-right",
+      "keys": [
+        "L"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
       "command": "mosaic:extend-selection-right",
       "keys": [
         "Shift L"
       ],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:extend-selection-right",
+      "keys": [
+        "Shift L"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:move-cursor-down",
@@ -93,11 +121,25 @@
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
+      "command": "mosaic:move-cursor-down",
+      "keys": [
+        "J"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
       "command": "mosaic:extend-selection-down",
       "keys": [
         "Shift J"
       ],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:extend-selection-down",
+      "keys": [
+        "Shift J"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:move-cursor-up",
@@ -107,11 +149,25 @@
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
+      "command": "mosaic:move-cursor-up",
+      "keys": [
+        "K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
       "command": "mosaic:extend-selection-up",
       "keys": [
         "Shift K"
       ],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:extend-selection-up",
+      "keys": [
+        "Shift K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:insert-cell-left",
@@ -121,11 +177,53 @@
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
+      "command": "mosaic:insert-cell-left",
+      "keys": [
+        "S"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
       "command": "mosaic:insert-cell-right",
       "keys": [
         "F"
       ],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-right",
+      "keys": [
+        "F"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:insert-cell-above",
+      "keys": [
+        "A"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-above",
+      "keys": [
+        "A"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:insert-cell-below",
+      "keys": [
+        "B"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-below",
+      "keys": [
+        "B"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "viewmenu:line-numbering",

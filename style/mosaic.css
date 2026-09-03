@@ -122,6 +122,19 @@ svg[data-icon='mosaic:add-right'] {
   width: calc(100% - 2 * var(--mosaic-edge-padding));
 }
 
+/* The cell toolbar hides itself whenever it would reach past the middle of the
+   editor, which in a tiled layout means most cells -- and more of them since
+   the insert-left/right buttons widened it. Keep it, and give it a background
+   so it stays legible over whatever it covers. */
+.mosaic-Notebook .jp-cell-toolbar {
+  background-color: var(--jp-layout-color1);
+  border-radius: 0 0 0 4px;
+}
+
+.mosaic-Notebook .jp-toolbar-overlap .jp-cell-toolbar {
+  display: flex;
+}
+
 /* -- gutters between adjacent groups -------------------------------------- */
 
 /* A seam between two groups has no cell on it to drop onto, so it gets a track
