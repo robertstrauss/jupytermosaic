@@ -30,6 +30,32 @@ Two different styles are offered, and can be switched between with a dropdown me
 
 ## Jupyter Lab and Jupyter Notebook version 7+
 
+Jupyter Mosaic is not on PyPI yet, so install it from a local copy of the
+repository.
+
+Clone it (or download and unpack the archive from the repository's Code
+button), then install in editable mode from inside the directory:
+
+```bash
+git clone https://github.com/robertstrauss/jupytermosaic.git
+cd jupytermosaic
+pip install -e .
+```
+
+The equivalent without git:
+
+```bash
+wget https://github.com/robertstrauss/jupytermosaic/archive/refs/heads/main.zip
+unzip main.zip
+cd jupytermosaic-main
+pip install -e .
+```
+
+Restart the Jupyter server if it was already running. You should see a Mosaic
+entry in the launcher alongside the usual Notebook one.
+
+Installing straight from the repository, without a local copy, also works:
+
 ```bash
 pip install git+https://github.com/robertstrauss/jupytermosaic.git
 ```

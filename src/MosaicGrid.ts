@@ -135,7 +135,7 @@ export class MosaicGrid {
   private _overlay: HTMLElement;
   private _resizeObserver: ResizeObserver;
   private _outerResizeObserver: ResizeObserver;
-  private _observed = new Set<HTMLElement>();
+  private _observed = new WeakSet<Element>();
   private _heights = new WeakMap<HTMLElement, number>();
   /** Per-group scroll offset, in px. Session state only -- never persisted. */
   private _scroll = new Map<string, number>();
@@ -144,6 +144,20 @@ export class MosaicGrid {
   private _colOffsets: number[] = [0];
   private _boxes = new Map<string, IBox>();
   private _padRight = 0;
+  private _rowGap = 0;
+  private _colGap = 0;
+
+  /**
+   * Where a grid line sits, excluding the gap that follows the track before it.
+   *
+   * Offsets carry each track's trailing gap, so reading one straight off makes
+   * every box a gap too long. Harmless where boxes only need to abut, but it
+   * put the rule inside a gutter half a gap off centre.
+   */
+  private _edge(offsets: number[], line: number, gap: number): number {
+    const value = offsets[line - 1] ?? 0;
+    return line - 1 < offsets.length - 1 ? value - gap : value;
+  }
   private _chrome = new Map<string, HTMLElement>();
   /** Every group we know a box for, including ones nested inside managed groups. */
   private _nodesByKey = new Map<string, IGroupNode>();
@@ -269,9 +283,7 @@ export class MosaicGrid {
     }
     return [
       this._rowOffsets[placement.rowStart - 1] ?? 0,
-      this._rowOffsets[placement.rowEnd - 1] ??
-        this._rowOffsets[this._rowOffsets.length - 1] ??
-        0
+      this._edge(this._rowOffsets, placement.rowEnd, this._rowGap)
     ];
   }
 
@@ -467,6 +479,8 @@ export class MosaicGrid {
       return offsets;
     };
 
+    this._rowGap = rowGap;
+    this._colGap = colGap;
     this._rowOffsets = parse(style.gridTemplateRows, rowGap, padTop);
     this._colOffsets = parse(style.gridTemplateColumns, colGap, padLeft);
   }
@@ -514,9 +528,9 @@ export class MosaicGrid {
 
   private _boxOf(placement: IPlacement): IBox {
     const x = this._colOffsets[placement.colStart - 1] ?? 0;
-    const x1 = this._colOffsets[placement.colEnd - 1] ?? x;
     const y = this._rowOffsets[placement.rowStart - 1] ?? 0;
-    const y1 = this._rowOffsets[placement.rowEnd - 1] ?? y;
+    const x1 = this._edge(this._colOffsets, placement.colEnd, this._colGap);
+    const y1 = this._edge(this._rowOffsets, placement.rowEnd, this._rowGap);
     return { x, y, w: Math.max(0, x1 - x), h: Math.max(0, y1 - y) };
   }
 
@@ -856,17 +870,24 @@ export class MosaicGrid {
     }
   }
 
+  /**
+   * Watch a cell for size changes.
+   *
+   * The cell box itself is watched as well as its children: a cell still in
+   * placeholder form has no children to watch, and once it rendered them
+   * nothing was left observing it, so the layout kept a stale height until some
+   * unrelated edit forced a rebuild.
+   */
   private _observe(el: HTMLElement): void {
-    if (this._observed.has(el)) {
-      return;
+    if (!this._observed.has(el)) {
+      this._observed.add(el);
+      this._resizeObserver.observe(el);
     }
-    const children = Array.from(el.children) as HTMLElement[];
-    if (children.length === 0) {
-      return; // still a placeholder; pick it up on a later pass
-    }
-    this._observed.add(el);
-    for (const child of children) {
-      this._resizeObserver.observe(child);
+    for (const child of Array.from(el.children) as HTMLElement[]) {
+      if (!this._observed.has(child)) {
+        this._observed.add(child);
+        this._resizeObserver.observe(child);
+      }
     }
   }
 
@@ -874,10 +895,12 @@ export class MosaicGrid {
   gutterRect(gutter: IGutter): IClip {
     const along = gutter.axis === 'col' ? this._rowOffsets : this._colOffsets;
     const across = gutter.axis === 'col' ? this._colOffsets : this._rowOffsets;
+    const alongGap = gutter.axis === 'col' ? this._rowGap : this._colGap;
+    const acrossGap = gutter.axis === 'col' ? this._colGap : this._rowGap;
     const a0 = along[gutter.line - 1] ?? 0;
-    const a1 = along[gutter.line] ?? a0;
+    const a1 = this._edge(along, gutter.line + 1, alongGap);
     const b0 = across[gutter.start - 1] ?? 0;
-    const b1 = across[gutter.end - 1] ?? b0;
+    const b1 = this._edge(across, gutter.end, acrossGap);
 
     return gutter.axis === 'col'
       ? { x0: b0, x1: b1, y0: a0, y1: a1 }

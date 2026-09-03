@@ -8,13 +8,13 @@
     "skeuomorphic": {
       "type": "boolean",
       "title": "Skeuomorphic Style (Floating Cell Bubbles)",
-      "default": false,
+      "default": true,
       "description": "Stylize cells as seperate, floating, and round, rather than the default flat, seamless view."
     },
     "topCellHandle": {
       "type": "boolean",
       "title": "Cell Handle Placement",
-      "default": false,
+      "default": true,
       "description": "Put cell handles above code areas rather than beside it"
     }
   },
@@ -74,14 +74,14 @@
     {
       "command": "mosaic:move-cursor-right",
       "keys": [
-        ";"
+        "L"
       ],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:extend-selection-right",
       "keys": [
-        "Shift ;"
+        "Shift L"
       ],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
@@ -110,6 +110,20 @@
       "command": "mosaic:extend-selection-up",
       "keys": [
         "Shift K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-left",
+      "keys": [
+        "S"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-right",
+      "keys": [
+        "F"
       ],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     }

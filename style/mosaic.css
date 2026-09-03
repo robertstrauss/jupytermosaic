@@ -256,6 +256,15 @@ svg[data-icon='mosaic:add-right'] {
 
 /* -- drop indicators ------------------------------------------------------ */
 
+/* A drop target gets a solid top border from the stock notebook stylesheet,
+   which reads as a second, contradictory indicator next to the directional one
+   below. Hide it without changing the border width, so nothing shifts. */
+.mosaic-Notebook .jp-Notebook-cell.jp-mod-dropTarget,
+.mosaic-Notebook
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget {
+  border-top-color: transparent;
+}
+
 .mosaic-Notebook .jp-Cell.jp-mod-dropTarget::after {
   content: '';
   position: absolute;

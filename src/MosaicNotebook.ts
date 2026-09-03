@@ -248,6 +248,20 @@ export class MosaicNotebook implements IGridHost {
   }
 
   /**
+   * Note that the next cell to appear at the end belongs at the notebook root.
+   *
+   * Running the last cell advances into a cell the notebook creates for us.
+   * Inheriting the neighbour's path would bury it in whatever tile happens to
+   * be last, whereas an insert the user asked for -- a toolbar button, or a/b
+   * and s/f -- should join that tile.
+   */
+  expectRootInsert(): void {
+    this._rootInsertPending = true;
+  }
+
+  private _rootInsertPending = false;
+
+  /**
    * Give any cell that arrived without a path one, based on its neighbour.
    *
    * Cells inserted by the notebook itself -- insert above/below, paste, split --
@@ -285,6 +299,12 @@ export class MosaicNotebook implements IGridHost {
 
     for (let i = 0; i < cells.length; i++) {
       if (this.pathOf(cells[i].model) !== undefined) {
+        continue;
+      }
+      if (this._rootInsertPending && i === cells.length - 1) {
+        this._rootInsertPending = false;
+        this.setPath(cells[i].model, []);
+        changed = true;
         continue;
       }
       const reference = cells[i - 1] ?? cells[i + 1];
@@ -425,16 +445,30 @@ export class MosaicNotebook implements IGridHost {
   private _installScrollReroute(): void {
     const notebook = this.notebook as any;
     notebook.scrollToItem = async (index: number): Promise<void> => {
+      // Wait for the layout to catch up first. Running a cell grows its output
+      // and so its row, and scrolling against the pre-execution geometry aimed
+      // at where the next cell used to be -- carrying the executed cell off the
+      // top of the viewport.
+      this.requestUpdate();
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      if (this._disposed) {
+        return;
+      }
+
       const outer = this.notebook.outerNode;
       const target = this.grid.revealCell(
         index,
         outer.scrollTop,
         outer.clientHeight
       );
-      if (target !== null) {
-        outer.scrollTo({ top: target, behavior: 'smooth' });
+      if (target === null) {
+        return;
       }
-      this.requestUpdate();
+      const furthest = Math.max(0, outer.scrollHeight - outer.clientHeight);
+      outer.scrollTo({
+        top: Math.min(Math.max(0, target), furthest),
+        behavior: 'smooth'
+      });
     };
   }
 

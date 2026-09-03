@@ -47,7 +47,7 @@ class MosaicGrid {
         this.inner = inner;
         this.outer = outer;
         this.host = host;
-        this._observed = new Set();
+        this._observed = new WeakSet();
         this._heights = new WeakMap();
         /** Per-group scroll offset, in px. Session state only -- never persisted. */
         this._scroll = new Map();
@@ -56,6 +56,8 @@ class MosaicGrid {
         this._colOffsets = [0];
         this._boxes = new Map();
         this._padRight = 0;
+        this._rowGap = 0;
+        this._colGap = 0;
         this._chrome = new Map();
         /** Every group we know a box for, including ones nested inside managed groups. */
         this._nodesByKey = new Map();
@@ -103,6 +105,18 @@ class MosaicGrid {
         this._onDblClick = this._onDblClick.bind(this);
         this.outer.addEventListener('wheel', this._onWheel, { passive: false });
         this.viewport.addEventListener('dblclick', this._onDblClick);
+    }
+    /**
+     * Where a grid line sits, excluding the gap that follows the track before it.
+     *
+     * Offsets carry each track's trailing gap, so reading one straight off makes
+     * every box a gap too long. Harmless where boxes only need to abut, but it
+     * put the rule inside a gutter half a gap off centre.
+     */
+    _edge(offsets, line, gap) {
+        var _a;
+        const value = (_a = offsets[line - 1]) !== null && _a !== void 0 ? _a : 0;
+        return line - 1 < offsets.length - 1 ? value - gap : value;
     }
     /**
      * Bumped on every layout pass. `getRangeToRender` must not answer "unchanged"
@@ -210,14 +224,14 @@ class MosaicGrid {
     }
     /** Vertical extent of a cell in grid coordinates, or null if unplaced. */
     cellSpan(index) {
-        var _a, _b, _c, _d;
+        var _a, _b;
         const placement = (_a = this._solution) === null || _a === void 0 ? void 0 : _a.placements.get(index);
         if (!placement) {
             return null;
         }
         return [
             (_b = this._rowOffsets[placement.rowStart - 1]) !== null && _b !== void 0 ? _b : 0,
-            (_d = (_c = this._rowOffsets[placement.rowEnd - 1]) !== null && _c !== void 0 ? _c : this._rowOffsets[this._rowOffsets.length - 1]) !== null && _d !== void 0 ? _d : 0
+            this._edge(this._rowOffsets, placement.rowEnd, this._rowGap)
         ];
     }
     /**
@@ -377,6 +391,8 @@ class MosaicGrid {
             }
             return offsets;
         };
+        this._rowGap = rowGap;
+        this._colGap = colGap;
         this._rowOffsets = parse(style.gridTemplateRows, rowGap, padTop);
         this._colOffsets = parse(style.gridTemplateColumns, colGap, padLeft);
     }
@@ -419,11 +435,11 @@ class MosaicGrid {
         this.viewport.style.width = '';
     }
     _boxOf(placement) {
-        var _a, _b, _c, _d;
+        var _a, _b;
         const x = (_a = this._colOffsets[placement.colStart - 1]) !== null && _a !== void 0 ? _a : 0;
-        const x1 = (_b = this._colOffsets[placement.colEnd - 1]) !== null && _b !== void 0 ? _b : x;
-        const y = (_c = this._rowOffsets[placement.rowStart - 1]) !== null && _c !== void 0 ? _c : 0;
-        const y1 = (_d = this._rowOffsets[placement.rowEnd - 1]) !== null && _d !== void 0 ? _d : y;
+        const y = (_b = this._rowOffsets[placement.rowStart - 1]) !== null && _b !== void 0 ? _b : 0;
+        const x1 = this._edge(this._colOffsets, placement.colEnd, this._colGap);
+        const y1 = this._edge(this._rowOffsets, placement.rowEnd, this._rowGap);
         return { x, y, w: Math.max(0, x1 - x), h: Math.max(0, y1 - y) };
     }
     /**
@@ -694,28 +710,37 @@ class MosaicGrid {
             el.style.display = '';
         }
     }
+    /**
+     * Watch a cell for size changes.
+     *
+     * The cell box itself is watched as well as its children: a cell still in
+     * placeholder form has no children to watch, and once it rendered them
+     * nothing was left observing it, so the layout kept a stale height until some
+     * unrelated edit forced a rebuild.
+     */
     _observe(el) {
-        if (this._observed.has(el)) {
-            return;
+        if (!this._observed.has(el)) {
+            this._observed.add(el);
+            this._resizeObserver.observe(el);
         }
-        const children = Array.from(el.children);
-        if (children.length === 0) {
-            return; // still a placeholder; pick it up on a later pass
-        }
-        this._observed.add(el);
-        for (const child of children) {
-            this._resizeObserver.observe(child);
+        for (const child of Array.from(el.children)) {
+            if (!this._observed.has(child)) {
+                this._observed.add(child);
+                this._resizeObserver.observe(child);
+            }
         }
     }
     /** A gutter's rectangle in grid coordinates. */
     gutterRect(gutter) {
-        var _a, _b, _c, _d;
+        var _a, _b;
         const along = gutter.axis === 'col' ? this._rowOffsets : this._colOffsets;
         const across = gutter.axis === 'col' ? this._colOffsets : this._rowOffsets;
+        const alongGap = gutter.axis === 'col' ? this._rowGap : this._colGap;
+        const acrossGap = gutter.axis === 'col' ? this._colGap : this._rowGap;
         const a0 = (_a = along[gutter.line - 1]) !== null && _a !== void 0 ? _a : 0;
-        const a1 = (_b = along[gutter.line]) !== null && _b !== void 0 ? _b : a0;
-        const b0 = (_c = across[gutter.start - 1]) !== null && _c !== void 0 ? _c : 0;
-        const b1 = (_d = across[gutter.end - 1]) !== null && _d !== void 0 ? _d : b0;
+        const a1 = this._edge(along, gutter.line + 1, alongGap);
+        const b0 = (_b = across[gutter.start - 1]) !== null && _b !== void 0 ? _b : 0;
+        const b1 = this._edge(across, gutter.end, acrossGap);
         return gutter.axis === 'col'
             ? { x0: b0, x1: b1, y0: a0, y1: a1 }
             : { x0: a0, x1: a1, y0: b0, y1: b1 };
@@ -1149,6 +1174,7 @@ class MosaicNotebook {
         this._solution = null;
         this._watched = new WeakSet();
         this._disposed = false;
+        this._rootInsertPending = false;
         const anyNb = notebook;
         this.grid = new _MosaicGrid__WEBPACK_IMPORTED_MODULE_2__.MosaicGrid(notebook.viewportNode, anyNb._innerElement, notebook.outerNode, this);
         this._installViewModelOverrides();
@@ -1305,6 +1331,17 @@ class MosaicNotebook {
         this.requestUpdate();
     }
     /**
+     * Note that the next cell to appear at the end belongs at the notebook root.
+     *
+     * Running the last cell advances into a cell the notebook creates for us.
+     * Inheriting the neighbour's path would bury it in whatever tile happens to
+     * be last, whereas an insert the user asked for -- a toolbar button, or a/b
+     * and s/f -- should join that tile.
+     */
+    expectRootInsert() {
+        this._rootInsertPending = true;
+    }
+    /**
      * Give any cell that arrived without a path one, based on its neighbour.
      *
      * Cells inserted by the notebook itself -- insert above/below, paste, split --
@@ -1340,6 +1377,12 @@ class MosaicNotebook {
         let changed = false;
         for (let i = 0; i < cells.length; i++) {
             if (this.pathOf(cells[i].model) !== undefined) {
+                continue;
+            }
+            if (this._rootInsertPending && i === cells.length - 1) {
+                this._rootInsertPending = false;
+                this.setPath(cells[i].model, []);
+                changed = true;
                 continue;
             }
             const reference = (_a = cells[i - 1]) !== null && _a !== void 0 ? _a : cells[i + 1];
@@ -1449,12 +1492,25 @@ class MosaicNotebook {
     _installScrollReroute() {
         const notebook = this.notebook;
         notebook.scrollToItem = async (index) => {
+            // Wait for the layout to catch up first. Running a cell grows its output
+            // and so its row, and scrolling against the pre-execution geometry aimed
+            // at where the next cell used to be -- carrying the executed cell off the
+            // top of the viewport.
+            this.requestUpdate();
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            if (this._disposed) {
+                return;
+            }
             const outer = this.notebook.outerNode;
             const target = this.grid.revealCell(index, outer.scrollTop, outer.clientHeight);
-            if (target !== null) {
-                outer.scrollTo({ top: target, behavior: 'smooth' });
+            if (target === null) {
+                return;
             }
-            this.requestUpdate();
+            const furthest = Math.max(0, outer.scrollHeight - outer.clientHeight);
+            outer.scrollTo({
+                top: Math.min(Math.max(0, target), furthest),
+                behavior: 'smooth'
+            });
         };
     }
     /**
@@ -2138,6 +2194,21 @@ __webpack_require__.r(__webpack_exports__);
 
 
 /**
+ * Running the last cell advances into a cell the notebook creates on the spot.
+ * Flag it so the mosaic gives it a row of its own at the end rather than
+ * burying it in whatever tile happened to be last; insertions the user asked
+ * for still join the tile they were invoked from.
+ */
+const runAndAdvance = _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_2__.NotebookActions.runAndAdvance;
+_jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_2__.NotebookActions.runAndAdvance = ((notebook, ...rest) => {
+    var _a;
+    if (notebook && notebook.activeCellIndex === notebook.widgets.length - 1) {
+        (_a = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_7__.mosaicOf)(notebook)) === null || _a === void 0 ? void 0 : _a.expectRootInsert();
+    }
+    return runAndAdvance.call(_jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_2__.NotebookActions, notebook, ...rest);
+});
+
+/**
  * Do not fall back to the default editor when a widget for this path already
  * exists under a different factory. Without this, restoring a workspace opens
  * both a Notebook and a Mosaic Notebook for the same file.
@@ -2663,4 +2734,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.c58c7e2a05e8accdf19c.js.map
+//# sourceMappingURL=lib_index_js.a36e750ca616f4156b8b.js.map

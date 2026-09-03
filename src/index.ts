@@ -19,6 +19,24 @@ import { LabIcon, addAboveIcon, addBelowIcon } from '@jupyterlab/ui-components';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
 import { Direction, MosaicNotebookPanel, mosaicOf } from './MosaicNotebook';
+import {
+  Notebook as NotebookWidget,
+  NotebookActions
+} from '@jupyterlab/notebook';
+
+/**
+ * Running the last cell advances into a cell the notebook creates on the spot.
+ * Flag it so the mosaic gives it a row of its own at the end rather than
+ * burying it in whatever tile happened to be last; insertions the user asked
+ * for still join the tile they were invoked from.
+ */
+const runAndAdvance = NotebookActions.runAndAdvance;
+NotebookActions.runAndAdvance = ((notebook: NotebookWidget, ...rest: any[]) => {
+  if (notebook && notebook.activeCellIndex === notebook.widgets.length - 1) {
+    mosaicOf(notebook)?.expectRootInsert();
+  }
+  return (runAndAdvance as any).call(NotebookActions, notebook, ...rest);
+}) as typeof NotebookActions.runAndAdvance;
 
 import MosaicIcon from '../style/icons/mosaic-icon.svg';
 
