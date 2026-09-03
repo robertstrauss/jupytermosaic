@@ -754,3 +754,30 @@ export function flexFactors(weights: number[]): number[] {
   const smallest = Math.min(...positive);
   return weights.map(w => (w > 0 ? w / smallest : 1));
 }
+
+/** Squared distance from a point to a rectangle; zero when inside it. */
+export function distanceTo(x: number, y: number, r: IRect): number {
+  const dx = Math.max(r.x0 - x, 0, x - r.x1);
+  const dy = Math.max(r.y0 - y, 0, y - r.y1);
+  return dx * dx + dy * dy;
+}
+
+/**
+ * Which edge of a rectangle a point outside it lies past.
+ *
+ * Used when a drop lands beside a target rather than on it, where comparing
+ * distances to all four edges -- the right question inside the box -- answers
+ * an arbitrary one.
+ */
+export function sideFrom(
+  r: IRect,
+  x: number,
+  y: number
+): 'top' | 'bottom' | 'left' | 'right' {
+  const dx = Math.max(r.x0 - x, 0, x - r.x1);
+  const dy = Math.max(r.y0 - y, 0, y - r.y1);
+  if (dy >= dx) {
+    return y < r.y0 ? 'top' : 'bottom';
+  }
+  return x < r.x0 ? 'left' : 'right';
+}

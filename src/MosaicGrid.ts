@@ -923,28 +923,9 @@ export class MosaicGrid {
     return null;
   }
 
-  /**
-   * The gutter nearest a viewport-local point, whatever the distance.
-   *
-   * Used for drops that land outside the grid altogether -- most often the
-   * blank space below the last row, which should read as the notebook's
-   * trailing seam rather than as some arbitrary cell edge.
-   */
-  nearestGutter(x: number, y: number): IGutter | null {
-    let best: IGutter | null = null;
-    let bestDistance = Infinity;
-
-    for (const gutter of this._solution?.gutters ?? []) {
-      const r = this.gutterRect(gutter);
-      const dx = Math.max(r.x0 - x, 0, x - r.x1);
-      const dy = Math.max(r.y0 - y, 0, y - r.y1);
-      const distance = dx * dx + dy * dy;
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = gutter;
-      }
-    }
-    return best;
+  /** Bottom of the laid-out grid, in viewport coordinates. */
+  get contentBottom(): number {
+    return this._edge(this._rowOffsets, this._rowOffsets.length, this._rowGap);
   }
 
   /** Highlight one gutter as the pending drop target, or clear the highlight. */

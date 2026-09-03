@@ -12,7 +12,14 @@ import { Cell, MarkdownCell } from '@jupyterlab/cells';
 import { Drag } from '@lumino/dragdrop';
 import { ArrayExt, findIndex } from '@lumino/algorithm';
 
-import { IGutter, divergeDepth, groupKey, newGroupId } from './MosaicTree';
+import {
+  IGutter,
+  distanceTo,
+  divergeDepth,
+  groupKey,
+  newGroupId,
+  sideFrom
+} from './MosaicTree';
 import { PATH_KEY, mosaicOf } from './MosaicNotebook';
 
 const DROP_TARGET_CLASS = 'jp-mod-dropTarget';
@@ -22,6 +29,15 @@ const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 const AUTOSCROLL_MARGIN = 24;
 /** How far outside a cell a drop still counts as aimed at that cell. */
 const CELL_HIT_MARGIN = 12;
+/**
+ * How far a drop may sit from any target and still reach it.
+ *
+ * Every target is bounded. An unbounded search always finds *something*, which
+ * is how a drop through a gap between targets used to teleport cells to
+ * whichever handle happened to win a distance comparison across the whole
+ * notebook. Finding nothing and putting the cells back is the better failure.
+ */
+const DROP_RANGE = 96;
 
 export type DropSide = 'top' | 'bottom' | 'left' | 'right';
 
@@ -65,14 +81,14 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event): void {
     // Cross-notebook mosaic drops are not supported yet.
     return;
   }
-  event.dropAction = 'move';
-
   clearDropTargets(notebook);
 
   const toMove: Cell[] = event.mimeData.getData('internal:cells');
   if (!toMove?.length) {
+    event.dropAction = 'none';
     return;
   }
+  event.dropAction = 'move';
 
   // Collapsed markdown headings carry their hidden children along.
   const last = toMove[toMove.length - 1];
@@ -89,6 +105,8 @@ export function mosaicDrop(notebook: Notebook, event: Drag.Event): void {
 
   const hit = hitTest(notebook, event.clientX, event.clientY);
   if (!hit) {
+    // Nothing within reach: leave the cells where they were.
+    event.dropAction = 'none';
     return;
   }
 
@@ -237,11 +255,10 @@ function clearDropTargets(notebook: Notebook): void {
 /**
  * What lies under a client point: a gutter, or a cell and one of its edges.
  *
- * Tried in order of how directly the point identifies a target. The last two
- * steps matter as much as the first: without them a drop in empty space fell
- * through to whichever cell happened to be nearest and then to whichever of
- * *its* edges was closest, which for a point below the notebook was some cell
- * mid-row -- and, further out, could be a cell anywhere at all.
+ * Returns null when nothing is close enough, and the drop is then abandoned.
+ * Every target has a bounded reach: a search with no limit always finds some
+ * target, so a drop into a gap between them landed wherever won a distance
+ * comparison taken across the whole notebook.
  */
 function hitTest(
   notebook: Notebook,
@@ -249,18 +266,18 @@ function hitTest(
   clientY: number
 ): DropTarget | null {
   const mosaic = mosaicOf(notebook);
-  const rect = notebook.viewportNode.getBoundingClientRect();
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
+  const viewport = notebook.viewportNode.getBoundingClientRect();
+  const x = clientX - viewport.left;
+  const y = clientY - viewport.top;
 
-  // 1. In a gutter. Gutters are narrow, and the cells beside them stay
+  // 1. Inside a gutter. They are narrow, and the cells beside them stay
   //    reachable by aiming a little further in.
   const inGutter = mosaic?.grid.gutterAt(x, y);
   if (inGutter) {
     return { kind: 'gutter', gutter: inGutter };
   }
 
-  // 2. On a cell, or close enough to it to have meant it.
+  // 2. On a cell.
   let target = elementFromPoint(clientX, clientY);
   while (target && !target.classList.contains(JUPYTER_CELL_CLASS)) {
     target = target.parentElement;
@@ -275,78 +292,63 @@ function hitTest(
       };
     }
   }
-  const near = nearestCell(notebook, clientX, clientY, CELL_HIT_MARGIN);
-  if (near) {
-    return {
-      kind: 'cell',
-      index: near.index,
-      side: closestSide(
-        clientX,
-        clientY,
-        notebook.widgets[near.index].node,
-        0.25
-      )
-    };
+
+  // 3. Below everything the grid laid out. This is the notebook's own trailing
+  //    seam, and it claims the blank space under the last row -- which is
+  //    bounded by the scroller, so it does not reach up into the notebook. A
+  //    nearest-target search cannot serve this: when the last tile is a plain
+  //    cell there is no trailing gutter at all, and the closest gutter is then
+  //    some row's side edge, which is how a drop down here ended up mid-row.
+  if (
+    mosaic &&
+    y > mosaic.grid.contentBottom &&
+    x >= 0 &&
+    x <= viewport.width
+  ) {
+    const trailing = mosaic.solution?.gutters.find(
+      gutter => gutter.path.length === 0 && gutter.cellAfter < 0
+    );
+    if (trailing) {
+      return { kind: 'gutter', gutter: trailing };
+    }
+    const last = notebook.widgets.length - 1;
+    if (last >= 0) {
+      // No trailing gutter means the last tile is a cell of the root column,
+      // so its bottom edge already means "a new row at the end".
+      return { kind: 'cell', index: last, side: 'bottom' };
+    }
   }
 
-  // 3. Outside everything: the nearest seam. Dropping below the last row means
-  //    the notebook's trailing gutter, not a cell edge inside that row.
-  const nearestGutter = mosaic?.grid.nearestGutter(x, y);
-  if (nearestGutter) {
-    return { kind: 'gutter', gutter: nearestGutter };
+  // 4. Otherwise the nearest target, gutter or cell, within reach of the point.
+  let best: DropTarget | null = null;
+  let bestDistance = DROP_RANGE * DROP_RANGE;
+
+  for (const gutter of mosaic?.solution?.gutters ?? []) {
+    const distance = distanceTo(x, y, mosaic!.grid.gutterRect(gutter));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = { kind: 'gutter', gutter };
+    }
   }
 
-  // 4. No seams at all -- a notebook that is one plain column. Fall back to the
-  //    nearest cell, taking the side from the direction the point lies in
-  //    rather than from its closest edge, which is meaningless out here.
-  const outside = nearestCell(notebook, clientX, clientY, Infinity);
-  return outside
-    ? { kind: 'cell', index: outside.index, side: outside.side }
-    : null;
-}
-
-/**
- * The nearest cell within `margin` of the point, with the side taken from the
- * direction the point lies in relative to it.
- */
-function nearestCell(
-  notebook: Notebook,
-  clientX: number,
-  clientY: number,
-  margin: number
-): { index: number; side: DropSide } | null {
-  let best = -1;
-  let bestDistance = Infinity;
-  let bestSide: DropSide = 'bottom';
-
-  for (let i = 0; i < notebook.widgets.length; i++) {
-    const node = notebook.widgets[i].node;
+  const cellRange = Math.min(DROP_RANGE, CELL_HIT_MARGIN) ** 2;
+  for (let index = 0; index < notebook.widgets.length; index++) {
+    const node = notebook.widgets[index].node;
     if (node.dataset.mosaicHidden || !node.isConnected) {
       continue;
     }
-    const rect = node.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) {
+    const rect = mosaic?.grid.cellRect(index);
+    if (!rect) {
       continue;
     }
-    const dx = Math.max(rect.left - clientX, 0, clientX - rect.right);
-    const dy = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
-    const distance = dx * dx + dy * dy;
-    if (distance >= bestDistance || Math.max(dx, dy) > margin) {
-      continue;
+    const distance = distanceTo(x, y, rect);
+    if (distance < Math.min(bestDistance, cellRange)) {
+      bestDistance = distance;
+      best = { kind: 'cell', index, side: sideFrom(rect, x, y) };
     }
-    bestDistance = distance;
-    best = i;
-    bestSide =
-      dy >= dx
-        ? clientY < rect.top
-          ? 'top'
-          : 'bottom'
-        : clientX < rect.left
-          ? 'left'
-          : 'right';
   }
 
-  return best < 0 ? null : { index: best, side: bestSide };
+  return best;
 }
 
 /**

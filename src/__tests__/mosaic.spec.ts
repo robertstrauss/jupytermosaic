@@ -8,11 +8,13 @@ import {
   divergeDepth,
   cellPaths,
   collapse,
+  distanceTo,
   findGroup,
   flexFactors,
   groupKey,
   nearestInDirection,
   rowFloors,
+  sideFrom,
   solve,
   subdividePath
 } from '../MosaicTree';
@@ -588,5 +590,68 @@ describe('collapse and deletion', () => {
     const root = tree([['g'], [], []]);
     collapse(root);
     expect([...cellPaths(root).values()]).toEqual([[], [], []]);
+  });
+});
+
+describe('drop geometry', () => {
+  const box = { x0: 100, y0: 100, x1: 200, y1: 150 };
+
+  it('measures zero distance inside a rectangle', () => {
+    expect(distanceTo(150, 120, box)).toBe(0);
+    expect(distanceTo(100, 100, box)).toBe(0);
+  });
+
+  it('measures to the nearest edge, not the centre', () => {
+    expect(distanceTo(210, 120, box)).toBe(100); // 10px to the right
+    expect(distanceTo(150, 90, box)).toBe(100); // 10px above
+    expect(distanceTo(210, 160, box)).toBe(200); // diagonally off a corner
+  });
+
+  it('reads the side a point outside lies past', () => {
+    expect(sideFrom(box, 150, 40)).toBe('top');
+    expect(sideFrom(box, 150, 400)).toBe('bottom');
+    expect(sideFrom(box, 10, 120)).toBe('left');
+    expect(sideFrom(box, 400, 120)).toBe('right');
+  });
+
+  it('takes the dominant direction off a corner', () => {
+    // Far below and slightly right reads as below, not to the right.
+    expect(sideFrom(box, 205, 400)).toBe('bottom');
+    expect(sideFrom(box, 400, 155)).toBe('right');
+  });
+});
+
+describe('the trailing seam', () => {
+  // Regression: a drop in the blank space below the notebook landed inside the
+  // bottom row. When the last tile is a plain cell there is no trailing gutter
+  // -- correctly, since that cell's own bottom edge is the drop target -- so an
+  // unbounded search for the nearest gutter reached back and found some row's
+  // side edge instead. Hit testing now handles the region below the content
+  // directly rather than by proximity.
+  it('is absent when the notebook ends in a cell', () => {
+    const s = solve(tree([['a'], ['a'], []]));
+    const trailing = s.gutters.filter(
+      g => g.path.length === 0 && g.cellAfter < 0
+    );
+    expect(trailing).toHaveLength(0);
+  });
+
+  it('exists when the notebook ends in a group', () => {
+    const s = solve(tree([[], ['a'], ['a']]));
+    const trailing = s.gutters.filter(
+      g => g.path.length === 0 && g.cellAfter < 0
+    );
+    expect(trailing).toHaveLength(1);
+    expect(trailing[0].cellBefore).toBe(2);
+  });
+
+  it('leaves only distant gutters for a proximity search to grab', () => {
+    // Root is [row, cell]: the row is bracketed at the top of the notebook and
+    // the trailing cell needs no gutter. Every gutter present is therefore
+    // somewhere other than the bottom, which is what an unbounded
+    // nearest-gutter search had to return for a drop below the notebook.
+    const s = solve(tree([['a'], ['a'], []]));
+    expect(s.gutters.length).toBeGreaterThan(0);
+    expect(s.gutters.every(g => g.cellAfter >= 0)).toBe(true);
   });
 });
