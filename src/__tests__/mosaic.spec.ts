@@ -560,3 +560,33 @@ describe('collapse', () => {
     expect(solve(repaired).gutters).toHaveLength(0);
   });
 });
+
+describe('collapse and deletion', () => {
+  // Regression: the repair used to be written straight back to metadata on
+  // every rebuild. Deleting one cell of a two-cell row left the other alone in
+  // its group, the repair rewrote that survivor's path, and undoing the
+  // deletion then restored a cell into a group its neighbour had already left
+  // -- so the row came back as a column. The tree work is unchanged; what the
+  // fix turns on is *when* its result is persisted.
+  it('flattens a row left holding one cell', () => {
+    const root = tree([['g'], []]);
+    collapse(root);
+    expect([...cellPaths(root).values()]).toEqual([[], []]);
+  });
+
+  it('restores the row when the deleted cell comes back', () => {
+    // Metadata as it stands if the survivor's path was never rewritten: the
+    // deleted cell returns still carrying its group, and the row reforms.
+    const root = tree([['g'], ['g'], []]);
+    collapse(root);
+    expect([...cellPaths(root).values()]).toEqual([['g'], ['g'], []]);
+  });
+
+  it('cannot reform the row once the survivor has been rewritten', () => {
+    // The same undo against metadata that was eagerly repaired: the restored
+    // cell is alone in 'g', so collapsing flattens it too and the row is lost.
+    const root = tree([['g'], [], []]);
+    collapse(root);
+    expect([...cellPaths(root).values()]).toEqual([[], [], []]);
+  });
+});

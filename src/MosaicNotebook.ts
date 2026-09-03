@@ -244,6 +244,7 @@ export class MosaicNotebook implements IGridHost {
     if (inserted) {
       this.setPath(inserted.model, destination);
     }
+    this.persistRepair();
     this.requestUpdate();
   }
 
@@ -271,14 +272,34 @@ export class MosaicNotebook implements IGridHost {
    * new cell above or below a tile looks like.
    */
   /**
+   * Note that the next rebuild should persist its repairs.
+   *
+   * Called for changes the user made to the layout, and once on load. A
+   * deletion deliberately does not: see the comment in {@link rebuild}.
+   */
+  persistRepair(): void {
+    this._repairPending = true;
+  }
+
+  private _repairPending = true;
+
+  /**
    * Persist repaired paths, so a corrupted notebook is fixed on disk and not
    * merely on screen. Writing nothing when nothing moved keeps a clean notebook
-   * clean -- this runs on every rebuild, including the first after loading.
+   * clean, so loading a sound one does not dirty it.
+   *
+   * The writes are one non-undoable transaction: normalising the metadata is
+   * housekeeping, and letting it onto the undo stack would put an undo step
+   * between the user and the edit they actually want back.
    */
   private _writeBackPaths(repaired: Map<number, string[]>): boolean {
+    const model = this.notebook.model;
     const cells = this.notebook.widgets;
-    let changed = false;
+    if (!model) {
+      return false;
+    }
 
+    const pending: [ICellModel, string[]][] = [];
     for (const [index, path] of repaired) {
       const cell = cells[index];
       if (!cell) {
@@ -286,11 +307,19 @@ export class MosaicNotebook implements IGridHost {
       }
       const current = this.pathOf(cell.model);
       if (!current || current.join('/') !== path.join('/')) {
-        this.setPath(cell.model, path);
-        changed = true;
+        pending.push([cell.model, path]);
       }
     }
-    return changed;
+    if (pending.length === 0) {
+      return false;
+    }
+
+    model.sharedModel.transact(() => {
+      for (const [cell, path] of pending) {
+        this.setPath(cell, path);
+      }
+    }, false);
+    return true;
   }
 
   private _inferMissingPaths(): boolean {
@@ -349,7 +378,15 @@ export class MosaicNotebook implements IGridHost {
       state
     );
     collapse(root);
-    if (this._writeBackPaths(cellPaths(root))) {
+
+    // The repair only reaches metadata on load or after a layout change the
+    // user asked for. Persisting it after a deletion would rewrite the
+    // surviving sibling's path, so undoing that deletion would bring the cell
+    // back into a group its neighbour had already left, and the row would come
+    // back flattened. Collapsing in memory keeps the display right meanwhile.
+    const persist = this._repairPending;
+    this._repairPending = false;
+    if (persist && this._writeBackPaths(cellPaths(root))) {
       // Paths moved, so group state now hangs off different keys: rebuild from
       // the repaired metadata rather than patching the tree's own paths.
       root = buildTree(
@@ -507,6 +544,7 @@ export class MosaicNotebook implements IGridHost {
     if (!model) {
       return;
     }
+    this._repairPending = true; // repair whatever we just loaded
     model.cells.changed.connect(this._onCellsChanged, this);
     model.metadataChanged.connect(this._onMetadataChanged, this);
     for (let i = 0; i < model.cells.length; i++) {

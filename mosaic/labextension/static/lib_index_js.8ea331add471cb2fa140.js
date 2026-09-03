@@ -759,6 +759,29 @@ class MosaicGrid {
         }
         return null;
     }
+    /**
+     * The gutter nearest a viewport-local point, whatever the distance.
+     *
+     * Used for drops that land outside the grid altogether -- most often the
+     * blank space below the last row, which should read as the notebook's
+     * trailing seam rather than as some arbitrary cell edge.
+     */
+    nearestGutter(x, y) {
+        var _a, _b;
+        let best = null;
+        let bestDistance = Infinity;
+        for (const gutter of (_b = (_a = this._solution) === null || _a === void 0 ? void 0 : _a.gutters) !== null && _b !== void 0 ? _b : []) {
+            const r = this.gutterRect(gutter);
+            const dx = Math.max(r.x0 - x, 0, x - r.x1);
+            const dy = Math.max(r.y0 - y, 0, y - r.y1);
+            const distance = dx * dx + dy * dy;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = gutter;
+            }
+        }
+        return best;
+    }
     /** Highlight one gutter as the pending drop target, or clear the highlight. */
     highlightGutter(gutter) {
         for (const [key, el] of this._gutterNodes) {
@@ -1175,6 +1198,7 @@ class MosaicNotebook {
         this._watched = new WeakSet();
         this._disposed = false;
         this._rootInsertPending = false;
+        this._repairPending = true;
         const anyNb = notebook;
         this.grid = new _MosaicGrid__WEBPACK_IMPORTED_MODULE_2__.MosaicGrid(notebook.viewportNode, anyNb._innerElement, notebook.outerNode, this);
         this._installViewModelOverrides();
@@ -1328,6 +1352,7 @@ class MosaicNotebook {
         if (inserted) {
             this.setPath(inserted.model, destination);
         }
+        this.persistRepair();
         this.requestUpdate();
     }
     /**
@@ -1351,13 +1376,30 @@ class MosaicNotebook {
      * new cell above or below a tile looks like.
      */
     /**
+     * Note that the next rebuild should persist its repairs.
+     *
+     * Called for changes the user made to the layout, and once on load. A
+     * deletion deliberately does not: see the comment in {@link rebuild}.
+     */
+    persistRepair() {
+        this._repairPending = true;
+    }
+    /**
      * Persist repaired paths, so a corrupted notebook is fixed on disk and not
      * merely on screen. Writing nothing when nothing moved keeps a clean notebook
-     * clean -- this runs on every rebuild, including the first after loading.
+     * clean, so loading a sound one does not dirty it.
+     *
+     * The writes are one non-undoable transaction: normalising the metadata is
+     * housekeeping, and letting it onto the undo stack would put an undo step
+     * between the user and the edit they actually want back.
      */
     _writeBackPaths(repaired) {
+        const model = this.notebook.model;
         const cells = this.notebook.widgets;
-        let changed = false;
+        if (!model) {
+            return false;
+        }
+        const pending = [];
         for (const [index, path] of repaired) {
             const cell = cells[index];
             if (!cell) {
@@ -1365,11 +1407,18 @@ class MosaicNotebook {
             }
             const current = this.pathOf(cell.model);
             if (!current || current.join('/') !== path.join('/')) {
-                this.setPath(cell.model, path);
-                changed = true;
+                pending.push([cell.model, path]);
             }
         }
-        return changed;
+        if (pending.length === 0) {
+            return false;
+        }
+        model.sharedModel.transact(() => {
+            for (const [cell, path] of pending) {
+                this.setPath(cell, path);
+            }
+        }, false);
+        return true;
     }
     _inferMissingPaths() {
         var _a, _b;
@@ -1418,7 +1467,14 @@ class MosaicNotebook {
         // show up as tiles wrapped around a plain run of cells.
         let root = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.buildTree)(cells.map(c => this.pathOf(c.model)), weight, state);
         (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.collapse)(root);
-        if (this._writeBackPaths((0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.cellPaths)(root))) {
+        // The repair only reaches metadata on load or after a layout change the
+        // user asked for. Persisting it after a deletion would rewrite the
+        // surviving sibling's path, so undoing that deletion would bring the cell
+        // back into a group its neighbour had already left, and the row would come
+        // back flattened. Collapsing in memory keeps the display right meanwhile.
+        const persist = this._repairPending;
+        this._repairPending = false;
+        if (persist && this._writeBackPaths((0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.cellPaths)(root))) {
             // Paths moved, so group state now hangs off different keys: rebuild from
             // the repaired metadata rather than patching the tree's own paths.
             root = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.buildTree)(cells.map(c => this.pathOf(c.model)), weight, state);
@@ -1548,6 +1604,7 @@ class MosaicNotebook {
         if (!model) {
             return;
         }
+        this._repairPending = true; // repair whatever we just loaded
         model.cells.changed.connect(this._onCellsChanged, this);
         model.metadataChanged.connect(this._onMetadataChanged, this);
         for (let i = 0; i < model.cells.length; i++) {
@@ -2443,6 +2500,8 @@ const JUPYTER_CELL_CLASS = 'jp-Cell';
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 /** Distance from a group's edge, in px, that triggers drag auto-scroll. */
 const AUTOSCROLL_MARGIN = 24;
+/** How far outside a cell a drop still counts as aimed at that cell. */
+const CELL_HIT_MARGIN = 12;
 function installMosaicDrag(notebook) {
     const anyNb = notebook;
     anyNb._evtDrop = (event) => mosaicDrop(notebook, event);
@@ -2568,6 +2627,7 @@ function mosaicDrop(notebook, event) {
     if (fromIndex !== toIndex) {
         notebook.moveCell(fromIndex, toIndex, toMove.length);
     }
+    mosaic.persistRepair();
     mosaic.requestUpdate();
 }
 function mosaicDragOver(notebook, event) {
@@ -2621,18 +2681,27 @@ function clearDropTargets(notebook) {
     }
     (_a = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_4__.mosaicOf)(notebook)) === null || _a === void 0 ? void 0 : _a.grid.highlightGutter(null);
 }
-/** What lies under a client point: a gutter, or a cell and one of its edges. */
+/**
+ * What lies under a client point: a gutter, or a cell and one of its edges.
+ *
+ * Tried in order of how directly the point identifies a target. The last two
+ * steps matter as much as the first: without them a drop in empty space fell
+ * through to whichever cell happened to be nearest and then to whichever of
+ * *its* edges was closest, which for a point below the notebook was some cell
+ * mid-row -- and, further out, could be a cell anywhere at all.
+ */
 function hitTest(notebook, clientX, clientY) {
-    // Gutters win: they are narrow, and the cells beside them are always
-    // reachable by aiming a little further in.
     const mosaic = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_4__.mosaicOf)(notebook);
-    if (mosaic) {
-        const rect = notebook.viewportNode.getBoundingClientRect();
-        const gutter = mosaic.grid.gutterAt(clientX - rect.left, clientY - rect.top);
-        if (gutter) {
-            return { kind: 'gutter', gutter };
-        }
+    const rect = notebook.viewportNode.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    // 1. In a gutter. Gutters are narrow, and the cells beside them stay
+    //    reachable by aiming a little further in.
+    const inGutter = mosaic === null || mosaic === void 0 ? void 0 : mosaic.grid.gutterAt(x, y);
+    if (inGutter) {
+        return { kind: 'gutter', gutter: inGutter };
     }
+    // 2. On a cell, or close enough to it to have meant it.
     let target = elementFromPoint(clientX, clientY);
     while (target && !target.classList.contains(JUPYTER_CELL_CLASS)) {
         target = target.parentElement;
@@ -2647,13 +2716,36 @@ function hitTest(notebook, clientX, clientY) {
             };
         }
     }
-    // Not over a cell: fall back to the nearest cell in the grid, so drops in the
-    // gaps between tiles and past the end of the notebook still land somewhere.
-    return nearestCell(notebook, clientX, clientY);
+    const near = nearestCell(notebook, clientX, clientY, CELL_HIT_MARGIN);
+    if (near) {
+        return {
+            kind: 'cell',
+            index: near.index,
+            side: closestSide(clientX, clientY, notebook.widgets[near.index].node, 0.25)
+        };
+    }
+    // 3. Outside everything: the nearest seam. Dropping below the last row means
+    //    the notebook's trailing gutter, not a cell edge inside that row.
+    const nearestGutter = mosaic === null || mosaic === void 0 ? void 0 : mosaic.grid.nearestGutter(x, y);
+    if (nearestGutter) {
+        return { kind: 'gutter', gutter: nearestGutter };
+    }
+    // 4. No seams at all -- a notebook that is one plain column. Fall back to the
+    //    nearest cell, taking the side from the direction the point lies in
+    //    rather than from its closest edge, which is meaningless out here.
+    const outside = nearestCell(notebook, clientX, clientY, Infinity);
+    return outside
+        ? { kind: 'cell', index: outside.index, side: outside.side }
+        : null;
 }
-function nearestCell(notebook, clientX, clientY) {
+/**
+ * The nearest cell within `margin` of the point, with the side taken from the
+ * direction the point lies in relative to it.
+ */
+function nearestCell(notebook, clientX, clientY, margin) {
     let best = -1;
-    let bestDist = Infinity;
+    let bestDistance = Infinity;
+    let bestSide = 'bottom';
     for (let i = 0; i < notebook.widgets.length; i++) {
         const node = notebook.widgets[i].node;
         if (node.dataset.mosaicHidden || !node.isConnected) {
@@ -2665,20 +2757,22 @@ function nearestCell(notebook, clientX, clientY) {
         }
         const dx = Math.max(rect.left - clientX, 0, clientX - rect.right);
         const dy = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
-        const dist = dx * dx + dy * dy;
-        if (dist < bestDist) {
-            bestDist = dist;
-            best = i;
+        const distance = dx * dx + dy * dy;
+        if (distance >= bestDistance || Math.max(dx, dy) > margin) {
+            continue;
         }
+        bestDistance = distance;
+        best = i;
+        bestSide =
+            dy >= dx
+                ? clientY < rect.top
+                    ? 'top'
+                    : 'bottom'
+                : clientX < rect.left
+                    ? 'left'
+                    : 'right';
     }
-    if (best < 0) {
-        return null;
-    }
-    return {
-        kind: 'cell',
-        index: best,
-        side: closestSide(clientX, clientY, notebook.widgets[best].node, 0.25)
-    };
+    return best < 0 ? null : { index: best, side: bestSide };
 }
 /**
  * Which side of an element a point is nearest.
@@ -2734,4 +2828,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.a36e750ca616f4156b8b.js.map
+//# sourceMappingURL=lib_index_js.8ea331add471cb2fa140.js.map
