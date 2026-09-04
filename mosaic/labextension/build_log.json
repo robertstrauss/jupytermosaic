@@ -1,6 +1,6 @@
 [
   {
-    "bail": true,
+    "bail": false,
     "module": {
       "rules": [
         {
