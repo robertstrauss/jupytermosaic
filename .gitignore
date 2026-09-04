@@ -129,3 +129,6 @@ dmypy.json
 # one packaged (see shared-data in pyproject.toml) and both map to the same
 # wheel path, so tracking this one breaks the build.
 mosaic/labextension/install.json
+
+# Session notes, local only
+HANDOFF.md
