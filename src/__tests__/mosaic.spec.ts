@@ -12,6 +12,8 @@ import {
   findGroup,
   flexFactors,
   groupKey,
+  linearSolution,
+  minGridWidth,
   nearestInDirection,
   rowFloors,
   sideFrom,
@@ -21,16 +23,13 @@ import {
 
 const noState = (): IGroupState => ({});
 
-/** Content-track weights, ignoring any gutter tracks. */
-const weightsOf = (s: ISolution) =>
-  s.colTracks.filter(t => !t.gutter).map(t => t.weight);
+const weightsOf = (s: ISolution) => s.colTracks.map(t => t.weight);
 
-const contentRows = (s: ISolution) =>
-  s.rowTracks.filter(t => !t.gutter).length;
+const contentRows = (s: ISolution) => s.rowTracks.length;
 
-/** Row floors for the content tracks only, in order. */
+/** Row floors, in track order. */
 const contentFloors = (s: ISolution, height: (i: number) => number) =>
-  rowFloors(s, height).filter((_, i) => !s.rowTracks[i].gutter);
+  rowFloors(s, height);
 const unitWeight = () => 1;
 
 const tree = (
@@ -123,12 +122,12 @@ describe('solve', () => {
     expect(s.placements.get(3)).toMatchObject({ colStart: 2, colEnd: 4 });
     expect(s.placements.get(4)).toMatchObject({ colStart: 4, colEnd: 5 });
 
-    // The two rows occupy separate bands, with a gutter between them because
-    // both children of the root are groups.
+    // The two rows occupy separate bands. Both children of the root are groups,
+    // so the seam between them carries a gutter -- which takes no line of its
+    // own, leaving the bands to abut.
     expect(contentRows(s)).toBe(2);
-    expect(s.placements.get(2)!.rowStart).toBeGreaterThan(
-      s.placements.get(0)!.rowEnd
-    );
+    expect(s.placements.get(2)!.rowStart).toBe(s.placements.get(0)!.rowEnd);
+    expect(s.gutters.some(g => g.between)).toBe(true);
   });
 
   it('gives column weights that sum to one', () => {
@@ -193,12 +192,13 @@ describe('solve', () => {
     const s = solve(tree([['a'], ['a']]));
     expect(s.groupPlacements.has(groupKey([]))).toBe(true);
     const placement = s.groupPlacements.get(groupKey(['a']))!.placement;
-    // The row spans both columns, and sits between the notebook's edge gutters.
+    // The row spans both columns and the notebook's whole height: its edge
+    // gutters sit on the outer lines and take no track of their own.
     expect(placement.colStart).toBe(1);
     expect(placement.colEnd).toBe(3);
     expect(placement.rowEnd - placement.rowStart).toBe(1);
-    expect(s.rowTracks[placement.rowStart - 2].gutter).toBe(true);
-    expect(s.rowTracks[placement.rowEnd - 1].gutter).toBe(true);
+    expect(placement.rowStart).toBe(1);
+    expect(placement.rowEnd).toBe(s.rowTracks.length + 1);
   });
 
   it('nests managed groups innermost-owner-first', () => {
@@ -449,33 +449,34 @@ describe('gutters', () => {
     const leading = s.gutters.find(g => g.index === 0)!;
     expect(leading.cellBefore).toBe(-1);
     expect(leading.cellAfter).toBe(0);
-    // Nothing precedes it, so its track is the very first.
+    // Nothing precedes it, so it falls on the very first line.
     expect(leading.line).toBe(1);
 
     const trailing = s.gutters.find(g => g.index === 2)!;
     expect(trailing.cellAfter).toBe(-1);
     expect(trailing.cellBefore).toBe(3);
-    expect(s.rowTracks[trailing.line - 1].gutter).toBe(true);
-    expect(trailing.line).toBe(s.rowTracks.length);
+    expect(trailing.line).toBe(s.rowTracks.length + 1);
   });
 
-  it('gives every gutter a track of its own', () => {
+  it('costs no track of its own', () => {
+    // A gutter falls on a line and lives in the gap already there, so a
+    // notebook with seams has exactly as many tracks as it has bands. Giving
+    // each one a track opened a channel the full length of the grid, which
+    // every other band paid for as an outsized gap.
     const plain = solve(tree([[], [], []]));
     const gutted = solve(tree([['a'], ['a'], ['b'], ['b']]));
-    expect(plain.rowTracks.filter(t => t.gutter)).toHaveLength(0);
-    // Two bands of content, bracketed and separated.
-    expect(gutted.rowTracks.filter(t => t.gutter)).toHaveLength(3);
-    expect(gutted.rowTracks).toHaveLength(5);
+    expect(gutted.gutters.length).toBeGreaterThan(0);
+    expect(plain.rowTracks).toHaveLength(3);
+    expect(gutted.rowTracks).toHaveLength(2);
   });
 
-  it('separates the two sides across the gutter track', () => {
+  it('leaves the two sides of a seam sharing one line', () => {
     const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
     const above = s.placements.get(0)!;
     const below = s.placements.get(2)!;
-    // The group above ends before the gutter and the one below starts after,
-    // leaving exactly one track between them.
-    expect(below.rowStart - above.rowEnd).toBe(1);
-    expect(s.rowTracks[above.rowEnd - 1].gutter).toBe(true);
+    expect(below.rowStart).toBe(above.rowEnd);
+    const seam = s.gutters.find(g => g.between)!;
+    expect(seam.line).toBe(above.rowEnd);
   });
 
   it('runs vertical gutters between the columns of a row', () => {
@@ -485,15 +486,12 @@ describe('gutters', () => {
     // One between the columns, plus the row's own two ends.
     expect(vertical).toHaveLength(3);
     expect(vertical.every(g => g.path.join('/') === 'r')).toBe(true);
-    expect(s.colTracks.filter(t => t.gutter)).toHaveLength(3);
+    expect(s.colTracks).toHaveLength(2);
   });
 
-  it('keeps track floors off the gutters', () => {
+  it('floors every track, there being no spacer tracks to skip', () => {
     const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
-    const floors = rowFloors(s, () => 100);
-    for (let i = 0; i < s.rowTracks.length; i++) {
-      expect(floors[i]).toBe(s.rowTracks[i].gutter ? 0 : 100);
-    }
+    expect(rowFloors(s, () => 100)).toEqual([100, 100]);
   });
 });
 
@@ -653,5 +651,169 @@ describe('the trailing seam', () => {
     const s = solve(tree([['a'], ['a'], []]));
     expect(s.gutters.length).toBeGreaterThan(0);
     expect(s.gutters.every(g => g.cellAfter >= 0)).toBe(true);
+  });
+});
+
+describe('linearSolution', () => {
+  it('gives every cell its own row of one column', () => {
+    const s = linearSolution(3);
+    expect(s.collapsed).toBe(true);
+    expect(contentRows(s)).toBe(3);
+    expect(s.colTracks).toHaveLength(1);
+    for (let i = 0; i < 3; i++) {
+      const p = s.placements.get(i)!;
+      expect(p.colStart).toBe(1);
+      expect(p.colEnd).toBe(2);
+      expect(p.rowEnd).toBe(p.rowStart + 1);
+    }
+    // Document order, top to bottom.
+    expect(s.placements.get(0)!.rowStart).toBeLessThan(
+      s.placements.get(1)!.rowStart
+    );
+  });
+
+  it('drops the two-dimensional chrome, which has nowhere to go', () => {
+    const s = linearSolution(4);
+    expect(s.gutters).toHaveLength(0);
+    expect(s.managed).toHaveLength(0);
+    expect(s.groupPlacements.size).toBe(0);
+  });
+
+  it('still floors each row at its cell height', () => {
+    const s = linearSolution(2);
+    expect(contentFloors(s, i => (i === 0 ? 40 : 90))).toEqual([40, 90]);
+  });
+
+  it('is empty for an empty notebook', () => {
+    const s = linearSolution(0);
+    expect(s.colTracks).toHaveLength(0);
+    expect(s.placements.size).toBe(0);
+  });
+});
+
+describe('rowFloors across a spanned range', () => {
+  // A row holding a cell beside a column of two: the lone cell spans both of
+  // the row tracks that the column's two cells split between them.
+  const banded = () => solve(tree([['g'], ['g', 'c'], ['g', 'c']]));
+  const total = (floors: number[]) => floors.reduce((a, b) => a + b, 0);
+
+  it('charges a spanning cell only for what its tracks lack', () => {
+    // Band needs max(100, 100 + 10) = 110. Charging the spanning cell's whole
+    // height to both tracks gave 100 + 50 = 150, and every cell in the band
+    // stretched to fill it.
+    const s = banded();
+    expect(total(rowFloors(s, i => [100, 100, 10][i]))).toBeCloseTo(110, 6);
+  });
+
+  it('leaves a track at the height of the cell that sits in it alone', () => {
+    const floors = rowFloors(banded(), i => [100, 100, 10][i]);
+    expect(floors.filter(v => v > 0)).toEqual([100, 10]);
+  });
+
+  it('still makes room for a spanning cell taller than its whole range', () => {
+    const s = banded();
+    const floors = rowFloors(s, i => [300, 100, 10][i]);
+    expect(total(floors)).toBeCloseTo(300, 6);
+    // The shortfall is shared, so neither track drops below what it needs.
+    expect(Math.min(...floors.filter(v => v > 0))).toBeGreaterThanOrEqual(10);
+  });
+
+  it('counts the gaps inside a span as height the cell already has', () => {
+    // 100 + gap + 10 covers a 118px spanning cell exactly.
+    const s = banded();
+    const floors = rowFloors(s, i => [118, 100, 10][i], { gap: 8 });
+    expect(total(floors)).toBeCloseTo(110, 6);
+  });
+
+  it('is unchanged for a plain column, where nothing spans', () => {
+    const s = solve(tree([[], [], []]));
+    expect(contentFloors(s, i => [50, 60, 70][i])).toEqual([50, 60, 70]);
+  });
+});
+
+describe('gutter rules', () => {
+  // Only a seam between two parallel groups is ambiguous to the eye; the ones
+  // at a group's outer edges are drop targets with nothing to say.
+  it('marks the seam between two adjacent groups', () => {
+    const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
+    const between = s.gutters.filter(g => g.between);
+    expect(between).toHaveLength(1);
+    expect(between[0].cellBefore).toBe(1);
+    expect(between[0].cellAfter).toBe(2);
+  });
+
+  it('does not mark a group\'s leading or trailing edge', () => {
+    const s = solve(tree([['a'], ['a'], []]));
+    expect(s.gutters.length).toBeGreaterThan(0);
+    expect(s.gutters.every(g => !g.between)).toBe(true);
+  });
+
+  it('keeps every gutter, marked or not, as a drop target', () => {
+    const s = solve(tree([['a'], ['a'], ['b'], ['b']]));
+    expect(s.gutters.length).toBeGreaterThan(1);
+  });
+});
+
+describe('minGridWidth', () => {
+  const metrics = { minCell: 160, gap: 8, padding: 16 };
+
+  /** Width of each track at a given grid width. */
+  const tracksAt = (s: ISolution, width: number) => {
+    const n = s.colTracks.length;
+    const fixed = metrics.padding + metrics.gap * (n - 1);
+    const total = s.colTracks.reduce((a, t) => a + t.weight, 0);
+    const free = Math.max(width, minGridWidth(s, metrics)) - fixed;
+    return s.colTracks.map(t => (t.weight / total) * free);
+  };
+
+  // A row of [column, cell, column] where each column subdivides horizontally.
+  // The bare cell holds one third in a single track; each column holds its
+  // third across two. Flooring each *track* held the columns to twice the
+  // minimum of the cell, so the three stopped being equal.
+  const mixed = () => {
+    const root = tree([
+      ['r', 'a', 'x'],
+      ['r', 'a', 'x'],
+      ['r', 'a'],
+      ['r'],
+      ['r', 'b', 'y'],
+      ['r', 'b', 'y'],
+      ['r', 'b']
+    ]);
+    collapse(root);
+    return solve(root);
+  };
+
+  it('keeps a cell and its sibling columns equal at any width', () => {
+    const s = mixed();
+    for (const width of [2000, 1400, 900, 400]) {
+      const t = tracksAt(s, width);
+      // [colA/2, colA/2, cell, colB/2, colB/2]
+      expect(t[0] + t[1]).toBeCloseTo(t[2], 6);
+      expect(t[3] + t[4]).toBeCloseTo(t[2], 6);
+    }
+  });
+
+  it('holds the grid open at one minimum per track', () => {
+    const s = mixed();
+    expect(minGridWidth(s, metrics)).toBeCloseTo(
+      metrics.padding +
+        metrics.gap * (s.colTracks.length - 1) +
+        s.colTracks.length * metrics.minCell,
+      6
+    );
+  });
+
+  it('lets a fine subdivision shrink its own cells, not its siblings', () => {
+    // At the floor the four outer tracks are half the width of the middle
+    // cell's, because they are half its share -- not because they were each
+    // held to the minimum, which is what used to unbalance the row.
+    const t = tracksAt(mixed(), 0);
+    expect(t[0]).toBeCloseTo(t[2] / 2, 6);
+    expect(t[0]).toBeLessThan(metrics.minCell);
+  });
+
+  it('imposes no minimum on a collapsed layout', () => {
+    expect(minGridWidth(linearSolution(5), metrics)).toBe(0);
   });
 });

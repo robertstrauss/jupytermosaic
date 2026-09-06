@@ -18,7 +18,12 @@ import { ILauncher } from '@jupyterlab/launcher';
 import { LabIcon, addAboveIcon, addBelowIcon } from '@jupyterlab/ui-components';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
-import { Direction, MosaicNotebookPanel, mosaicOf } from './MosaicNotebook';
+import {
+  Direction,
+  MosaicNotebookPanel,
+  mosaicOf,
+  mosaicOptions
+} from './MosaicNotebook';
 import {
   Notebook as NotebookWidget,
   NotebookActions
@@ -86,9 +91,13 @@ const addRightIcon = new LabIcon({
 const PLUGIN_ID = 'mosaic:plugin';
 const MOSAIC_FACTORY = 'MosaicNotebook';
 
-function applySettings(s: any): void {
+function applySettings(s: any, tracker: NotebookTracker): void {
   document.body.classList.toggle('mosaic-skeuomorphic', !!s.skeuomorphic);
   document.body.classList.toggle('mosaic-top-cell-handles', !!s.topCellHandle);
+  mosaicOptions.collapseWhenNarrow = s.collapseWhenNarrow !== false;
+  // This one is read during layout rather than by a stylesheet, so every open
+  // notebook has to be asked to lay out again.
+  tracker.forEach(panel => mosaicOf(panel.content)?.requestUpdate());
 }
 
 const plugin: JupyterFrontEndPlugin<void> = {
@@ -114,8 +123,8 @@ const plugin: JupyterFrontEndPlugin<void> = {
     settings: ISettingRegistry
   ) => {
     const loaded = await settings.load(PLUGIN_ID);
-    applySettings(loaded.composite);
-    loaded.changed.connect(() => applySettings(loaded.composite));
+    applySettings(loaded.composite, tracker);
+    loaded.changed.connect(() => applySettings(loaded.composite, tracker));
 
     // The shared NotebookTracker holds both kinds of panel, so teach its
     // restorer to record which factory each one came from. This is cheaper than

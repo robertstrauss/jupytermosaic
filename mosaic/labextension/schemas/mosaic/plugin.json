@@ -16,6 +16,12 @@
       "title": "Cell Handle Placement",
       "default": true,
       "description": "Put cell handles above code areas rather than beside it"
+    },
+    "collapseWhenNarrow": {
+      "type": "boolean",
+      "title": "Collapse To One Column When Too Narrow",
+      "default": true,
+      "description": "When the panel is narrower than the layout's columns can fit, render the notebook as a single linear column instead of overflowing into a horizontal scroll. The saved layout is untouched and returns when the panel is widened."
     }
   },
   "jupyter.lab.toolbars": {

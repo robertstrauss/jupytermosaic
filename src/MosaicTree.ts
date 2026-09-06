@@ -74,10 +74,9 @@ export interface IManagedGroup {
   cells: number[];
 }
 
-/** One grid track: either a content track or a drop gutter between groups. */
+/** One grid track. */
 export interface ITrack {
-  gutter: boolean;
-  /** Share of the axis, for content tracks only. */
+  /** Share of the axis. */
   weight: number;
 }
 
@@ -86,17 +85,22 @@ export interface ITrack {
  *
  * Two groups meeting edge to edge have no cell along the seam to drop onto, so
  * there is otherwise no way to land between them -- a drop necessarily joins a
- * cell inside one of them. A gutter is a real grid track, so it takes space,
- * accepts a drop, and carries the rule that distinguishes a row of columns from
- * a column of rows. Cells adjacent to a group need none: dropping on the cell
- * already reaches the seam.
+ * cell inside one of them. A gutter takes no space of its own: it names the
+ * grid line the seam falls on, and the drop target and the rule both live in
+ * the ordinary gap that already separates the two tracks there. Giving it a
+ * track instead made a seam cost a gap, a track and another gap -- and because
+ * a track runs the whole length of the grid, every other band paid that too,
+ * opening a wide channel across rows that had no seam to show.
+ *
+ * Cells adjacent to a group need no gutter: dropping on the cell already
+ * reaches the seam.
  */
 export interface IGutter {
   /** Path of the group whose children the gutter separates. */
   path: string[];
   /** Axis of that group: 'col' stacks children, so the gutter is horizontal. */
   axis: Axis;
-  /** Grid line the gutter track starts at; it spans one track. */
+  /** Grid line the seam falls on. The gap before it is the drop target. */
   line: number;
   /** The group's extent across the other axis, as grid lines. */
   start: number;
@@ -107,12 +111,20 @@ export interface IGutter {
   cellAfter: number;
   /** Last cell of the child before the gutter, or -1 at a leading edge. */
   cellBefore: number;
+  /**
+   * True where the gutter separates two sibling *groups* -- a row above a row,
+   * or a column beside a column. That is the only arrangement a reader cannot
+   * resolve by eye, so it is the only one that carries a drawn rule. The
+   * gutters at a group's leading and trailing edge exist to catch a drop that
+   * belongs outside the group; there is nothing ambiguous about them.
+   */
+  between: boolean;
 }
 
 export interface ISolution {
-  /** Column tracks, in order, including gutters. */
+  /** Column tracks, in order. */
   colTracks: ITrack[];
-  /** Row tracks, in order, including gutters. */
+  /** Row tracks, in order. */
   rowTracks: ITrack[];
   /** Minimum height contributed to each row track, in px (0 = pure `auto`). */
   rowMinPx: number[];
@@ -126,6 +138,46 @@ export interface ISolution {
   groupPlacements: Map<string, { node: IGroupNode; placement: IPlacement }>;
   /** Seams between adjacent sibling groups. */
   gutters: IGutter[];
+  /**
+   * True for the degenerate single-column layout produced by
+   * {@link linearSolution}, which the grid falls back to when the panel is too
+   * narrow to hold the real one. Consumers use it to drop two-dimensional
+   * affordances that have nowhere to go in one column.
+   */
+  collapsed?: boolean;
+}
+
+/**
+ * The layout a notebook has without the extension: every cell in its own row of
+ * a single column, in document order.
+ *
+ * This is a *rendering* fallback for a panel narrower than the mosaic's
+ * columns can fit. It touches no metadata, so the real layout comes straight
+ * back when the panel widens again.
+ */
+export function linearSolution(count: number): ISolution {
+  const placements = new Map<number, IPlacement>();
+  const rowTracks: ITrack[] = [];
+  for (let index = 0; index < count; index++) {
+    placements.set(index, {
+      rowStart: index + 1,
+      rowEnd: index + 2,
+      colStart: 1,
+      colEnd: 2
+    });
+    rowTracks.push({ weight: 1 });
+  }
+  return {
+    colTracks: count > 0 ? [{ weight: 1 }] : [],
+    rowTracks,
+    rowMinPx: new Array(rowTracks.length).fill(0),
+    placements,
+    managed: [],
+    managedOwner: new Map(),
+    groupPlacements: new Map(),
+    gutters: [],
+    collapsed: true
+  };
 }
 
 /** The axis a group at the given depth divides along. Root (depth 0) is a column. */
@@ -397,26 +449,17 @@ export function solve(root: IGroupNode): ISolution {
   const xAt = new Map(xLines.map((v, i) => [v, i]));
   const yAt = new Map(yLines.map((v, i) => [v, i]));
 
-  const xGutters = new Set<number>();
-  const yGutters = new Set<number>();
-  for (const mark of marks) {
-    const at = (mark.node.axis === 'col' ? yAt : xAt).get(mark.coord);
-    if (at !== undefined) {
-      (mark.node.axis === 'col' ? yGutters : xGutters).add(at);
-    }
-  }
-
-  const columns = buildAxis(xLines, xGutters);
-  const rows = buildAxis(yLines, yGutters);
+  const columns = buildAxis(xLines);
+  const rows = buildAxis(yLines);
   const rowMinPx = new Array(rows.tracks.length).fill(0);
 
-  // A node ends where the gutter before it begins, and starts where that
-  // gutter ends, so the two sides of a seam use different line maps.
+  // Two nodes meeting at a seam share the line: nothing is inserted between
+  // them, so one ends exactly where the next begins.
   const place = (r: IRect): IPlacement => ({
-    rowStart: rows.start[yAt.get(r.y0)!],
-    rowEnd: rows.end[yAt.get(r.y1)!],
-    colStart: columns.start[xAt.get(r.x0)!],
-    colEnd: columns.end[xAt.get(r.x1)!]
+    rowStart: rows.at[yAt.get(r.y0)!],
+    rowEnd: rows.at[yAt.get(r.y1)!],
+    colStart: columns.at[xAt.get(r.x0)!],
+    colEnd: columns.at[xAt.get(r.x1)!]
   });
 
   const placements = new Map<number, IPlacement>();
@@ -491,13 +534,17 @@ export function solve(root: IGroupNode): ISolution {
     gutters.push({
       path: mark.node.path,
       axis: mark.node.axis,
-      line: along.end[alongAt],
-      start: across.start[fromAt],
-      end: across.end[toAt],
+      line: along.at[alongAt],
+      start: across.at[fromAt],
+      end: across.at[toAt],
       index: mark.index,
       cellAfter: afterCells.length > 0 ? afterCells[0] : -1,
       cellBefore:
-        beforeCells.length > 0 ? beforeCells[beforeCells.length - 1] : -1
+        beforeCells.length > 0 ? beforeCells[beforeCells.length - 1] : -1,
+      // Marks are raised at a group's two outer edges and between each pair of
+      // adjacent sibling groups; only the last of those has a child on both
+      // sides.
+      between: !!before && !!after
     });
   }
 
@@ -514,41 +561,26 @@ export function solve(root: IGroupNode): ISolution {
 }
 
 /**
- * Lay out one axis, inserting a gutter track at each seam that needs one.
+ * Lay out one axis: one track between each pair of adjacent cut lines.
  *
- * Because a gutter takes a track of its own, the line a node ends at is no
- * longer the line the next node starts at, so two maps come back: `end` for a
- * node finishing at a logical line and `start` for one beginning there.
+ * Seams add nothing here. They fall *on* a line, and the gap the grid already
+ * puts between two tracks is where the rule is drawn and the drop is caught.
  */
-function buildAxis(
-  lines: number[],
-  gutters: Set<number>
-): { tracks: ITrack[]; start: number[]; end: number[] } {
+function buildAxis(lines: number[]): { tracks: ITrack[]; at: number[] } {
   const tracks: ITrack[] = [];
-  const start = new Array<number>(lines.length);
-  const end = new Array<number>(lines.length);
-  let line = 1;
+  const at = new Array<number>(lines.length);
 
   for (let i = 0; i < lines.length; i++) {
-    if (gutters.has(i)) {
-      end[i] = line;
-      tracks.push({ gutter: true, weight: 0 });
-      line += 1;
-      start[i] = line;
-    } else {
-      end[i] = line;
-      start[i] = line;
-    }
+    at[i] = i + 1;
     if (i < lines.length - 1) {
-      tracks.push({ gutter: false, weight: lines[i + 1] - lines[i] });
-      line += 1;
+      tracks.push({ weight: lines[i + 1] - lines[i] });
     }
   }
 
-  return { tracks, start, end };
+  return { tracks, at };
 }
 
-/** Indices of the non-gutter tracks a placement spans. */
+/** Indices of the tracks a placement spans. */
 export function contentTracks(
   tracks: ITrack[],
   startLine: number,
@@ -556,9 +588,7 @@ export function contentTracks(
 ): number[] {
   const out: number[] = [];
   for (let t = startLine - 1; t < endLine - 1 && t < tracks.length; t++) {
-    if (!tracks[t].gutter) {
-      out.push(t);
-    }
+    out.push(t);
   }
   return out.length > 0 ? out : [Math.max(0, startLine - 1)];
 }
@@ -630,27 +660,109 @@ export function newGroupId(): string {
  *
  * Cells inside a managed group are skipped: that group's own `size` already
  * holds its band open, and its cells sit outside the grid's flow anyway.
+ *
+ * A cell spanning several tracks only raises them by what it is *short* of,
+ * shared out between them -- CSS Grid 12.5's rule for distributing space across
+ * a spanned range, and the reason items are taken shortest-span first: a
+ * track's floor has to be settled by the cells sitting in it alone before a
+ * spanning cell is asked whether it still needs more. Charging every spanned
+ * track the cell's whole height instead made a band as tall as its tallest cell
+ * times the number of tracks beside it, and every cell in the band then
+ * stretched to that, trailing blank space under its content.
+ *
+ * @param metrics Track geometry the span already covers: the row `gap` between
+ *   tracks. Counting it as covered is what stops a spanning cell demanding room
+ *   for it a second time.
  */
 export function rowFloors(
   solution: ISolution,
-  cellHeight: (index: number) => number
+  cellHeight: (index: number) => number,
+  metrics: { gap?: number } = {}
 ): number[] {
+  const gap = metrics.gap ?? 0;
   const floors = solution.rowMinPx.slice();
+
+  const items: { height: number; placement: IPlacement; spanned: number[] }[] =
+    [];
   for (const [index, placement] of solution.placements) {
     if (solution.managedOwner.has(index)) {
       continue;
     }
-    const spanned = contentTracks(
-      solution.rowTracks,
-      placement.rowStart,
-      placement.rowEnd
-    );
-    const share = cellHeight(index) / spanned.length;
+    items.push({
+      height: cellHeight(index),
+      placement,
+      spanned: contentTracks(
+        solution.rowTracks,
+        placement.rowStart,
+        placement.rowEnd
+      )
+    });
+  }
+  items.sort((a, b) => a.spanned.length - b.spanned.length);
+
+  for (const { height, placement, spanned } of items) {
+    // What the span already provides: every track under it at its current
+    // floor, plus the gaps between them.
+    let covered = gap * Math.max(0, placement.rowEnd - placement.rowStart - 1);
+    for (let t = placement.rowStart - 1; t < placement.rowEnd - 1; t++) {
+      if (solution.rowTracks[t]) {
+        covered += floors[t] ?? 0;
+      }
+    }
+
+    const excess = height - covered;
+    if (excess <= 0) {
+      continue;
+    }
+    const share = excess / spanned.length;
     for (const t of spanned) {
-      floors[t] = Math.max(floors[t] ?? 0, share);
+      floors[t] = (floors[t] ?? 0) + share;
     }
   }
   return floors;
+}
+
+/** Fixed lengths the grid is drawn with, in px. */
+export interface IWidthMetrics {
+  /** Narrowest a single cell may be drawn. */
+  minCell: number;
+  /** Gap between two adjacent tracks. */
+  gap: number;
+  /** The grid's own left plus right padding. */
+  padding: number;
+}
+
+/**
+ * The narrowest the grid is drawn at, in px, before it starts to scroll
+ * sideways (or collapse, if that setting is on).
+ *
+ * The floor is a property of the *grid*, not of any one track: it holds the
+ * whole grid open at one {@link IWidthMetrics.minCell} per track, and the
+ * tracks then divide that strictly by weight. Putting the floor on each
+ * track instead broke the hierarchy -- a column subdivided into two tracks was
+ * held to twice the minimum of a bare cell holding the same share of the row,
+ * so once the floors bound, the two stopped being the same width and the deeper
+ * subdivision won space from its siblings.
+ *
+ * A track narrower than its share of this is the honest consequence: a
+ * subdivision fine enough to put a cell under the minimum shrinks that cell
+ * rather than stealing width from its siblings. Requiring *every* cell to clear
+ * the minimum was tried and is far too strict -- one twelfth of a row would
+ * hold the whole notebook open at twelve times the minimum, which on an
+ * ordinary screen means no mosaic at all.
+ *
+ * A collapsed layout has no minimum: yielding to the panel is its whole point.
+ */
+export function minGridWidth(
+  solution: ISolution,
+  metrics: IWidthMetrics
+): number {
+  const { minCell, gap, padding } = metrics;
+  const count = solution.colTracks.length;
+  if (count === 0 || solution.collapsed) {
+    return 0;
+  }
+  return padding + gap * (count - 1) + count * minCell;
 }
 
 /** A step in the two-dimensional layout. */

@@ -29,8 +29,15 @@ __webpack_require__.r(__webpack_exports__);
  * that straddle each edge.
  */
 
-/** How far, in px, a drop may sit from a gutter's centre line and still hit. */
-const GUTTER_HIT_SLOP = 6;
+/**
+ * How far, in px, a drop may sit outside a gutter and still hit it.
+ *
+ * A gutter is the grid's own gap, which is a real target on its own, so this is
+ * only rounding tolerance. It used to be wide enough to make a narrow gutter
+ * track reachable; at that size it would now reach several px into the cells on
+ * either side, which are flush against the gap.
+ */
+const GUTTER_HIT_SLOP = 2;
 /** Fallback height (px) assumed for a cell that has never been measured. */
 const ESTIMATED_CELL_HEIGHT = 90;
 function intersect(a, b) {
@@ -55,7 +62,6 @@ class MosaicGrid {
         this._rowOffsets = [0];
         this._colOffsets = [0];
         this._boxes = new Map();
-        this._padRight = 0;
         this._rowGap = 0;
         this._colGap = 0;
         this._chrome = new Map();
@@ -304,28 +310,28 @@ class MosaicGrid {
             }
         }
         // -- phase 1: tracks and flow placement --------------------------------
-        // Gutters are fixed-width tracks; the rest share the space by weight.
-        const factors = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.flexFactors)(solution.colTracks.filter(t => !t.gutter).map(t => t.weight));
-        let flexible = 0;
+        // Every track shares the space by weight; seams take none of their own.
+        const factors = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.flexFactors)(solution.colTracks.map(t => t.weight));
         const cols = solution.colTracks.length
             ? solution.colTracks
-                .map(track => track.gutter
-                ? 'var(--mosaic-gutter)'
-                : `minmax(var(--mosaic-cell-min-width), ${factors[flexible++].toFixed(4)}fr)`)
+                // Strictly proportional. A floor here would be per *track*, which is
+                // not where the minimum belongs -- see `minGridWidth`, which sizes
+                // the whole grid instead so that equal partitions stay equal at
+                // every panel width.
+                .map((_, i) => `minmax(0, ${factors[i].toFixed(4)}fr)`)
                 .join(' ')
             : '1fr';
-        const floors = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.rowFloors)(solution, i => this._cellHeight(i));
+        const floors = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.rowFloors)(solution, i => this._cellHeight(i), {
+            gap: this._trackMetric('row-gap')
+        });
         const rows = solution.rowTracks.length
             ? solution.rowTracks
-                .map((track, i) => track.gutter
-                ? 'var(--mosaic-gutter)'
-                : floors[i] > 0
-                    ? `minmax(${floors[i].toFixed(2)}px, auto)`
-                    : 'auto')
+                .map((_, i) => floors[i] > 0 ? `minmax(${floors[i].toFixed(2)}px, auto)` : 'auto')
                 .join(' ')
             : 'auto';
         this.viewport.style.gridTemplateColumns = cols;
         this.viewport.style.gridTemplateRows = rows;
+        this.viewport.classList.toggle('mosaic-collapsed', !!solution.collapsed);
         for (let index = 0; index < count; index++) {
             const node = this.host.cellNode(index);
             if (!node) {
@@ -344,7 +350,7 @@ class MosaicGrid {
             }
         }
         // -- phase 2: read back resolved geometry ------------------------------
-        this._fitWidth();
+        this._fitWidth(solution);
         // -- phase 3: managed interiors ----------------------------------------
         this._localOffsets.clear();
         this._boxes.clear();
@@ -379,7 +385,6 @@ class MosaicGrid {
         const colGap = parseFloat(style.columnGap) || 0;
         const padTop = parseFloat(style.paddingTop) || 0;
         const padLeft = parseFloat(style.paddingLeft) || 0;
-        this._padRight = parseFloat(style.paddingRight) || 0;
         const parse = (value, gap, start) => {
             const sizes = value
                 .split(' ')
@@ -399,34 +404,30 @@ class MosaicGrid {
     /**
      * Size the scrollable area to the grid, exactly.
      *
-     * Columns have a minimum width, so a narrow panel makes the grid wider than
-     * the panel. The viewport is absolutely positioned and pinned to both edges,
-     * which clamps it to the panel and leaves that overflow unreachable. Widening
-     * the inner element to the content gives the outer node a real scrollable
-     * width -- and no more than that, so there is never blank space to scroll
-     * into that holds no cells.
+     * The tracks are pure fractions, so left alone the grid always fits the panel
+     * however narrow it gets -- past the point where a cell is readable. The
+     * width every cell needs is therefore *computed* rather than measured, and
+     * the grid is held open at it: the viewport is absolutely positioned and
+     * pinned to both edges, so widening the inner element is what gives the outer
+     * node a real scrollable width, and no more than that.
      *
-     * The measurement is always taken with any previously forced width released.
-     * Deciding from a width we ourselves imposed on an earlier pass made the
-     * fitted size ratchet: the tracks refill whatever width they are given, so
-     * the requirement could only ever grow, and the grid stayed pinned at a stale
-     * width while the panel grew past it.
+     * Computing it also settles an old failure. Deciding from a width we
+     * ourselves imposed on an earlier pass made the fitted size ratchet -- the
+     * tracks refill whatever width they are given, so the requirement could only
+     * ever grow, and the grid stayed pinned at a stale width while the panel grew
+     * past it. Nothing here reads back a width we set.
      *
      * Leaves the track offsets current, so callers need not re-read them.
      */
-    _fitWidth() {
-        var _a;
+    _fitWidth(solution) {
         this._release();
-        this._readTracks();
-        // Offsets already carry the leading padding, so only the trailing one is
-        // still missing from the border-box width the scroller needs.
-        const content = ((_a = this._colOffsets[this._colOffsets.length - 1]) !== null && _a !== void 0 ? _a : 0) + this._padRight;
-        if (content > this.outer.clientWidth + 1) {
-            this.inner.style.width = `${content}px`;
+        const required = this.requiredWidth(solution);
+        if (required > this.outer.clientWidth + 1) {
+            this.inner.style.width = `${required}px`;
             this.viewport.style.right = 'auto';
-            this.viewport.style.width = `${content}px`;
-            this._readTracks();
+            this.viewport.style.width = `${required}px`;
         }
+        this._readTracks();
     }
     /** Return the viewport to spanning the panel. */
     _release() {
@@ -532,6 +533,44 @@ class MosaicGrid {
             return node.children.reduce((s, c) => s + this._extentOf(c, 'row'), 0);
         }
         return node.children.reduce((m, c) => Math.max(m, this._extentOf(c, 'row')), 0);
+    }
+    /**
+     * The narrowest the grid can be drawn, in px, including its own padding.
+     *
+     * Computed from the track list rather than measured, so the answer does not
+     * depend on the width we last imposed -- and so it can be asked *before*
+     * committing to a layout, which is what lets the caller choose another one.
+     */
+    requiredWidth(solution) {
+        const style = getComputedStyle(this.viewport);
+        return (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_0__.minGridWidth)(solution, {
+            minCell: this._minCellWidth(),
+            gap: this._trackMetric('column-gap'),
+            padding: (parseFloat(style.paddingLeft) || 0) +
+                (parseFloat(style.paddingRight) || 0)
+        });
+    }
+    /**
+     * Whether this layout would overflow the panel horizontally.
+     *
+     * False while the panel has no width of its own -- before it is attached, or
+     * while it is hidden -- so a notebook never opens collapsed by accident.
+     */
+    overflowsWidth(solution) {
+        const available = this.outer.clientWidth;
+        return available > 0 && this.requiredWidth(solution) > available + 1;
+    }
+    /**
+     * A length from the viewport's own style, in px.
+     *
+     * Read fresh rather than off the cached values `_readTracks` leaves behind:
+     * those describe the *previous* pass, and the floors computed here decide
+     * this one's track sizes. Both are static CSS, so reading them costs a style
+     * lookup and no layout.
+     */
+    _trackMetric(property) {
+        const style = getComputedStyle(this.viewport);
+        return parseFloat(style.getPropertyValue(property)) || 0;
     }
     _minCellWidth() {
         return (parseFloat(getComputedStyle(this.viewport).getPropertyValue('--mosaic-cell-min-width')) || 160);
@@ -730,15 +769,26 @@ class MosaicGrid {
             }
         }
     }
-    /** A gutter's rectangle in grid coordinates. */
+    /**
+     * A gutter's rectangle in grid coordinates: the gap the seam falls in.
+     *
+     * Offsets carry each track's trailing gap, so the track before the seam ends
+     * at `_edge` and the one after begins at the offset itself -- the span
+     * between them is the gap, and that is the whole of the gutter.
+     *
+     * At the grid's own trailing edge there is no following gap, so the gutter
+     * that catches a drop past the last group is given one, reaching outward into
+     * the padding. Without it the target collapses to the edge line and there is
+     * nothing to aim at.
+     */
     gutterRect(gutter) {
         var _a, _b;
         const along = gutter.axis === 'col' ? this._rowOffsets : this._colOffsets;
         const across = gutter.axis === 'col' ? this._colOffsets : this._rowOffsets;
         const alongGap = gutter.axis === 'col' ? this._rowGap : this._colGap;
         const acrossGap = gutter.axis === 'col' ? this._colGap : this._rowGap;
-        const a0 = (_a = along[gutter.line - 1]) !== null && _a !== void 0 ? _a : 0;
-        const a1 = this._edge(along, gutter.line + 1, alongGap);
+        const a0 = this._edge(along, gutter.line, alongGap);
+        const a1 = Math.max((_a = along[gutter.line - 1]) !== null && _a !== void 0 ? _a : a0, a0 + alongGap);
         const b0 = (_b = across[gutter.start - 1]) !== null && _b !== void 0 ? _b : 0;
         const b1 = this._edge(across, gutter.end, acrossGap);
         return gutter.axis === 'col'
@@ -784,6 +834,7 @@ class MosaicGrid {
             }
             const r = this.gutterRect(gutter);
             el.dataset.mosaicAxis = gutter.axis;
+            el.classList.toggle('mosaic-gutter-seam', gutter.between);
             el.style.transform = `translate(${r.x0}px, ${r.y0}px)`;
             el.style.width = `${Math.max(0, r.x1 - r.x0)}px`;
             el.style.height = `${Math.max(0, r.y1 - r.y0)}px`;
@@ -1126,7 +1177,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   PATH_KEY: () => (/* binding */ PATH_KEY),
 /* harmony export */   WEIGHT_KEY: () => (/* binding */ WEIGHT_KEY),
 /* harmony export */   cellsOf: () => (/* binding */ cellsOf),
-/* harmony export */   mosaicOf: () => (/* binding */ mosaicOf)
+/* harmony export */   mosaicOf: () => (/* binding */ mosaicOf),
+/* harmony export */   mosaicOptions: () => (/* binding */ mosaicOptions)
 /* harmony export */ });
 /* harmony import */ var _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @jupyterlab/notebook */ "webpack/sharing/consume/default/@jupyterlab/notebook");
 /* harmony import */ var _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_0__);
@@ -1149,6 +1201,18 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+/**
+ * Settings that apply to every mosaic notebook at once, mirrored here from the
+ * setting registry by the plugin. Read at layout time, so a change takes effect
+ * on the next rebuild.
+ */
+const mosaicOptions = {
+    /**
+     * Fall back to a plain single column when the panel is narrower than the
+     * layout's columns need, instead of overflowing into a horizontal scroll.
+     */
+    collapseWhenNarrow: true
+};
 /** Cell metadata key holding the group path. */
 const PATH_KEY = 'mosaic';
 /** Cell metadata key holding the cell's share of its parent's extent. */
@@ -1463,7 +1527,15 @@ class MosaicNotebook {
             // the repaired metadata rather than patching the tree's own paths.
             root = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.buildTree)(cells.map(c => this.pathOf(c.model)), weight, state);
         }
-        this._solution = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.solve)(root);
+        // A panel too narrow for the layout's own minimum widths would otherwise
+        // spill off the right and be reached only by scrolling sideways. Falling
+        // back to one column is purely a rendering choice: no metadata is touched,
+        // so the mosaic comes back intact as soon as there is room for it.
+        const solution = (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.solve)(root);
+        this._solution =
+            mosaicOptions.collapseWhenNarrow && this.grid.overflowsWidth(solution)
+                ? (0,_MosaicTree__WEBPACK_IMPORTED_MODULE_3__.linearSolution)(cells.length)
+                : solution;
         this.grid.update(this._solution);
         this.notebook.update();
     }
@@ -1513,14 +1585,23 @@ class MosaicNotebook {
             const next = hull
                 ? [hull[0], hull[1], hull[0], hull[1]]
                 : [0, count - 1, 0, count - 1];
-            if (lastWindow &&
-                lastVersion === grid.version &&
-                lastWindow[0] === next[0] &&
-                lastWindow[1] === next[1]) {
+            const moved = !lastWindow || lastWindow[0] !== next[0] || lastWindow[1] !== next[1];
+            if (!moved && lastVersion === grid.version) {
                 return null;
             }
             lastWindow = next;
             lastVersion = grid.version;
+            if (moved) {
+                // Cells are about to be built or emptied, and nothing else will notice
+                // what they end up being worth. A cell stretches to its grid track, so
+                // its own box does not change as its content appears, and its children
+                // did not exist when the last pass subscribed to them -- so the resize
+                // observer stays silent. The row then keeps the height *estimated* for
+                // a cell no one has measured: too tall, with every cell in the band
+                // stretched to it, until some unrelated edit forces a pass. Ask for one
+                // here instead, so a scroll re-measures what it just rendered.
+                this.requestUpdate();
+            }
             return next;
         };
     }
@@ -1663,6 +1744,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   findGroup: () => (/* binding */ findGroup),
 /* harmony export */   flexFactors: () => (/* binding */ flexFactors),
 /* harmony export */   groupKey: () => (/* binding */ groupKey),
+/* harmony export */   linearSolution: () => (/* binding */ linearSolution),
+/* harmony export */   minGridWidth: () => (/* binding */ minGridWidth),
 /* harmony export */   nearestInDirection: () => (/* binding */ nearestInDirection),
 /* harmony export */   newGroupId: () => (/* binding */ newGroupId),
 /* harmony export */   rowFloors: () => (/* binding */ rowFloors),
@@ -1685,6 +1768,38 @@ __webpack_require__.r(__webpack_exports__);
  */
 /** Default extent (px) of a scrollable group along its scroll axis. */
 const DEFAULT_SCROLL_SIZE = 320;
+/**
+ * The layout a notebook has without the extension: every cell in its own row of
+ * a single column, in document order.
+ *
+ * This is a *rendering* fallback for a panel narrower than the mosaic's
+ * columns can fit. It touches no metadata, so the real layout comes straight
+ * back when the panel widens again.
+ */
+function linearSolution(count) {
+    const placements = new Map();
+    const rowTracks = [];
+    for (let index = 0; index < count; index++) {
+        placements.set(index, {
+            rowStart: index + 1,
+            rowEnd: index + 2,
+            colStart: 1,
+            colEnd: 2
+        });
+        rowTracks.push({ weight: 1 });
+    }
+    return {
+        colTracks: count > 0 ? [{ weight: 1 }] : [],
+        rowTracks,
+        rowMinPx: new Array(rowTracks.length).fill(0),
+        placements,
+        managed: [],
+        managedOwner: new Map(),
+        groupPlacements: new Map(),
+        gutters: [],
+        collapsed: true
+    };
+}
 /** The axis a group at the given depth divides along. Root (depth 0) is a column. */
 function axisAtDepth(depth) {
     return depth % 2 === 0 ? 'col' : 'row';
@@ -1906,24 +2021,16 @@ function solve(root) {
     const yLines = [...ys].sort((a, b) => a - b);
     const xAt = new Map(xLines.map((v, i) => [v, i]));
     const yAt = new Map(yLines.map((v, i) => [v, i]));
-    const xGutters = new Set();
-    const yGutters = new Set();
-    for (const mark of marks) {
-        const at = (mark.node.axis === 'col' ? yAt : xAt).get(mark.coord);
-        if (at !== undefined) {
-            (mark.node.axis === 'col' ? yGutters : xGutters).add(at);
-        }
-    }
-    const columns = buildAxis(xLines, xGutters);
-    const rows = buildAxis(yLines, yGutters);
+    const columns = buildAxis(xLines);
+    const rows = buildAxis(yLines);
     const rowMinPx = new Array(rows.tracks.length).fill(0);
-    // A node ends where the gutter before it begins, and starts where that
-    // gutter ends, so the two sides of a seam use different line maps.
+    // Two nodes meeting at a seam share the line: nothing is inserted between
+    // them, so one ends exactly where the next begins.
     const place = (r) => ({
-        rowStart: rows.start[yAt.get(r.y0)],
-        rowEnd: rows.end[yAt.get(r.y1)],
-        colStart: columns.start[xAt.get(r.x0)],
-        colEnd: columns.end[xAt.get(r.x1)]
+        rowStart: rows.at[yAt.get(r.y0)],
+        rowEnd: rows.at[yAt.get(r.y1)],
+        colStart: columns.at[xAt.get(r.x0)],
+        colEnd: columns.at[xAt.get(r.x1)]
     });
     const placements = new Map();
     const managed = [];
@@ -1983,12 +2090,16 @@ function solve(root) {
         gutters.push({
             path: mark.node.path,
             axis: mark.node.axis,
-            line: along.end[alongAt],
-            start: across.start[fromAt],
-            end: across.end[toAt],
+            line: along.at[alongAt],
+            start: across.at[fromAt],
+            end: across.at[toAt],
             index: mark.index,
             cellAfter: afterCells.length > 0 ? afterCells[0] : -1,
-            cellBefore: beforeCells.length > 0 ? beforeCells[beforeCells.length - 1] : -1
+            cellBefore: beforeCells.length > 0 ? beforeCells[beforeCells.length - 1] : -1,
+            // Marks are raised at a group's two outer edges and between each pair of
+            // adjacent sibling groups; only the last of those has a child on both
+            // sides.
+            between: !!before && !!after
         });
     }
     return {
@@ -2003,42 +2114,27 @@ function solve(root) {
     };
 }
 /**
- * Lay out one axis, inserting a gutter track at each seam that needs one.
+ * Lay out one axis: one track between each pair of adjacent cut lines.
  *
- * Because a gutter takes a track of its own, the line a node ends at is no
- * longer the line the next node starts at, so two maps come back: `end` for a
- * node finishing at a logical line and `start` for one beginning there.
+ * Seams add nothing here. They fall *on* a line, and the gap the grid already
+ * puts between two tracks is where the rule is drawn and the drop is caught.
  */
-function buildAxis(lines, gutters) {
+function buildAxis(lines) {
     const tracks = [];
-    const start = new Array(lines.length);
-    const end = new Array(lines.length);
-    let line = 1;
+    const at = new Array(lines.length);
     for (let i = 0; i < lines.length; i++) {
-        if (gutters.has(i)) {
-            end[i] = line;
-            tracks.push({ gutter: true, weight: 0 });
-            line += 1;
-            start[i] = line;
-        }
-        else {
-            end[i] = line;
-            start[i] = line;
-        }
+        at[i] = i + 1;
         if (i < lines.length - 1) {
-            tracks.push({ gutter: false, weight: lines[i + 1] - lines[i] });
-            line += 1;
+            tracks.push({ weight: lines[i + 1] - lines[i] });
         }
     }
-    return { tracks, start, end };
+    return { tracks, at };
 }
-/** Indices of the non-gutter tracks a placement spans. */
+/** Indices of the tracks a placement spans. */
 function contentTracks(tracks, startLine, endLine) {
     const out = [];
     for (let t = startLine - 1; t < endLine - 1 && t < tracks.length; t++) {
-        if (!tracks[t].gutter) {
-            out.push(t);
-        }
+        out.push(t);
     }
     return out.length > 0 ? out : [Math.max(0, startLine - 1)];
 }
@@ -2103,21 +2199,84 @@ function newGroupId() {
  *
  * Cells inside a managed group are skipped: that group's own `size` already
  * holds its band open, and its cells sit outside the grid's flow anyway.
+ *
+ * A cell spanning several tracks only raises them by what it is *short* of,
+ * shared out between them -- CSS Grid 12.5's rule for distributing space across
+ * a spanned range, and the reason items are taken shortest-span first: a
+ * track's floor has to be settled by the cells sitting in it alone before a
+ * spanning cell is asked whether it still needs more. Charging every spanned
+ * track the cell's whole height instead made a band as tall as its tallest cell
+ * times the number of tracks beside it, and every cell in the band then
+ * stretched to that, trailing blank space under its content.
+ *
+ * @param metrics Track geometry the span already covers: the row `gap` between
+ *   tracks. Counting it as covered is what stops a spanning cell demanding room
+ *   for it a second time.
  */
-function rowFloors(solution, cellHeight) {
-    var _a;
+function rowFloors(solution, cellHeight, metrics = {}) {
+    var _a, _b, _c;
+    const gap = (_a = metrics.gap) !== null && _a !== void 0 ? _a : 0;
     const floors = solution.rowMinPx.slice();
+    const items = [];
     for (const [index, placement] of solution.placements) {
         if (solution.managedOwner.has(index)) {
             continue;
         }
-        const spanned = contentTracks(solution.rowTracks, placement.rowStart, placement.rowEnd);
-        const share = cellHeight(index) / spanned.length;
+        items.push({
+            height: cellHeight(index),
+            placement,
+            spanned: contentTracks(solution.rowTracks, placement.rowStart, placement.rowEnd)
+        });
+    }
+    items.sort((a, b) => a.spanned.length - b.spanned.length);
+    for (const { height, placement, spanned } of items) {
+        // What the span already provides: every track under it at its current
+        // floor, plus the gaps between them.
+        let covered = gap * Math.max(0, placement.rowEnd - placement.rowStart - 1);
+        for (let t = placement.rowStart - 1; t < placement.rowEnd - 1; t++) {
+            if (solution.rowTracks[t]) {
+                covered += (_b = floors[t]) !== null && _b !== void 0 ? _b : 0;
+            }
+        }
+        const excess = height - covered;
+        if (excess <= 0) {
+            continue;
+        }
+        const share = excess / spanned.length;
         for (const t of spanned) {
-            floors[t] = Math.max((_a = floors[t]) !== null && _a !== void 0 ? _a : 0, share);
+            floors[t] = ((_c = floors[t]) !== null && _c !== void 0 ? _c : 0) + share;
         }
     }
     return floors;
+}
+/**
+ * The narrowest the grid is drawn at, in px, before it starts to scroll
+ * sideways (or collapse, if that setting is on).
+ *
+ * The floor is a property of the *grid*, not of any one track: it holds the
+ * whole grid open at one {@link IWidthMetrics.minCell} per track, and the
+ * tracks then divide that strictly by weight. Putting the floor on each
+ * track instead broke the hierarchy -- a column subdivided into two tracks was
+ * held to twice the minimum of a bare cell holding the same share of the row,
+ * so once the floors bound, the two stopped being the same width and the deeper
+ * subdivision won space from its siblings.
+ *
+ * A track narrower than its share of this is the honest consequence: a
+ * subdivision fine enough to put a cell under the minimum shrinks that cell
+ * rather than stealing width from its siblings. Requiring *every* cell to clear
+ * the minimum was tried and is far too strict -- one twelfth of a row would
+ * hold the whole notebook open at twelve times the minimum, which on an
+ * ordinary screen means no mosaic at all.
+ *
+ * A collapsed layout has no minimum: yielding to the panel is its whole point.
+ */
+function minGridWidth(solution, metrics) {
+    const { minCell, gap, padding } = metrics;
+    const count = solution.colTracks.length;
+    if (count === 0 || solution.collapsed) {
+        return 0;
+    }
+    return padding + gap * (count - 1) + count * minCell;
 }
 /** Slack, in px, when deciding whether a candidate lies past our edge. */
 const NAV_TOLERANCE = 1;
@@ -2309,9 +2468,13 @@ const addRightIcon = new _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_5__.
 });
 const PLUGIN_ID = 'mosaic:plugin';
 const MOSAIC_FACTORY = 'MosaicNotebook';
-function applySettings(s) {
+function applySettings(s, tracker) {
     document.body.classList.toggle('mosaic-skeuomorphic', !!s.skeuomorphic);
     document.body.classList.toggle('mosaic-top-cell-handles', !!s.topCellHandle);
+    _MosaicNotebook__WEBPACK_IMPORTED_MODULE_7__.mosaicOptions.collapseWhenNarrow = s.collapseWhenNarrow !== false;
+    // This one is read during layout rather than by a stylesheet, so every open
+    // notebook has to be asked to lay out again.
+    tracker.forEach(panel => { var _a; return (_a = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_7__.mosaicOf)(panel.content)) === null || _a === void 0 ? void 0 : _a.requestUpdate(); });
 }
 const plugin = {
     id: PLUGIN_ID,
@@ -2327,8 +2490,8 @@ const plugin = {
     ],
     activate: async (app, tracker, launcher, editorServices, restorer, docmanager, settings) => {
         const loaded = await settings.load(PLUGIN_ID);
-        applySettings(loaded.composite);
-        loaded.changed.connect(() => applySettings(loaded.composite));
+        applySettings(loaded.composite, tracker);
+        loaded.changed.connect(() => applySettings(loaded.composite, tracker));
         // The shared NotebookTracker holds both kinds of panel, so teach its
         // restorer to record which factory each one came from. This is cheaper than
         // standing up a second tracker and re-attaching every command hook to it.
@@ -2735,6 +2898,20 @@ function clearDropTargets(notebook) {
  */
 function hitTest(notebook, clientX, clientY) {
     var _a, _b, _c;
+    const target = hitTestGrid(notebook, clientX, clientY);
+    // A collapsed notebook is one column, so a drop on a cell's left or right
+    // edge would subdivide into a row the very next layout pass folds away
+    // again. Resolve it onto the near horizontal edge instead, which is the
+    // reordering a single column can actually show.
+    if ((target === null || target === void 0 ? void 0 : target.kind) === 'cell' && ((_b = (_a = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_4__.mosaicOf)(notebook)) === null || _a === void 0 ? void 0 : _a.solution) === null || _b === void 0 ? void 0 : _b.collapsed)) {
+        const rect = (_c = notebook.widgets[target.index]) === null || _c === void 0 ? void 0 : _c.node.getBoundingClientRect();
+        const side = rect && clientY > (rect.top + rect.bottom) / 2 ? 'bottom' : 'top';
+        return { ...target, side };
+    }
+    return target;
+}
+function hitTestGrid(notebook, clientX, clientY) {
+    var _a, _b, _c;
     const mosaic = (0,_MosaicNotebook__WEBPACK_IMPORTED_MODULE_4__.mosaicOf)(notebook);
     const viewport = notebook.viewportNode.getBoundingClientRect();
     const x = clientX - viewport.left;
@@ -2863,4 +3040,4 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http:/
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.d70eb4bcc4b0034cd58b.js.map
+//# sourceMappingURL=lib_index_js.c9ee4a493c1a0e0f1bb7.js.map

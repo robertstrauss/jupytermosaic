@@ -265,6 +265,26 @@ function hitTest(
   clientX: number,
   clientY: number
 ): DropTarget | null {
+  const target = hitTestGrid(notebook, clientX, clientY);
+
+  // A collapsed notebook is one column, so a drop on a cell's left or right
+  // edge would subdivide into a row the very next layout pass folds away
+  // again. Resolve it onto the near horizontal edge instead, which is the
+  // reordering a single column can actually show.
+  if (target?.kind === 'cell' && mosaicOf(notebook)?.solution?.collapsed) {
+    const rect = notebook.widgets[target.index]?.node.getBoundingClientRect();
+    const side: DropSide =
+      rect && clientY > (rect.top + rect.bottom) / 2 ? 'bottom' : 'top';
+    return { ...target, side };
+  }
+  return target;
+}
+
+function hitTestGrid(
+  notebook: Notebook,
+  clientX: number,
+  clientY: number
+): DropTarget | null {
   const mosaic = mosaicOf(notebook);
   const viewport = notebook.viewportNode.getBoundingClientRect();
   const x = clientX - viewport.left;

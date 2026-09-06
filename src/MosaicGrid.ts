@@ -24,11 +24,19 @@ import {
   MosaicNode,
   flexFactors,
   groupKey,
+  minGridWidth,
   rowFloors
 } from './MosaicTree';
 
-/** How far, in px, a drop may sit from a gutter's centre line and still hit. */
-const GUTTER_HIT_SLOP = 6;
+/**
+ * How far, in px, a drop may sit outside a gutter and still hit it.
+ *
+ * A gutter is the grid's own gap, which is a real target on its own, so this is
+ * only rounding tolerance. It used to be wide enough to make a narrow gutter
+ * track reachable; at that size it would now reach several px into the cells on
+ * either side, which are flush against the gap.
+ */
+const GUTTER_HIT_SLOP = 2;
 
 /** Fallback height (px) assumed for a cell that has never been measured. */
 const ESTIMATED_CELL_HEIGHT = 90;
@@ -143,7 +151,6 @@ export class MosaicGrid {
   private _rowOffsets: number[] = [0];
   private _colOffsets: number[] = [0];
   private _boxes = new Map<string, IBox>();
-  private _padRight = 0;
   private _rowGap = 0;
   private _colGap = 0;
 
@@ -373,36 +380,30 @@ export class MosaicGrid {
     }
 
     // -- phase 1: tracks and flow placement --------------------------------
-    // Gutters are fixed-width tracks; the rest share the space by weight.
-    const factors = flexFactors(
-      solution.colTracks.filter(t => !t.gutter).map(t => t.weight)
-    );
-    let flexible = 0;
+    // Every track shares the space by weight; seams take none of their own.
+    const factors = flexFactors(solution.colTracks.map(t => t.weight));
     const cols = solution.colTracks.length
       ? solution.colTracks
-          .map(track =>
-            track.gutter
-              ? 'var(--mosaic-gutter)'
-              : `minmax(var(--mosaic-cell-min-width), ${factors[
-                  flexible++
-                ].toFixed(4)}fr)`
-          )
+          // Strictly proportional. A floor here would be per *track*, which is
+          // not where the minimum belongs -- see `minGridWidth`, which sizes
+          // the whole grid instead so that equal partitions stay equal at
+          // every panel width.
+          .map((_, i) => `minmax(0, ${factors[i].toFixed(4)}fr)`)
           .join(' ')
       : '1fr';
-    const floors = rowFloors(solution, i => this._cellHeight(i));
+    const floors = rowFloors(solution, i => this._cellHeight(i), {
+      gap: this._trackMetric('row-gap')
+    });
     const rows = solution.rowTracks.length
       ? solution.rowTracks
-          .map((track, i) =>
-            track.gutter
-              ? 'var(--mosaic-gutter)'
-              : floors[i] > 0
-                ? `minmax(${floors[i].toFixed(2)}px, auto)`
-                : 'auto'
+          .map((_, i) =>
+            floors[i] > 0 ? `minmax(${floors[i].toFixed(2)}px, auto)` : 'auto'
           )
           .join(' ')
       : 'auto';
     this.viewport.style.gridTemplateColumns = cols;
     this.viewport.style.gridTemplateRows = rows;
+    this.viewport.classList.toggle('mosaic-collapsed', !!solution.collapsed);
 
     for (let index = 0; index < count; index++) {
       const node = this.host.cellNode(index);
@@ -423,7 +424,7 @@ export class MosaicGrid {
     }
 
     // -- phase 2: read back resolved geometry ------------------------------
-    this._fitWidth();
+    this._fitWidth(solution);
 
     // -- phase 3: managed interiors ----------------------------------------
     this._localOffsets.clear();
@@ -465,7 +466,6 @@ export class MosaicGrid {
     const colGap = parseFloat(style.columnGap) || 0;
     const padTop = parseFloat(style.paddingTop) || 0;
     const padLeft = parseFloat(style.paddingLeft) || 0;
-    this._padRight = parseFloat(style.paddingRight) || 0;
 
     const parse = (value: string, gap: number, start: number): number[] => {
       const sizes = value
@@ -488,35 +488,30 @@ export class MosaicGrid {
   /**
    * Size the scrollable area to the grid, exactly.
    *
-   * Columns have a minimum width, so a narrow panel makes the grid wider than
-   * the panel. The viewport is absolutely positioned and pinned to both edges,
-   * which clamps it to the panel and leaves that overflow unreachable. Widening
-   * the inner element to the content gives the outer node a real scrollable
-   * width -- and no more than that, so there is never blank space to scroll
-   * into that holds no cells.
+   * The tracks are pure fractions, so left alone the grid always fits the panel
+   * however narrow it gets -- past the point where a cell is readable. The
+   * width every cell needs is therefore *computed* rather than measured, and
+   * the grid is held open at it: the viewport is absolutely positioned and
+   * pinned to both edges, so widening the inner element is what gives the outer
+   * node a real scrollable width, and no more than that.
    *
-   * The measurement is always taken with any previously forced width released.
-   * Deciding from a width we ourselves imposed on an earlier pass made the
-   * fitted size ratchet: the tracks refill whatever width they are given, so
-   * the requirement could only ever grow, and the grid stayed pinned at a stale
-   * width while the panel grew past it.
+   * Computing it also settles an old failure. Deciding from a width we
+   * ourselves imposed on an earlier pass made the fitted size ratchet -- the
+   * tracks refill whatever width they are given, so the requirement could only
+   * ever grow, and the grid stayed pinned at a stale width while the panel grew
+   * past it. Nothing here reads back a width we set.
    *
    * Leaves the track offsets current, so callers need not re-read them.
    */
-  private _fitWidth(): void {
+  private _fitWidth(solution: ISolution): void {
     this._release();
-    this._readTracks();
-
-    // Offsets already carry the leading padding, so only the trailing one is
-    // still missing from the border-box width the scroller needs.
-    const content =
-      (this._colOffsets[this._colOffsets.length - 1] ?? 0) + this._padRight;
-    if (content > this.outer.clientWidth + 1) {
-      this.inner.style.width = `${content}px`;
+    const required = this.requiredWidth(solution);
+    if (required > this.outer.clientWidth + 1) {
+      this.inner.style.width = `${required}px`;
       this.viewport.style.right = 'auto';
-      this.viewport.style.width = `${content}px`;
-      this._readTracks();
+      this.viewport.style.width = `${required}px`;
     }
+    this._readTracks();
   }
 
   /** Return the viewport to spanning the panel. */
@@ -637,6 +632,48 @@ export class MosaicGrid {
       (m, c) => Math.max(m, this._extentOf(c, 'row')),
       0
     );
+  }
+
+  /**
+   * The narrowest the grid can be drawn, in px, including its own padding.
+   *
+   * Computed from the track list rather than measured, so the answer does not
+   * depend on the width we last imposed -- and so it can be asked *before*
+   * committing to a layout, which is what lets the caller choose another one.
+   */
+  requiredWidth(solution: ISolution): number {
+    const style = getComputedStyle(this.viewport);
+    return minGridWidth(solution, {
+      minCell: this._minCellWidth(),
+      gap: this._trackMetric('column-gap'),
+      padding:
+        (parseFloat(style.paddingLeft) || 0) +
+        (parseFloat(style.paddingRight) || 0)
+    });
+  }
+
+  /**
+   * Whether this layout would overflow the panel horizontally.
+   *
+   * False while the panel has no width of its own -- before it is attached, or
+   * while it is hidden -- so a notebook never opens collapsed by accident.
+   */
+  overflowsWidth(solution: ISolution): boolean {
+    const available = this.outer.clientWidth;
+    return available > 0 && this.requiredWidth(solution) > available + 1;
+  }
+
+  /**
+   * A length from the viewport's own style, in px.
+   *
+   * Read fresh rather than off the cached values `_readTracks` leaves behind:
+   * those describe the *previous* pass, and the floors computed here decide
+   * this one's track sizes. Both are static CSS, so reading them costs a style
+   * lookup and no layout.
+   */
+  private _trackMetric(property: string): number {
+    const style = getComputedStyle(this.viewport);
+    return parseFloat(style.getPropertyValue(property)) || 0;
   }
 
   private _minCellWidth(): number {
@@ -891,14 +928,25 @@ export class MosaicGrid {
     }
   }
 
-  /** A gutter's rectangle in grid coordinates. */
+  /**
+   * A gutter's rectangle in grid coordinates: the gap the seam falls in.
+   *
+   * Offsets carry each track's trailing gap, so the track before the seam ends
+   * at `_edge` and the one after begins at the offset itself -- the span
+   * between them is the gap, and that is the whole of the gutter.
+   *
+   * At the grid's own trailing edge there is no following gap, so the gutter
+   * that catches a drop past the last group is given one, reaching outward into
+   * the padding. Without it the target collapses to the edge line and there is
+   * nothing to aim at.
+   */
   gutterRect(gutter: IGutter): IClip {
     const along = gutter.axis === 'col' ? this._rowOffsets : this._colOffsets;
     const across = gutter.axis === 'col' ? this._colOffsets : this._rowOffsets;
     const alongGap = gutter.axis === 'col' ? this._rowGap : this._colGap;
     const acrossGap = gutter.axis === 'col' ? this._colGap : this._rowGap;
-    const a0 = along[gutter.line - 1] ?? 0;
-    const a1 = this._edge(along, gutter.line + 1, alongGap);
+    const a0 = this._edge(along, gutter.line, alongGap);
+    const a1 = Math.max(along[gutter.line - 1] ?? a0, a0 + alongGap);
     const b0 = across[gutter.start - 1] ?? 0;
     const b1 = this._edge(across, gutter.end, acrossGap);
 
@@ -956,6 +1004,7 @@ export class MosaicGrid {
       }
       const r = this.gutterRect(gutter);
       el.dataset.mosaicAxis = gutter.axis;
+      el.classList.toggle('mosaic-gutter-seam', gutter.between);
       el.style.transform = `translate(${r.x0}px, ${r.y0}px)`;
       el.style.width = `${Math.max(0, r.x1 - r.x0)}px`;
       el.style.height = `${Math.max(0, r.y1 - r.y0)}px`;

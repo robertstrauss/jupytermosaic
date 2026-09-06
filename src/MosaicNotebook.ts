@@ -28,6 +28,7 @@ import {
   collapse,
   collectCells,
   groupKey,
+  linearSolution,
   nearestInDirection,
   newGroupId,
   solve,
@@ -36,6 +37,19 @@ import {
 import { installMosaicDrag } from './mosaicdrag';
 
 export type { Direction };
+
+/**
+ * Settings that apply to every mosaic notebook at once, mirrored here from the
+ * setting registry by the plugin. Read at layout time, so a change takes effect
+ * on the next rebuild.
+ */
+export const mosaicOptions = {
+  /**
+   * Fall back to a plain single column when the panel is narrower than the
+   * layout's columns need, instead of overflowing into a horizontal scroll.
+   */
+  collapseWhenNarrow: true
+};
 
 /** Cell metadata key holding the group path. */
 export const PATH_KEY = 'mosaic';
@@ -399,7 +413,15 @@ export class MosaicNotebook implements IGridHost {
       );
     }
 
-    this._solution = solve(root);
+    // A panel too narrow for the layout's own minimum widths would otherwise
+    // spill off the right and be reached only by scrolling sideways. Falling
+    // back to one column is purely a rendering choice: no metadata is touched,
+    // so the mosaic comes back intact as soon as there is room for it.
+    const solution = solve(root);
+    this._solution =
+      mosaicOptions.collapseWhenNarrow && this.grid.overflowsWidth(solution)
+        ? linearSolution(cells.length)
+        : solution;
     this.grid.update(this._solution);
     this.notebook.update();
   }
@@ -463,16 +485,25 @@ export class MosaicNotebook implements IGridHost {
         ? [hull[0], hull[1], hull[0], hull[1]]
         : [0, count - 1, 0, count - 1];
 
-      if (
-        lastWindow &&
-        lastVersion === grid.version &&
-        lastWindow[0] === next[0] &&
-        lastWindow[1] === next[1]
-      ) {
+      const moved =
+        !lastWindow || lastWindow[0] !== next[0] || lastWindow[1] !== next[1];
+      if (!moved && lastVersion === grid.version) {
         return null;
       }
       lastWindow = next;
       lastVersion = grid.version;
+
+      if (moved) {
+        // Cells are about to be built or emptied, and nothing else will notice
+        // what they end up being worth. A cell stretches to its grid track, so
+        // its own box does not change as its content appears, and its children
+        // did not exist when the last pass subscribed to them -- so the resize
+        // observer stays silent. The row then keeps the height *estimated* for
+        // a cell no one has measured: too tall, with every cell in the band
+        // stretched to it, until some unrelated edit forces a pass. Ask for one
+        // here instead, so a scroll re-measures what it just rendered.
+        this.requestUpdate();
+      }
       return next;
     };
   }
