@@ -1,494 +1,596 @@
-/** mosaic-groups are flex so all the cells are squeezed into a row or column */
-.mosaic-group-inner, .jp-Notebook .jp-WindowedPanel-viewport {
-    display: flex;
-    position: relative;
-    flex-basis: 100%; /* keeps from crushing scrollable divs to nothing */
-    overflow: auto;
-    /*z-index:  -2 !important;*/
-    --mosaic-group-padding: 0px;
-    --mosaic-cell-min-width: 160px;
-}
-
-/* .mosaic-group-outer:has(> .jp-WindowedPanel-outer:nth-child(2):last-child > .jp-WindowedPanel-inner > .mosaic-group-inner:empty) {
-  /* hide empty groups * /
-  display: none;
-} */
-/** 
- * makes cells and mosaic groups the same size, with gaps between them, and not overflow 
- * z-index is to make them capture the mouse events so they know when something is dragging over them
+/**
+ * Jupyter Mosaic layout.
+ *
+ * The notebook viewport is a single flat CSS grid: every cell is a direct child
+ * of `.jp-WindowedPanel-viewport` and is positioned by `grid-row`/`grid-column`
+ * computed in MosaicGrid.ts. There are no nested containers -- the notebook's
+ * windowed layout binary-searches every viewport child for a windowing index
+ * and hangs on anything else. Group chrome therefore lives in `.mosaic-overlay`,
+ * a sibling of the viewport.
  */
-.jp-Cell, .mosaic-group-outer { /*, .jp-Notebook {*/
-    /*min-width: 0;*/
-    /* width: unset !important; */
-    flex-grow: 1;
-    flex-shrink: 0;
-    flex-basis: 0; /* needs an absolute value, not content, to not collapse */
-    /* z-index: 2; */
-}
-.jp-Cell {
-  min-width: var(--mosaic-cell-min-width);
-  box-sizing: border-box;
-}
-.mosaic-group-outer {
-  min-width: calc(var(--mosaic-cell-min-width) + 2*var(--mosaic-group-padding));
-}
 
-/** when hovering over a mosaic-group it changed its background slightly so the execution order can be seen */
-/* .mosaic-group:hover {
-    background-color: rgba(0,0,0,0.2);
-} */
+.mosaic-Notebook {
+  --mosaic-cell-min-width: 160px;
+  --mosaic-gap: 8px;
 
-/* .mosaic-skeuomorphic .jp-Notebook .jp-WindowedPanel-viewport { */
-  /* gap: 10px; */
-/* } */
+  /* The rule drawn in the gap between two adjacent groups. */
+  --mosaic-gutter-rule: rgb(0 0 0 / 20%);
 
+  /* The notebook's own margin. Matching the gap makes the outer edge read the
+     same as every seam inside. Sampled once by WindowedList on attach and
+     folded into the document height, so this must not vary with the
+     layout-style setting -- a constant that happens to equal another constant
+     is fine. */
+  --mosaic-edge-padding: var(--mosaic-gap);
+  --mosaic-frame-color: rgb(128 128 128 / 35%);
 
-.jp-WindowedPanel-viewport.mosaic-group-inner.mosaic-row{
-    flex-direction: row;
-    padding: var(--mosaic-group-padding); /** padded edges to drop cells on **/
-}
-.jp-WindowedPanel-viewport.mosaic-group-inner.mosaic-col, .jp-Notebook .jp-WindowedPanel-viewport {
-    flex-direction: column;
-    padding: var(--mosaic-group-padding);
-}
-
-/* body:not(.mosaic-skeuomorphic) */
-.mosaic-scrolling { 
-  --overflow-shadow-color: 0, 0, 0;
-  --overflow-shadow-opacity: 0.9;
-}
-/* .mosaic-skeuomorphic .mosaic-scrolling {
-  --overflow-shadow-color: var(--jp-layout-color3);
-  --overflow-shadow-opacity: 1.0;
-} */
-.mosaic-scrolling::after, .mosaic-scrolling::before {
-  pointer-events: none;
-  z-index: 2;
-  content: '';
-  position: absolute;
-  /* top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0; */
-  /* --shadow-extent: 20px; */
-}
-.mosaic-col .mosaic-scrolling {
-  /* scroll-timeline: --shift-shadow-vert y;
-  scroll-timeline: --shift-shadow-vert vertical; */
-}
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='top']::before {
-  /* hide top shadow if scrolled all the way to the top */
-  opacity: 0;
-}
-
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)[data-mosaic-scrolled-side='bottom']::after {
-  display: none;
-  opacity: 0;;
-}
-
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)::after {
-  /* overshadow both top and bottom, where more content lurks */
-  /* stick out past edges, shadow decays less along width */
-  left: -15px;
-  right: -15px;
-  height: 15px; /* thickness of shadow overlay */
-  bottom: 0;
-  border-bottom: 1px solid rgb(var(--overflow-shadow-color));
-  background: radial-gradient(
-    farthest-side at 50% 100%,
-    rgba(var(--overflow-shadow-color), 1) 0%,
-    rgba(var(--overflow-shadow-color), 0) 100%
-  );
-  transition: 0.8s;
-  opacity: 1;
-}
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-col)::before {
-  /* overshadow both top and bottom, where more content lurks */
-  /* stick out past edges, shadow decays less along width */
-  left: -15px;
-  right: -15px;
-  height: 15px; /* thickness of shadow overlay */
-  top: 0;
-  border-top: 1px solid rgb(var(--overflow-shadow-color));
-  background: radial-gradient(
-    farthest-side at 50% 0,
-    rgba(var(--overflow-shadow-color), 1) 0%,
-    rgba(var(--overflow-shadow-color), 0) 100%
-  );
-  transition: 0.8s;
-  opacity: 1;
-  /* a shadow coming in on the left and right to show it extends beyond these sides */
-  /* box-shadow: inset 0px -35px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)), 
-              inset 0px 35px  20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
-  /* transition: 0.8s; */
-  /* animation: adjust-position-vert linear forwards;
-  animation-timeline: --shift-shadow-vert; */
-}
-/* @keyframes adjust-position-vert {
-	0% {
-    transform: translateX(0); /* stay fixed over the viewport * /
-    /* fully scrolled to the start: shadow over right only, where more cells are * /
-    box-shadow: inset -10px -30px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity)),
-                inset 10px 10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity));
-	}
-  5% {
-    box-shadow: inset -10px -30px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity)), 
-                inset 10px 30px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity));
-  }
-  95% {
-    box-shadow: inset -10px -30px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity)), 
-                inset 10px 30px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity));
-  }
-	100% {
-    transform: translateX(calc(var(--scroll-width) + -100%)); /* stay fixed over the viewport * /
-    /* fully scrolled to the end: shadow over left only, where more cells are * /
-    box-shadow: inset -10px -10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity)),
-                inset 10px 30px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity));
-	}
-} */
-
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="left"]::before {
-  opacity: 0;
-  /* overshadow mostly the right, where more content lurks */
-  /* box-shadow: inset -35px -0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
-              inset   0px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
-}
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)[data-mosaic-scrolled-side="right"]::after {
-  opacity: 0;
-  /* overshadow mostly the left, where more content lurks */
-  /* box-shadow: inset 0px   0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)),
-              inset 35px  0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)); */
-}
-  /* a shadow coming in on the left and right to show it extends beyond these sides */
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)::before {
-  /* an elliptical shadow and border for a slit-like appearance, content sliding under a seam in the background */
-  /* stick out past edges, shadow decays less along width */
-  top: -15px;
-  bottom: -15px;
-  width: 15px; /* thickness of shadow overlay */
-  left: 0;
-  border-left: 1px solid rgb(var(--overflow-shadow-color));
-  background: radial-gradient(
-    farthest-side at 0 50%,
-    rgba(var(--overflow-shadow-color), 1) 0%,
-    rgba(var(--overflow-shadow-color), 0) 100%
-  );
-  transition: 0.8s;
-  opacity: 1;
-}
-.mosaic-scrolling:has(>.jp-WindowedPanel-outer>.jp-WindowedPanel-inner>.mosaic-row)::after {
-  /* stick out past edges, shadow decays less along width */
-  top: -15px;
-  bottom: -15px;
-  width: 15px; /* thickness of shadow overlay */
-  right: 0;
-  border-right: 1px solid rgb(var(--overflow-shadow-color));
-  background: radial-gradient(
-    farthest-side at 100% 50%,
-    rgba(var(--overflow-shadow-color), 1) 0%,
-    rgba(var(--overflow-shadow-color), 0) 100%
-  );
-  transition: 0.8s;
-  opacity: 1;
-    /* box-shadow: inset -35px 0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity)), 
-                inset  35px 0px 20px -20px rgba(var(--overflow-shadow-color), var(--overflow-shadow-opacity));
-    transition: 0.8s; */
-}
-/* @keyframes adjust-position-horiz {
-	0% {
-    transform: translateX(0); /* stay fixed over the viewport * /
-    /* fully scrolled to the start: shadow over right only, where more cells are * /
-    box-shadow: inset -30px -10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity)),
-                inset 10px 10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity));
-	}
-  5% {
-    box-shadow: inset -30px -10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity)), 
-                inset 30px 10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity));
-  }
-  95% {
-    box-shadow: inset -30px -10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity)), 
-                inset 30px 10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity));
-  }
-	100% {
-    transform: translateX(calc(var(--scroll-width) + -100%)); /* stay fixed over the viewport * /
-    /* fully scrolled to the end: shadow over left only, where more cells are * /
-    box-shadow: inset -10px -10px 10px -10px rgba(0, 0, 0, var(--overflow-shadow-opacity)),
-                inset 30px 10px 10px -10px rgba(0, 0, 0, var(--overflow-hadow-opacity));
-	}
-} */
-
-
-
-.jp-Notebook .jp-Cell {
-  margin: var(--cell-margin);
-}
-body:not(.mosaic-skeuomorphic) .jp-Notebook {
+  /* Side of the square transpose button, which shares the output's prompt
+     column with JupyterLab's own scroll overlay. */
+  --mosaic-transpose-size: var(--jp-cell-prompt-width);
   --cell-margin: 0;
 }
-/** floating vs flat layout style */
-/** takes away white middle column so cells are floating in the grey area */
-.mosaic-skeuomorphic .jp-Notebook {
-    background: transparent;
-    box-shadow: none;
-    --cell-margin: 5px;
-}
-/** makes cells floating bubbles with round corners */
-.mosaic-skeuomorphic .jp-Notebook .jp-Cell, .mosaic-skeuomorphic .mosaic-tab {
-    /* background-color: var(--jp-layout-color3); */
-    /* make the cells slightly lighter than background */
-    background-color: rgba(255, 255, 255, 0.03);
-    box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
-    border-radius: 10px !important;
-    margin: var(--cell-margin);
-}
-.mosaic-skeuomorphic .jp-Notebook .jp-ThemedContainer :not(.jp-Cell) {
-  /* make the background darker than usual to differentiate from the cells */
-  background-color: rgb(from var(--jp-layout-color3) calc(r - 50) calc(g - 50) calc(b - 50));
+
+/* The viewport is the grid. Windowing keeps it absolutely positioned; the
+   getSpan override pins it to the top so grid lines stay in document space. */
+.mosaic-Notebook .jp-WindowedPanel-viewport.mosaic-grid {
+  display: grid;
+  align-items: stretch;
+  gap: var(--mosaic-gap);
+
+  /* The fitted width in MosaicGrid is a border-box figure: tracks plus the
+     edge padding. */
+  box-sizing: border-box;
+  padding: var(--mosaic-edge-padding);
+  left: 0;
+  right: 0;
+  width: auto;
 }
 
-div .jp-Notebook .jp-WindowedPanel-viewport {
-  padding: 0; /* get rid of padding of outer notebook, more useful to be flush with edge in mosaic mode */
+.mosaic-Notebook .jp-WindowedPanel-inner {
+  position: relative; /* containing block for the overlay plane */
 }
 
-
-/** offset  run buttons of nested groups from overlapping */
-.mosaic-group-outer:not(:nth-child(1)) {
-  --parent-run-btn-offset: 0;
-  --run-btn-offset: 0;
-}
-.mosaic-group-inner:first-child {
-  --parent-run-btn-offset: var(--run-btn-offset);
-}
-.mosaic-group-outer:nth-child(1){ /* 2nd because windowedpanel scrollbar is always first */
-  /* --parent-run-btn-offset: var(--run-btn-offset); */
-  --run-btn-offset: calc(var(--parent-run-btn-offset)+1px)
+.mosaic-Notebook .jp-Cell {
+  /* The narrowest a cell may be drawn is enforced on the grid as a whole, by
+     `minGridWidth`; a floor here would instead be a floor on the cell's grid
+     track, which is exactly what stopped equal partitions coming out equal. */
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  margin: 0;
 }
 
-.mosaic-group-run-btn {
+/* Cells inside a scrolling or tabbed group are positioned by hand against the
+   group's grid area, so they must not stretch to it. */
+.mosaic-Notebook .jp-Cell.mosaic-managed {
+  overflow: hidden;
+}
+
+/* -- overlay plane ------------------------------------------------------- */
+
+.mosaic-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.mosaic-frame {
   position: absolute;
   top: 0;
-  left: calc(var(--run-btn-offset)*25);
-  width: 24px;
-  height: 24px;
-  background-color: rgba(120, 120, 120, 0.3);
-  border-radius: 3px;
-  z-index: 3;
+  left: 0;
+
+  /* The grid hands over the box the content occupies; the padding carries the
+     border half a gap outward on every side, so it is drawn down the middle of
+     the gutter rather than tight against the cells. */
+  box-sizing: content-box;
+  margin: calc(var(--mosaic-gap) / -2);
+  padding: calc(var(--mosaic-gap) / 2);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  pointer-events: none;
+  transition: border-color 0.15s;
+}
+
+.mosaic-frame[data-mosaic-mode='scroll'],
+.mosaic-frame[data-mosaic-mode='tabs'] {
+  border-color: var(--mosaic-frame-color);
+}
+
+/* Reached for, not merely present: the frame you are about to act on says so
+   in the brand colour, at full strength. */
+.mosaic-frame:hover {
+  border-color: var(--jp-brand-color1);
+}
+
+.mosaic-frame-run {
+  --mosaic-run-size: 22px;
+
+  position: absolute;
+
+  /* Half outside its own frame, so it sits astride the border it belongs to
+     instead of inside the group's content. */
+  top: calc(var(--mosaic-run-size) / -2);
+  left: calc(var(--mosaic-run-size) / -2);
+  display: flex;
   align-items: center;
   justify-content: center;
-
-  opacity: 0; /* invisible except when hovered over */
-  /* pointer-events: none; */
-  transition: 0.2s;
+  width: var(--mosaic-run-size);
+  height: var(--mosaic-run-size);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--jp-layout-color1);
+  box-shadow: 0 0 0 1px var(--jp-brand-color1);
+  color: var(--jp-ui-font-color0);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.2s;
 }
-.mosaic-group-run-btn:hover {
+
+.mosaic-frame-run svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mosaic-frame-run svg [fill] {
+  fill: var(--jp-brand-color1);
+}
+
+.mosaic-frame:hover .mosaic-frame-run {
   opacity: 1;
 }
-.mosaic-group-run-btn svg {
-  max-width: 100%;
+
+/* The label, drawn from the button's own attribute: it appears the moment the
+   button does, where a `title` would wait for the browser's pause. */
+.mosaic-frame-run::after {
+  content: attr(data-mosaic-tip);
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background-color: var(--jp-inverse-layout-color1);
+  color: var(--jp-ui-inverse-font-color1);
+  font-size: var(--jp-ui-font-size0);
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.mosaic-frame-run:hover::after {
+  opacity: 1;
+}
+
+/* Insert-left/right reuse the insert-above/below icons, turned a quarter turn
+   so the arrow points the way the cell will be added. */
+svg[data-icon='mosaic:add-left'],
+svg[data-icon='mosaic:add-right'] {
+  transform: rotate(-90deg);
+}
+
+/* The stock footer is indented to line up with a linear notebook's cell
+   content, past the prompt and collapser. Cells here start at the grid's edge,
+   so it needs to span the same width they do. */
+.mosaic-Notebook .jp-Notebook-footer {
+  margin-left: var(--mosaic-edge-padding);
+  width: calc(100% - 2 * var(--mosaic-edge-padding));
+}
+
+/* The cell toolbar hides itself whenever it would reach past the middle of the
+   editor, which in a tiled layout means most cells -- and more of them since
+   the insert-left/right buttons widened it. Keep it shown. */
+.mosaic-Notebook .jp-toolbar-overlap .jp-cell-toolbar {
+  display: flex;
+}
+
+/* -- gutters between adjacent groups -------------------------------------- */
+
+/* A seam between two groups has no cell on it to drop onto, so it gets a
+   gutter: a target laid over the ordinary gap that already separates the two
+   tracks, taking no space of its own. Seams that touch a cell need none -- that
+   cell is already the drop target.
+
+   Every gutter takes a drop, but only one kind carries a drawn rule: where two
+   parallel groups meet -- a row above a row, a column beside a column -- which
+   is the one arrangement the eye cannot resolve on its own. At a group's outer
+   edge there is nothing to disambiguate, so the gutter is there but invisible
+   until a drag proposes landing on it. */
+.mosaic-gutter {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mosaic-gutter::after {
+  content: '';
+  background-color: transparent;
+}
+
+.mosaic-gutter-seam::after {
+  background-color: var(--mosaic-gutter-rule);
+}
+
+.mosaic-gutter[data-mosaic-axis='col']::after {
+  width: 100%;
+  height: 1px;
+}
+
+.mosaic-gutter[data-mosaic-axis='row']::after {
+  width: 1px;
   height: 100%;
-  color: var(--jp-ui-font-color0); /* visible against background in light or dark mode */
 }
 
-.mosaic-row {
-  gap: 10px; /* gap between elements for resize handle */
-  cursor: ew-resize;
-  scroll-behavior: smooth;
-  scroll-snap-type: x proximity;
-}
-.mosaic-row > * {
-  scroll-snap-align: center;
-  cursor: pointer; /* no resize cursor unless over only the row itself (not children content) */
-  flex-basis: var(--el-width); /* width stored in parent variable */
+.mosaic-gutter-active::after {
+  background-color: var(--jp-brand-color1);
 }
 
+.mosaic-gutter-active[data-mosaic-axis='col']::after {
+  height: 4px;
+}
 
-/** makes the input prompt or blank area of markdown cells clickable with z-index, so it can be dragged there, and full size */
+.mosaic-gutter-active[data-mosaic-axis='row']::after {
+  width: 4px;
+}
 
-/** styles the input prompt of code cells only, making it bigger and on the top rather than side */
+/* The rule reads against either theme: dark on light, light on dark. */
+:where(body[data-jp-theme-light='false']) .mosaic-Notebook {
+  --mosaic-gutter-rule: rgb(255 255 255 / 20%);
+}
+
+/* -- simulated scrollbars ------------------------------------------------- */
+
+.mosaic-frame-scrollbar {
+  position: absolute;
+  pointer-events: auto;
+  background-color: rgb(128 128 128 / 12%);
+  border-radius: 4px;
+}
+
+.mosaic-frame[data-mosaic-axis='col'] > .mosaic-frame-scrollbar {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+}
+
+.mosaic-frame[data-mosaic-axis='row'] > .mosaic-frame-scrollbar {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 8px;
+}
+
+.mosaic-frame-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: rgb(128 128 128 / 65%);
+  border-radius: 4px;
+  cursor: grab;
+}
+
+.mosaic-frame-thumb:active {
+  cursor: grabbing;
+  background-color: rgb(128 128 128 / 90%);
+}
+
+.mosaic-frame[data-mosaic-axis='col']
+  > .mosaic-frame-scrollbar
+  > .mosaic-frame-thumb {
+  width: 100%;
+}
+
+.mosaic-frame[data-mosaic-axis='row']
+  > .mosaic-frame-scrollbar
+  > .mosaic-frame-thumb {
+  height: 100%;
+}
+
+/* -- tab bars ------------------------------------------------------------- */
+
+.mosaic-frame-tabs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  pointer-events: auto;
+  background-color: var(--jp-layout-color2);
+  border-radius: 6px 6px 0 0;
+}
+
+.mosaic-tab {
+  padding: 2px 8px;
+  font-size: var(--jp-ui-font-size0);
+  font-family: var(--jp-ui-font-family);
+  color: var(--jp-ui-font-color1);
+  white-space: nowrap;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+}
+
+.mosaic-tab:hover {
+  background-color: var(--jp-layout-color3);
+}
+
+.mosaic-tab-active {
+  background-color: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color0);
+  font-weight: 600;
+}
+
+/* -- drop indicators ------------------------------------------------------ */
+
+/* A drop target gets a solid top border from the stock notebook stylesheet,
+   which reads as a second, contradictory indicator next to the directional one
+   below. Hide it without changing the border width, so nothing shifts. */
+.mosaic-Notebook .jp-Notebook-cell.jp-mod-dropTarget,
+.mosaic-Notebook
+  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget {
+  border-top-color: transparent;
+}
+
+.mosaic-Notebook .jp-Cell.jp-mod-dropTarget::after {
+  content: '';
+  position: absolute;
+  background-color: var(--jp-brand-color1);
+  border-radius: 2px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.mosaic-Notebook
+  .jp-Cell.jp-mod-dropTarget[data-mosaic-drop-side='top']::after {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.mosaic-Notebook
+  .jp-Cell.jp-mod-dropTarget[data-mosaic-drop-side='bottom']::after {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.mosaic-Notebook
+  .jp-Cell.jp-mod-dropTarget[data-mosaic-drop-side='left']::after {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+}
+
+.mosaic-Notebook
+  .jp-Cell.jp-mod-dropTarget[data-mosaic-drop-side='right']::after {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 3px;
+}
+
+/* -- transpose: output beside code ---------------------------------------- */
+
+/*
+ * A control modelled on `jp-OutputArea-promptOverlay`: invisible until hovered,
+ * living in the output's prompt area. It takes a square at the start of that
+ * area and the stock scroll overlay keeps the rest, so the two read as one
+ * square button followed by one long one.
+ *
+ * With handles beside the code the prompt area is a column, so the square goes
+ * on top; with handles above it is a band, so the square goes at the left. The
+ * top-handles case is further down, with the rest of that mode's rules.
+ *
+ * JupyterLab sets the overlay's height inline from a resize observer, so
+ * shortening it has to win over that.
+ */
+.mosaic-Notebook .jp-OutputArea-promptOverlay {
+  top: var(--mosaic-transpose-size);
+  height: calc(100% - var(--mosaic-transpose-size)) !important;
+}
+
+.mosaic-transposeOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--mosaic-transpose-size);
+  height: var(--mosaic-transpose-size);
+  padding: 0;
+  border: none;
+  background: none;
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.mosaic-transposeOverlay:hover {
+  background: var(--jp-layout-color2);
+  box-shadow: inset 0 0 1px var(--jp-inverse-layout-color0);
+}
+
+/* Silent until reached for, exactly as the stock overlay hides its own icon. */
+.mosaic-transposeOverlay span {
+  display: none;
+}
+
+.mosaic-transposeOverlay:hover span {
+  display: flex;
+}
+
+/* The move-cell-up and move-cell-down arrows, a quarter turn short of
+   horizontal: the direction the output is about to go. */
+.mosaic-transposeOverlay svg {
+  width: calc(var(--mosaic-transpose-size) * 0.55);
+  height: calc(var(--mosaic-transpose-size) * 0.55);
+  transform: rotate(45deg);
+}
+
+.mosaic-transposeOverlay svg [fill] {
+  fill: var(--jp-inverse-layout-color3);
+}
+
+/* With no output there is nothing to move, and the output area has no height:
+   the button would hang below the cell as a dead square over its neighbour. */
+.mosaic-Notebook .jp-Cell.jp-mod-noOutputs .mosaic-transposeOverlay {
+  display: none;
+}
+
+/* The transposed cell itself: input half and output half side by side, both
+   starting at the top so the two prompts sit level. */
+.mosaic-Notebook .jp-Cell.mosaic-transposed {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.mosaic-Notebook .jp-Cell.mosaic-transposed > .jp-Cell-inputWrapper,
+.mosaic-Notebook .jp-Cell.mosaic-transposed > .jp-Cell-outputWrapper {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+
+/* A cell's header, footer and resize handle are siblings of the two halves and
+   carry `width: 100%`, which as flex items made them claim a share of the row
+   -- half the cell went to two things that draw nothing. */
+.mosaic-Notebook
+  .jp-Cell.mosaic-transposed
+  > :not(.jp-Cell-inputWrapper, .jp-Cell-outputWrapper) {
+  flex: 0 0 0;
+  width: 0;
+}
+
+/* -- flat vs floating presentation (the style dropdown) ------------------- */
+
+.mosaic-skeuomorphic .mosaic-Notebook {
+  background: transparent;
+  box-shadow: none;
+
+  --cell-margin: 10px;
+  --mosaic-gap: 14px;
+}
+
+.mosaic-skeuomorphic .mosaic-Notebook .jp-Cell {
+  background-color: rgb(255 255 255 / 3%);
+  box-shadow: 0 2px 7px 1px rgb(0 0 0 / 70%);
+  border-radius: 10px;
+}
+
+.mosaic-skeuomorphic .mosaic-Notebook.jp-ThemedContainer :not(.jp-Cell) {
+  /* darken the backdrop so the floating cells read as raised */
+  background-color: rgb(
+    from var(--jp-layout-color3) calc(r - 50) calc(g - 50) calc(b - 50)
+  );
+}
+
+/* the outer notebook's own padding is not useful once cells tile edge to edge */
+div .mosaic-Notebook .jp-WindowedPanel-viewport {
+  padding: var(--mosaic-edge-padding);
+}
 
 /* * puts cell handles (In [*]:) and output labels (Out [*]:) on the left */
-.mosaic-top-cell-handles .jp-OutputArea-promptOverlay {
-    width: 100%;
-    height: 100%;
-    max-height: 2.8rem !important;
+.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-promptOverlay {
+  /* The prompt area is a band here, so the transpose square sits at its left
+     and the scroll overlay takes the rest of the row. */
+  top: 0;
+  left: var(--mosaic-transpose-size);
+  width: calc(100% - var(--mosaic-transpose-size));
+  height: 100% !important;
+  max-height: 2.8rem !important;
 }
-.mosaic-top-cell-handles .jp-OutputArea-promptOverlay {
-    text-align: left;
+
+.mosaic-top-cell-handles .mosaic-Notebook {
+  --mosaic-transpose-size: 2.8rem;
 }
-.mosaic-top-cell-handles .jp-Cell .jp-InputArea, .jp-OutputArea {
-    flex-direction: column !important;
+.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-promptOverlay {
+  text-align: left;
+}
+.mosaic-top-cell-handles .mosaic-Notebook .jp-Cell .jp-InputArea,
+.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea {
+  flex-direction: column !important;
 }
 /** 
  * make the output view full width of the cell 
  * (it usually leaves room for the output prompt, but we are putting that on top instead)
  */
-.mosaic-top-cell-handles .jp-OutputArea-child {
-    max-width: 100% !important;
+.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-child {
+  max-width: 100% !important;
+
+  /* The output prompt sits above its output, as the input prompt sits above
+     the code. */
+  flex-direction: column;
 }
-.mosaic-top-cell-handles .prompt_container > .jp-InputPrompt {
-    text-align: left;
-    position: relative;
-    height: 2.8rem;
-    width: 100%;
+
+/* And is styled the same way as the input prompt is in this mode: no fixed
+   column width, text starting at the left. */
+.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputPrompt {
+  flex: 0 0 auto;
+  text-align: left;
 }
-.mosaic-top-cell-handles .jp-InputPrompt {
-    width: 100%;
-    /* height: 100%; */
-    text-align: left;
-    flex: 0 0 auto;
-    z-index: 2;
+.mosaic-top-cell-handles .mosaic-Notebook .prompt_container > .jp-InputPrompt {
+  text-align: left;
+  position: relative;
+  height: 2.8rem;
+  width: 100%;
 }
-.mosaic-top-cell-handles .jp-InputArea-editor {
+.mosaic-top-cell-handles .mosaic-Notebook .jp-InputPrompt {
+  width: 100%;
+  /* height: 100%; */
+  text-align: left;
+  flex: 0 0 auto;
+  z-index: 2;
+}
+
+/* The heading collapse caret lives inside the input prompt, anchored to its
+   right edge and clipped to it. With handles above, that prompt is a band the
+   full width of the cell and about ten pixels tall, so `right: 0` threw the
+   caret out to the far edge and `overflow: hidden` cut off what was left of it.
+   Anchor it to the left of the band instead and let it out of the box -- half a
+   rem in, to clear the run button now sitting on the group's corner. */
+.mosaic-top-cell-handles .mosaic-Notebook .jp-MarkdownCell .jp-InputPrompt,
+.mosaic-top-cell-handles .mosaic-Notebook .jp-MarkdownCell .jp-InputArea {
+  overflow: visible;
+
+  /* The band has to be as tall as the caret it now holds. */
+  min-height: 25px;
+}
+
+.mosaic-top-cell-handles .mosaic-Notebook .jp-collapseHeadingButton {
+  right: auto;
+  bottom: auto;
+  left: 0;
+  /* Tall enough for the caret at the size a plain notebook draws it. */
+  height: 25px;
+  margin-left: 0.5rem;
+
+  /* Upstream stretches this button down the full-height prompt column and then
+     pushes the caret 0.3 heading-widths down it, to sit level with the heading
+     text. Here the prompt is a short band above the heading, so that offset put
+     all but a sliver of the caret below the box: centre it instead. */
+  background-position-y: center;
+  background-size: 25px;
+}
+
+.mosaic-top-cell-handles .mosaic-Notebook .jp-InputArea-editor {
   margin-left: 5px; /* spacing between collapser and editor */
 }
 
 /** makes sure the output is clickable */
-.jp-OutputArea {
-    z-index: 2 !important;
-}
-
-
-
-
-.mosaic-group-outer.jp-mod-dropTarget ,
-.jp-Notebook-cell.jp-mod-dropTarget ,
-.jp-Notebook.jp-mod-commandMode
-  .jp-Notebook-cell.jp-mod-active.jp-mod-selected.jp-mod-dropTarget {
-    border: none;
-  }
-
-.mosaic-group-outer.jp-mod-dropTarget::after ,
-.jp-Notebook-cell.jp-mod-dropTarget::after,
-.jp-WindowedPanel-viewport.jp-mod-dropTarget::after {
-    display: none; /* shown only when data-mosaic-drop-side is set */
-    content: '';
-    position: absolute;
-    contain: strict;
-    background: rgba(33, 150, 243, 0.1);
-    border: var(--jp-border-width) dashed var(--jp-brand-color1);
-    transition-property: top, left, right, bottom;
-    transition-duration: 150ms;
-    transition-timing-function: ease;
-}
-.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="top"]::after,
-.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="top"]::after,
-.jp-WindowedPanel-viewport.jp-mod-dropTarget[data-mosaic-drop-side="top"]::after{
-  top: 0px;
-  left: 0px;
-  right: 0px;
-  height: calc(min(50%, 39px));
-  display: block;
-}
-
-.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="bottom"]::after,
-.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="bottom"]::after,
-.jp-Notebook  .jp-WindowedPanel-viewport.jp-mod-dropTarget[data-mosaic-drop-side="bottom"]::after {
-  bottom: 0px;
-  left: 0px;
-  right: 0px;
-  height: calc(min(50%, 39px));
-  display: block; 
-}
-.jp-Notebook  .jp-WindowedPanel-viewport.jp-mod-dropTarget[data-mosaic-drop-side="bottom"]::after {
-  bottom: -39px;
-}
-
-.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="left"]::after,
-.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="left"]::after {
-  top: 0px;
-  left: 0px;
-  bottom: 0px;
-  width: 50%;
-  display: block;
-}
-
-.mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="right"]::after,
-.jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="right"]::after{
-  top: 0px;
-  bottom: 0px;
-  right: 0px;
-  width: 50%;
-  display: block;
-} 
-
-.mosaic-top-cell-handles .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-top-cell-handles .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-group-outer:has(> div > div > .mosaic-tabgroup.mosaic-row).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-tabgroup.mosaic-row > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after {
-  top: var(--jp-cell-padding);
-  right: var(--jp-cell-padding);
-  width: var(--mosaic-tab-bar-width);
-  height: var(--mosaic-tab-bar-height);
-  display: block;
-} 
-body:not(.mosaic-top-cell-handles)  .mosaic-group-outer.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-body:not(.mosaic-top-cell-handles) .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-group-outer:has(> div > div > .mosaic-tabgroup.mosaic-col).jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after,
-.mosaic-tabgroup.mosaic-col > .jp-Notebook-cell.jp-mod-dropTarget[data-mosaic-drop-side="tab"]::after {
-  bottom: var(--jp-cell-padding);
-  left: var(--jp-cell-padding);
-  width: var(--mosaic-tab-bar-width);
-  height: var(--mosaic-tab-bar-height);
-  display: block;
-}
-
-
-.mosaic-tabgroup {
-    border: 1px solid var(--jp-layout-color2);
-    border-radius: 5px;
-    margin: 5px;
-    padding: 5px;
-}
-
-.mosaic-tabgroup:has(.jp-Notebook-cell.jp-mod-active) {
-    border-color: var(--jp-brand-color1);
-    box-shadow: 0 0 5px var(--jp-brand-color1);
-}
-
-
-.mosaic-tab-bar {
-    display: flex;
-    flex-direction: row;
-    /* background-color: var(--jp-layout-color2); */
-    /* border-bottom: 1px solid var(--jp-border-color1); */
-    flex-shrink: 0;
-    overflow-x: auto;
-}
-
-.mosaic-tab {
-    background-color: rgba(0,0,0, 0.1);
-    padding: 8px 12px;
-    cursor: pointer;
-    border-right: 1px solid var(--jp-border-color1);
-    white-space: nowrap;
-    flex-shrink: 0;
-    box-shadow: none;
-    min-width: 100px;
-}
-.mosaic-tab > pre {
-    height: 1rem;
-    margin: 0;
-}
-
-.mosaic-tab:hover {
-    background-color: rgba(0,0,0,0.2);
-    box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
-}
-
-.mosaic-tab-active {
-    background-color: rgba(255,255,255,0.3);
-    box-shadow: 0px 2px 7px 1px rgba(0,0,0,0.7);
-    font-weight: bold;
-    border: 1px solid var(--jp-border-color1);
-}
-
-.mosaic-add-tab-button {
-    padding: 8px 12px;
-    cursor: pointer;
-    border-left: 1px solid var(--jp-accent-color1);
-    margin-left: auto;
-}
-
-.mosaic-add-tab-button:hover {
-    background-color: var(--jp-layout-color3);
+.mosaic-Notebook .jp-OutputArea {
+  z-index: 2 !important;
 }

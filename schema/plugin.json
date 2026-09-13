@@ -1,5 +1,5 @@
 {
-  "jupyter.lab.setting-icon": "settings",
+  "jupyter.lab.setting-icon": "mosaic:favicon",
   "jupyter.lab.setting-icon-label": "Mosaic",
   "title": "Mosaic Notebook Settings",
   "description": "Controls global stylistic features of the mosaic notebook.",
@@ -8,14 +8,243 @@
     "skeuomorphic": {
       "type": "boolean",
       "title": "Skeuomorphic Style (Floating Cell Bubbles)",
-      "default": false,
+      "default": true,
       "description": "Stylize cells as seperate, floating, and round, rather than the default flat, seamless view."
     },
     "topCellHandle": {
-        "type": "boolean",
-        "title": "Cell Handle Placement",
-        "default": false,
-        "description": "Put cell handles above code areas rather than beside it"
+      "type": "boolean",
+      "title": "Cell Handle Placement",
+      "default": true,
+      "description": "Put cell handles above code areas rather than beside it"
+    },
+    "collapseWhenNarrow": {
+      "type": "boolean",
+      "title": "Collapse To One Column When Too Narrow",
+      "default": true,
+      "description": "When the panel is narrower than the layout's columns can fit, render the notebook as a single linear column instead of overflowing into a horizontal scroll. The saved layout is untouched and returns when the panel is widened."
     }
-  }
+  },
+  "jupyter.lab.toolbars": {
+    "Cell": [
+      {
+        "name": "duplicate-cell",
+        "rank": 10
+      },
+      {
+        "name": "move-cell-up",
+        "rank": 20
+      },
+      {
+        "name": "move-cell-down",
+        "rank": 30
+      },
+      {
+        "name": "insert-cell-above",
+        "rank": 40
+      },
+      {
+        "name": "insert-cell-below",
+        "rank": 50
+      },
+      {
+        "name": "mosaic-insert-cell-left",
+        "command": "mosaic:insert-cell-left",
+        "rank": 51
+      },
+      {
+        "name": "mosaic-insert-cell-right",
+        "command": "mosaic:insert-cell-right",
+        "rank": 52
+      },
+      {
+        "name": "delete-cell",
+        "rank": 60
+      }
+    ]
+  },
+  "jupyter.lab.shortcuts": [
+    {
+      "command": "mosaic:move-cursor-left",
+      "keys": [
+        "H"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:move-cursor-left",
+      "keys": [
+        "H"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:extend-selection-left",
+      "keys": [
+        "Shift H"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:extend-selection-left",
+      "keys": [
+        "Shift H"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:move-cursor-right",
+      "keys": [
+        "L"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:move-cursor-right",
+      "keys": [
+        "L"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:extend-selection-right",
+      "keys": [
+        "Shift L"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:extend-selection-right",
+      "keys": [
+        "Shift L"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:move-cursor-down",
+      "keys": [
+        "J"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:move-cursor-down",
+      "keys": [
+        "J"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:extend-selection-down",
+      "keys": [
+        "Shift J"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:extend-selection-down",
+      "keys": [
+        "Shift J"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:move-cursor-up",
+      "keys": [
+        "K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:move-cursor-up",
+      "keys": [
+        "K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:extend-selection-up",
+      "keys": [
+        "Shift K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:extend-selection-up",
+      "keys": [
+        "Shift K"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:insert-cell-left",
+      "keys": [
+        "S"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-left",
+      "keys": [
+        "S"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:insert-cell-right",
+      "keys": [
+        "F"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-right",
+      "keys": [
+        "F"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:insert-cell-above",
+      "keys": [
+        "A"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-above",
+      "keys": [
+        "A"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "mosaic:insert-cell-below",
+      "keys": [
+        "B"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    },
+    {
+      "command": "mosaic:insert-cell-below",
+      "keys": [
+        "B"
+      ],
+      "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
+    },
+    {
+      "command": "viewmenu:line-numbering",
+      "keys": [
+        "Shift L"
+      ],
+      "selector": ".jp-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus",
+      "disabled": true
+    },
+    {
+      "command": "viewmenu:line-numbering",
+      "keys": [
+        "Shift N"
+      ],
+      "selector": ".jp-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
+    }
+  ]
 }

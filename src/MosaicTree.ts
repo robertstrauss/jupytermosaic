@@ -1,0 +1,967 @@
+/**
+ * Pure layout model for Jupyter Mosaic. No DOM, no JupyterLab imports.
+ *
+ * A mosaic layout is a *guillotine partition*: the notebook is a column of
+ * children, each child of a column is a row, each child of a row is a column,
+ * and so on. Every such partition rasterises exactly onto a CSS grid, which is
+ * what this module computes.
+ *
+ * The tree is derived entirely from cell metadata (`mosaic: string[]`, a path of
+ * group ids) plus per-group state stored in notebook metadata. It is never the
+ * authoritative copy of anything: rebuild it from metadata whenever the notebook
+ * changes and the layout follows.
+ */
+
+export type Axis = 'row' | 'col';
+
+/** How a group presents its children. */
+export type GroupMode =
+  /** children participate in the outer grid (the default) */
+  | 'flow'
+  /** children are laid out internally and clipped; the group scrolls */
+  | 'scroll'
+  /** like 'scroll', but only one child is shown at a time */
+  | 'tabs';
+
+/** Per-group state, persisted in notebook metadata under `mosaic:<path>`. */
+export interface IGroupState {
+  mode?: GroupMode;
+  /** Preferred extent along the group's own axis, in px. Only used in 'scroll'/'tabs'. */
+  size?: number;
+  /** Share of the parent's extent, relative to siblings. */
+  weight?: number;
+  /** Index of the visible child in 'tabs' mode. */
+  activeTab?: number;
+}
+
+export interface ICellNode {
+  kind: 'cell';
+  /** Index of the cell in the notebook's linear cell list. */
+  index: number;
+  weight: number;
+}
+
+export interface IGroupNode {
+  kind: 'group';
+  id: string;
+  path: string[];
+  axis: Axis;
+  weight: number;
+  mode: GroupMode;
+  size: number;
+  children: MosaicNode[];
+}
+
+export type MosaicNode = ICellNode | IGroupNode;
+
+/** Default extent (px) of a scrollable group along its scroll axis. */
+export const DEFAULT_SCROLL_SIZE = 320;
+
+/** A node's placement in the flat grid, as 1-based CSS grid line numbers. */
+export interface IPlacement {
+  rowStart: number;
+  rowEnd: number;
+  colStart: number;
+  colEnd: number;
+}
+
+/** A group whose children are positioned manually rather than by the grid. */
+export interface IManagedGroup {
+  node: IGroupNode;
+  /** Where the group itself sits in the outer grid. */
+  placement: IPlacement;
+  /** Linear indices of every cell anywhere beneath this group. */
+  cells: number[];
+}
+
+/** One grid track. */
+export interface ITrack {
+  /** Share of the axis. */
+  weight: number;
+}
+
+/**
+ * A gutter between two adjacent sibling groups.
+ *
+ * Two groups meeting edge to edge have no cell along the seam to drop onto, so
+ * there is otherwise no way to land between them -- a drop necessarily joins a
+ * cell inside one of them. A gutter takes no space of its own: it names the
+ * grid line the seam falls on, and the drop target and the rule both live in
+ * the ordinary gap that already separates the two tracks there. Giving it a
+ * track instead made a seam cost a gap, a track and another gap -- and because
+ * a track runs the whole length of the grid, every other band paid that too,
+ * opening a wide channel across rows that had no seam to show.
+ *
+ * Cells adjacent to a group need no gutter: dropping on the cell already
+ * reaches the seam.
+ */
+export interface IGutter {
+  /** Path of the group whose children the gutter separates. */
+  path: string[];
+  /** Axis of that group: 'col' stacks children, so the gutter is horizontal. */
+  axis: Axis;
+  /** Grid line the seam falls on. The gap before it is the drop target. */
+  line: number;
+  /** The group's extent across the other axis, as grid lines. */
+  start: number;
+  end: number;
+  /** Index, among the group's children, of the child after the gutter. */
+  index: number;
+  /** First cell of the child after the gutter, or -1 at a trailing edge. */
+  cellAfter: number;
+  /** Last cell of the child before the gutter, or -1 at a leading edge. */
+  cellBefore: number;
+  /**
+   * True where the gutter separates two sibling *groups* -- a row above a row,
+   * or a column beside a column. That is the only arrangement a reader cannot
+   * resolve by eye, so it is the only one that carries a drawn rule. The
+   * gutters at a group's leading and trailing edge exist to catch a drop that
+   * belongs outside the group; there is nothing ambiguous about them.
+   */
+  between: boolean;
+}
+
+export interface ISolution {
+  /** Column tracks, in order. */
+  colTracks: ITrack[];
+  /** Row tracks, in order. */
+  rowTracks: ITrack[];
+  /** Minimum height contributed to each row track, in px (0 = pure `auto`). */
+  rowMinPx: number[];
+  /** Grid placement for every cell that the grid positions directly. */
+  placements: Map<number, IPlacement>;
+  /** Groups laid out manually ('scroll' / 'tabs'), outermost first. */
+  managed: IManagedGroup[];
+  /** For each cell, the innermost managed group containing it (if any). */
+  managedOwner: Map<number, IManagedGroup>;
+  /** Placement of every group node, keyed by {@link groupKey}. Drives chrome. */
+  groupPlacements: Map<string, { node: IGroupNode; placement: IPlacement }>;
+  /** Seams between adjacent sibling groups. */
+  gutters: IGutter[];
+  /**
+   * Total height the notebook's content wants, in px, when {@link solve} was
+   * given cell heights. The row cuts are placed in proportion to those heights,
+   * so each track's share of this is exactly the height it needs.
+   */
+  contentHeight?: number;
+  /**
+   * True for the degenerate single-column layout produced by
+   * {@link linearSolution}, which the grid falls back to when the panel is too
+   * narrow to hold the real one. Consumers use it to drop two-dimensional
+   * affordances that have nowhere to go in one column.
+   */
+  collapsed?: boolean;
+}
+
+/**
+ * The layout a notebook has without the extension: every cell in its own row of
+ * a single column, in document order.
+ *
+ * This is a *rendering* fallback for a panel narrower than the mosaic's
+ * columns can fit. It touches no metadata, so the real layout comes straight
+ * back when the panel widens again.
+ */
+export function linearSolution(count: number): ISolution {
+  const placements = new Map<number, IPlacement>();
+  const rowTracks: ITrack[] = [];
+  for (let index = 0; index < count; index++) {
+    placements.set(index, {
+      rowStart: index + 1,
+      rowEnd: index + 2,
+      colStart: 1,
+      colEnd: 2
+    });
+    rowTracks.push({ weight: 1 });
+  }
+  return {
+    colTracks: count > 0 ? [{ weight: 1 }] : [],
+    rowTracks,
+    rowMinPx: new Array(rowTracks.length).fill(0),
+    placements,
+    managed: [],
+    managedOwner: new Map(),
+    groupPlacements: new Map(),
+    gutters: [],
+    collapsed: true
+  };
+}
+
+/** Cut positions are rounded here, so jitter cannot multiply the track list. */
+function round(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
+}
+
+/** The axis a group at the given depth divides along. Root (depth 0) is a column. */
+export function axisAtDepth(depth: number): Axis {
+  return depth % 2 === 0 ? 'col' : 'row';
+}
+
+export function groupKey(path: string[]): string {
+  return 'mosaic:' + path.join('/');
+}
+
+/**
+ * Build the layout tree from per-cell paths, in notebook order.
+ *
+ * A group is reused only while it is the most recently appended child at that
+ * depth. A path that reappears after an interruption therefore yields a second,
+ * distinct group -- which is the correct linearisation: cells that are not
+ * adjacent in the notebook cannot share a tile.
+ */
+export function buildTree(
+  paths: (string[] | undefined)[],
+  cellWeight: (index: number) => number,
+  groupState: (path: string[]) => IGroupState
+): IGroupNode {
+  const root: IGroupNode = {
+    kind: 'group',
+    id: '',
+    path: [],
+    axis: 'col',
+    weight: 1,
+    mode: 'flow',
+    size: 0,
+    children: []
+  };
+
+  for (let index = 0; index < paths.length; index++) {
+    const path = paths[index] ?? [];
+    let node = root;
+
+    for (let depth = 0; depth < path.length; depth++) {
+      const id = path[depth];
+      const last = node.children[node.children.length - 1];
+      let next: IGroupNode;
+
+      if (last && last.kind === 'group' && last.id === id) {
+        next = last;
+      } else {
+        const childPath = path.slice(0, depth + 1);
+        const state = groupState(childPath);
+        next = {
+          kind: 'group',
+          id,
+          path: childPath,
+          axis: axisAtDepth(depth + 1),
+          weight: state.weight ?? 1,
+          mode: state.mode ?? 'flow',
+          size: state.size ?? DEFAULT_SCROLL_SIZE,
+          children: []
+        };
+        node.children.push(next);
+      }
+      node = next;
+    }
+
+    node.children.push({ kind: 'cell', index, weight: cellWeight(index) });
+  }
+
+  return root;
+}
+
+/**
+ * Collapse redundant groups, in place.
+ *
+ * A group holding a single item says nothing the parent does not already say,
+ * and an empty one says nothing at all. Both arise from ordinary editing --
+ * dragging the second-to-last cell out of a tile leaves a singleton behind --
+ * and from metadata that has drifted, and they show up as tiles with rules
+ * around a plain run of cells.
+ *
+ * Unwrapping a singleton promotes its child one level, which flips the axis
+ * that child sits on. So when the child is itself a group, its *contents* are
+ * promoted instead: two levels up, back onto the axis they were laid out for.
+ * That is what keeps a row of columns from becoming a row of rows.
+ *
+ * Repeats until stable, since promoting can leave the parent a singleton too.
+ */
+export function collapse(node: IGroupNode): void {
+  for (const child of node.children) {
+    if (child.kind === 'group') {
+      collapse(child);
+    }
+  }
+
+  for (;;) {
+    const next: MosaicNode[] = [];
+    let changed = false;
+
+    for (const child of node.children) {
+      if (child.kind !== 'group' || child.children.length > 1) {
+        next.push(child);
+        continue;
+      }
+      changed = true;
+      const only = child.children[0];
+      if (!only) {
+        continue; // empty group: drop it
+      }
+      if (only.kind === 'group') {
+        next.push(...only.children);
+      } else {
+        next.push(only);
+      }
+    }
+
+    node.children = next;
+    if (!changed) {
+      return;
+    }
+  }
+}
+
+/** The path each cell sits at, read back off a tree. */
+export function cellPaths(root: IGroupNode): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+  const walk = (node: IGroupNode, path: string[]): void => {
+    for (const child of node.children) {
+      if (child.kind === 'cell') {
+        out.set(child.index, path);
+      } else {
+        walk(child, [...path, child.id]);
+      }
+    }
+  };
+  walk(root, []);
+  return out;
+}
+
+/** Sum of child weights, guarding against a degenerate zero total. */
+function totalWeight(children: MosaicNode[]): number {
+  let total = 0;
+  for (const child of children) {
+    total += child.weight > 0 ? child.weight : 1;
+  }
+  return total > 0 ? total : 1;
+}
+
+/**
+ * Rasterise the tree onto a flat grid.
+ *
+ * Every node occupies a rectangle in normalised [0,1] coordinates; the set of
+ * distinct rectangle edges becomes the grid's track boundaries. Because a
+ * boundary shared by two nodes is always inherited from their common ancestor,
+ * shared edges are bit-identical floats and dedupe exactly.
+ *
+ * Managed groups ('scroll' / 'tabs') are treated as leaves here: their subtree
+ * contributes no cuts, so the group always collapses to a single track on each
+ * axis and its interior is positioned by {@link MosaicGrid} instead.
+ */
+export function solve(
+  root: IGroupNode,
+  cellHeight?: (index: number) => number
+): ISolution {
+  /**
+   * The height a node wants, in px, from the heights its cells measured.
+   *
+   * Used to place the *cuts* of a column, not to size tracks afterwards. Two
+   * columns side by side each cut their own share of the band, so a column of
+   * 100 + 20 cuts at 5/6 while its neighbour's 20 + 100 cuts at 1/6: three
+   * distinct lines, three tracks of 20 / 80 / 20, and each cell spanning
+   * exactly what it needs. Cutting both at the half -- which is what equal
+   * weights do -- collapses them onto one line, and the band is then forced to
+   * twice the taller cell whatever the track sizer does afterwards.
+   */
+  const naturalHeight = (node: MosaicNode): number => {
+    if (node.kind === 'cell') {
+      return Math.max(cellHeight!(node.index), 1);
+    }
+    if (node.mode !== 'flow') {
+      return Math.max(node.size, 1);
+    }
+    if (node.axis === 'col') {
+      return node.children.reduce((sum, c) => sum + naturalHeight(c), 0);
+    }
+    return node.children.reduce((max, c) => Math.max(max, naturalHeight(c)), 0);
+  };
+
+  const xs = new Set<number>([0, 1]);
+  const ys = new Set<number>([0, 1]);
+
+  interface IRect {
+    node: MosaicNode;
+    x0: number;
+    x1: number;
+    y0: number;
+    y1: number;
+    owner: IGroupNode | null;
+  }
+  const rects: IRect[] = [];
+  const managedNodes: { node: IGroupNode; rect: IRect }[] = [];
+  const groupRects: { node: IGroupNode; rect: IRect }[] = [];
+  const marks: {
+    node: IGroupNode;
+    coord: number;
+    from: number;
+    to: number;
+    index: number;
+  }[] = [];
+
+  const walk = (
+    node: MosaicNode,
+    x0: number,
+    x1: number,
+    y0: number,
+    y1: number,
+    owner: IGroupNode | null
+  ): void => {
+    xs.add(x0);
+    xs.add(x1);
+    ys.add(y0);
+    ys.add(y1);
+
+    const rect: IRect = { node, x0, x1, y0, y1, owner };
+
+    if (node.kind === 'cell') {
+      rects.push(rect);
+      return;
+    }
+
+    groupRects.push({ node, rect });
+
+    if (node.mode !== 'flow') {
+      // A managed group is opaque to the grid: record it and stop cutting.
+      rects.push(rect);
+      managedNodes.push({ node, rect });
+      return;
+    }
+
+    // The outer edges are seams too, with a single neighbour. A leading or
+    // trailing cell needs none: its own top or bottom edge is the drop target.
+    const first = node.children[0];
+    const last = node.children[node.children.length - 1];
+    if (first?.kind === 'group') {
+      marks.push({
+        node,
+        coord: node.axis === 'col' ? y0 : x0,
+        from: node.axis === 'col' ? x0 : y0,
+        to: node.axis === 'col' ? x1 : y1,
+        index: 0
+      });
+    }
+    if (last?.kind === 'group') {
+      marks.push({
+        node,
+        coord: node.axis === 'col' ? y1 : x1,
+        from: node.axis === 'col' ? x0 : y0,
+        to: node.axis === 'col' ? x1 : y1,
+        index: node.children.length
+      });
+    }
+
+    // Down a column the children divide by the height their content needs;
+    // across a row they divide by weight. Heights are only available once
+    // something has measured them, so the first pass -- and the pure-model
+    // tests -- fall back to weights.
+    const heights =
+      cellHeight && node.axis === 'col'
+        ? node.children.map(naturalHeight)
+        : null;
+    const total = heights
+      ? heights.reduce((sum, h) => sum + h, 0) || 1
+      : totalWeight(node.children);
+
+    let offset = 0;
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      const share = heights
+        ? heights[i] / total
+        : (child.weight > 0 ? child.weight : 1) / total;
+      const from = offset;
+      // A height-driven cut is rounded, so a pixel of measurement jitter cannot
+      // split one line into two and churn the track list on every pass; the
+      // last lands exactly on the parent's edge. Weight-driven cuts keep their
+      // original arithmetic, so edges shared with a sibling stay bit-identical.
+      const to = heights
+        ? i === node.children.length - 1
+          ? 1
+          : round(offset + share)
+        : offset + share;
+      offset = to;
+
+      if (node.axis === 'col') {
+        walk(child, x0, x1, y0 + (y1 - y0) * from, y0 + (y1 - y0) * to, owner);
+      } else {
+        walk(child, x0 + (x1 - x0) * from, x0 + (x1 - x0) * to, y0, y1, owner);
+      }
+
+      // A seam between two groups has no cell on it to drop onto, so it needs a
+      // gutter. A seam touching a cell does not: that cell is the drop target.
+      const next = node.children[i + 1];
+      if (child.kind === 'group' && next?.kind === 'group') {
+        marks.push({
+          node,
+          coord:
+            node.axis === 'col' ? y0 + (y1 - y0) * to : x0 + (x1 - x0) * to,
+          from: node.axis === 'col' ? x0 : y0,
+          to: node.axis === 'col' ? x1 : y1,
+          index: i + 1
+        });
+      }
+    }
+  };
+
+  walk(root, 0, 1, 0, 1, null);
+
+  const xLines = [...xs].sort((a, b) => a - b);
+  const yLines = [...ys].sort((a, b) => a - b);
+  const xAt = new Map(xLines.map((v, i) => [v, i]));
+  const yAt = new Map(yLines.map((v, i) => [v, i]));
+
+  const columns = buildAxis(xLines);
+  const rows = buildAxis(yLines);
+  const rowMinPx = new Array(rows.tracks.length).fill(0);
+
+  // Two nodes meeting at a seam share the line: nothing is inserted between
+  // them, so one ends exactly where the next begins.
+  const place = (r: IRect): IPlacement => ({
+    rowStart: rows.at[yAt.get(r.y0)!],
+    rowEnd: rows.at[yAt.get(r.y1)!],
+    colStart: columns.at[xAt.get(r.x0)!],
+    colEnd: columns.at[xAt.get(r.x1)!]
+  });
+
+  const placements = new Map<number, IPlacement>();
+  const managed: IManagedGroup[] = [];
+  const managedOwner = new Map<number, IManagedGroup>();
+
+  for (const { node, rect } of managedNodes) {
+    const placement = place(rect);
+    managed.push({ node, placement, cells: collectCells(node) });
+
+    // Managed groups nested inside a managed group get no grid area of their
+    // own -- they are positioned in their ancestor's local pixel space -- but
+    // they still need discovering so they can carry their own scroll offset.
+    for (const nested of nestedManaged(node)) {
+      managed.push({
+        node: nested,
+        placement,
+        cells: collectCells(nested)
+      });
+    }
+
+    // A managed group holds its own extent open along its scroll axis, spread
+    // across the row tracks it spans. `auto` still wins if siblings are taller.
+    if (node.axis === 'col') {
+      const spanned = contentTracks(
+        rows.tracks,
+        placement.rowStart,
+        placement.rowEnd
+      );
+      for (const t of spanned) {
+        rowMinPx[t] = Math.max(rowMinPx[t], node.size / spanned.length);
+      }
+    }
+  }
+
+  // Outermost first, so the innermost owner wins when groups nest.
+  managed.sort((a, b) => a.node.path.length - b.node.path.length);
+  for (const entry of managed) {
+    for (const index of entry.cells) {
+      managedOwner.set(index, entry);
+    }
+  }
+
+  for (const rect of rects) {
+    if (rect.node.kind === 'cell') {
+      placements.set(rect.node.index, place(rect));
+    }
+  }
+
+  const groupPlacements = new Map<
+    string,
+    { node: IGroupNode; placement: IPlacement }
+  >();
+  for (const { node, rect } of groupRects) {
+    groupPlacements.set(groupKey(node.path), { node, placement: place(rect) });
+  }
+
+  const gutters: IGutter[] = [];
+  for (const mark of marks) {
+    const along = mark.node.axis === 'col' ? rows : columns;
+    const across = mark.node.axis === 'col' ? columns : rows;
+    const alongAt = (mark.node.axis === 'col' ? yAt : xAt).get(mark.coord);
+    const fromAt = (mark.node.axis === 'col' ? xAt : yAt).get(mark.from);
+    const toAt = (mark.node.axis === 'col' ? xAt : yAt).get(mark.to);
+    if (alongAt === undefined || fromAt === undefined || toAt === undefined) {
+      continue;
+    }
+    const after = mark.node.children[mark.index];
+    const before = mark.node.children[mark.index - 1];
+    const afterCells = after ? collectCells(after) : [];
+    const beforeCells = before ? collectCells(before) : [];
+    gutters.push({
+      path: mark.node.path,
+      axis: mark.node.axis,
+      line: along.at[alongAt],
+      start: across.at[fromAt],
+      end: across.at[toAt],
+      index: mark.index,
+      cellAfter: afterCells.length > 0 ? afterCells[0] : -1,
+      cellBefore:
+        beforeCells.length > 0 ? beforeCells[beforeCells.length - 1] : -1,
+      // Marks are raised at a group's two outer edges and between each pair of
+      // adjacent sibling groups; only the last of those has a child on both
+      // sides.
+      between: !!before && !!after
+    });
+  }
+
+  return {
+    colTracks: columns.tracks,
+    rowTracks: rows.tracks,
+    contentHeight: cellHeight ? naturalHeight(root) : undefined,
+    rowMinPx,
+    placements,
+    managed,
+    managedOwner,
+    groupPlacements,
+    gutters
+  };
+}
+
+/**
+ * Lay out one axis: one track between each pair of adjacent cut lines.
+ *
+ * Seams add nothing here. They fall *on* a line, and the gap the grid already
+ * puts between two tracks is where the rule is drawn and the drop is caught.
+ */
+function buildAxis(lines: number[]): { tracks: ITrack[]; at: number[] } {
+  const tracks: ITrack[] = [];
+  const at = new Array<number>(lines.length);
+
+  for (let i = 0; i < lines.length; i++) {
+    at[i] = i + 1;
+    if (i < lines.length - 1) {
+      tracks.push({ weight: lines[i + 1] - lines[i] });
+    }
+  }
+
+  return { tracks, at };
+}
+
+/** Indices of the tracks a placement spans. */
+export function contentTracks(
+  tracks: ITrack[],
+  startLine: number,
+  endLine: number
+): number[] {
+  const out: number[] = [];
+  for (let t = startLine - 1; t < endLine - 1 && t < tracks.length; t++) {
+    out.push(t);
+  }
+  return out.length > 0 ? out : [Math.max(0, startLine - 1)];
+}
+
+/** Managed groups strictly beneath a node, outermost first. */
+function nestedManaged(node: IGroupNode, out: IGroupNode[] = []): IGroupNode[] {
+  for (const child of node.children) {
+    if (child.kind !== 'group') {
+      continue;
+    }
+    if (child.mode !== 'flow') {
+      out.push(child);
+    }
+    nestedManaged(child, out);
+  }
+  return out;
+}
+
+/** Every cell index beneath a node, in notebook order. */
+export function collectCells(node: MosaicNode, out: number[] = []): number[] {
+  if (node.kind === 'cell') {
+    out.push(node.index);
+  } else {
+    for (const child of node.children) {
+      collectCells(child, out);
+    }
+  }
+  return out;
+}
+
+/** Find the group at `path`, or null. */
+export function findGroup(root: IGroupNode, path: string[]): IGroupNode | null {
+  let node: IGroupNode = root;
+  for (const id of path) {
+    const next = node.children.find(
+      (c): c is IGroupNode => c.kind === 'group' && c.id === id
+    );
+    if (!next) {
+      return null;
+    }
+    node = next;
+  }
+  return node;
+}
+
+/** Depth at which two paths diverge. */
+export function divergeDepth(a: string[] = [], b: string[] = []): number {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    if (a[i] !== b[i]) {
+      return i;
+    }
+  }
+  return n;
+}
+
+export function newGroupId(): string {
+  return 'mg-' + crypto.randomUUID();
+}
+
+/**
+ * Minimum height for each row track, in px.
+ *
+ * Windowing detaches off-screen cells, and a detached cell contributes nothing
+ * to an `auto` grid track -- so without a floor the band collapses, the
+ * document shrinks, and the render range then culls cells that are actually on
+ * screen. Flooring each track at the height its content last measured keeps an
+ * absent cell's space reserved.
+ *
+ * Cells inside a managed group are skipped: that group's own `size` already
+ * holds its band open, and its cells sit outside the grid's flow anyway.
+ *
+ * A cell spanning several tracks only raises them by what it is *short* of,
+ * shared out between them -- CSS Grid 12.5's rule for distributing space across
+ * a spanned range, and the reason items are taken shortest-span first: a
+ * track's floor has to be settled by the cells sitting in it alone before a
+ * spanning cell is asked whether it still needs more. Charging every spanned
+ * track the cell's whole height instead made a band as tall as its tallest cell
+ * times the number of tracks beside it, and every cell in the band then
+ * stretched to that, trailing blank space under its content.
+ *
+ * @param metrics Track geometry the span already covers: the row `gap` between
+ *   tracks. Counting it as covered is what stops a spanning cell demanding room
+ *   for it a second time.
+ */
+export function rowFloors(
+  solution: ISolution,
+  cellHeight: (index: number) => number,
+  metrics: { gap?: number } = {}
+): number[] {
+  const gap = metrics.gap ?? 0;
+  const floors = solution.rowMinPx.slice();
+
+  // When the cuts were placed from measured heights, each track's share of the
+  // document is already the height it needs -- read it straight off rather than
+  // reconstructing it from the cells. The reconstruction below has to follow
+  // CSS Grid's rule of spreading a spanning cell's shortfall equally, which
+  // cannot see that a track is already pinned by a shorter neighbour: a row of
+  // [100, 20] beside [20, 100] comes out 160 tall that way, and 120 this way.
+  if (solution.contentHeight !== undefined) {
+    return solution.rowTracks.map((track, t) =>
+      Math.max(floors[t] ?? 0, track.weight * solution.contentHeight!)
+    );
+  }
+
+  const items: { height: number; placement: IPlacement; spanned: number[] }[] =
+    [];
+  for (const [index, placement] of solution.placements) {
+    if (solution.managedOwner.has(index)) {
+      continue;
+    }
+    items.push({
+      height: cellHeight(index),
+      placement,
+      spanned: contentTracks(
+        solution.rowTracks,
+        placement.rowStart,
+        placement.rowEnd
+      )
+    });
+  }
+  items.sort((a, b) => a.spanned.length - b.spanned.length);
+
+  for (const { height, placement, spanned } of items) {
+    // What the span already provides: every track under it at its current
+    // floor, plus the gaps between them.
+    let covered = gap * Math.max(0, placement.rowEnd - placement.rowStart - 1);
+    for (let t = placement.rowStart - 1; t < placement.rowEnd - 1; t++) {
+      if (solution.rowTracks[t]) {
+        covered += floors[t] ?? 0;
+      }
+    }
+
+    const excess = height - covered;
+    if (excess <= 0) {
+      continue;
+    }
+    const share = excess / spanned.length;
+    for (const t of spanned) {
+      floors[t] = (floors[t] ?? 0) + share;
+    }
+  }
+  return floors;
+}
+
+/** Fixed lengths the grid is drawn with, in px. */
+export interface IWidthMetrics {
+  /** Narrowest a single cell may be drawn. */
+  minCell: number;
+  /** Gap between two adjacent tracks. */
+  gap: number;
+  /** The grid's own left plus right padding. */
+  padding: number;
+}
+
+/**
+ * The narrowest the grid is drawn at, in px, before it starts to scroll
+ * sideways (or collapse, if that setting is on).
+ *
+ * The floor is a property of the *grid*, not of any one track: it holds the
+ * whole grid open at one {@link IWidthMetrics.minCell} per track, and the
+ * tracks then divide that strictly by weight. Putting the floor on each
+ * track instead broke the hierarchy -- a column subdivided into two tracks was
+ * held to twice the minimum of a bare cell holding the same share of the row,
+ * so once the floors bound, the two stopped being the same width and the deeper
+ * subdivision won space from its siblings.
+ *
+ * A track narrower than its share of this is the honest consequence: a
+ * subdivision fine enough to put a cell under the minimum shrinks that cell
+ * rather than stealing width from its siblings. Requiring *every* cell to clear
+ * the minimum was tried and is far too strict -- one twelfth of a row would
+ * hold the whole notebook open at twelve times the minimum, which on an
+ * ordinary screen means no mosaic at all.
+ *
+ * A collapsed layout has no minimum: yielding to the panel is its whole point.
+ */
+export function minGridWidth(
+  solution: ISolution,
+  metrics: IWidthMetrics
+): number {
+  const { minCell, gap, padding } = metrics;
+  const count = solution.colTracks.length;
+  if (count === 0 || solution.collapsed) {
+    return 0;
+  }
+  return padding + gap * (count - 1) + count * minCell;
+}
+
+/** A step in the two-dimensional layout. */
+export type Direction = 'left' | 'right' | 'up' | 'down';
+
+/** A rectangle in viewport coordinates. */
+export interface IRect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Slack, in px, when deciding whether a candidate lies past our edge. */
+const NAV_TOLERANCE = 1;
+/** Candidates within this many px of the nearest count as equally near. */
+const NAV_BAND = 4;
+
+/**
+ * The cell to move to when stepping one place in a direction.
+ *
+ * Navigation is geometric rather than structural, which gives every case the
+ * user expects from a single rule: inside a column, up and down are the
+ * siblings above and below, while left and right cross into the neighbouring
+ * tile of the enclosing row at the nearest height. Inside a row the roles swap,
+ * with no special-casing for either.
+ *
+ * Candidates are gathered from the nearest band past our edge and then ranked
+ * by alignment on the other axis -- that second step is what makes a sideways
+ * step land on the nearest-height neighbour rather than the topmost one.
+ */
+export function nearestInDirection(
+  from: IRect,
+  candidates: { index: number; rect: IRect }[],
+  direction: Direction
+): number | null {
+  const horizontal = direction === 'left' || direction === 'right';
+  const backwards = direction === 'left' || direction === 'up';
+
+  const scored: { index: number; gap: number; offset: number }[] = [];
+  for (const { index, rect } of candidates) {
+    const gap = backwards
+      ? horizontal
+        ? from.x0 - rect.x1
+        : from.y0 - rect.y1
+      : horizontal
+        ? rect.x0 - from.x1
+        : rect.y0 - from.y1;
+    if (gap < -NAV_TOLERANCE) {
+      continue; // behind us, or merely overlapping
+    }
+    const offset = horizontal
+      ? Math.abs((rect.y0 + rect.y1) / 2 - (from.y0 + from.y1) / 2)
+      : Math.abs((rect.x0 + rect.x1) / 2 - (from.x0 + from.x1) / 2);
+    scored.push({ index, gap, offset });
+  }
+  if (scored.length === 0) {
+    return null;
+  }
+
+  const nearest = Math.min(...scored.map(c => c.gap));
+  const band = scored.filter(c => c.gap <= nearest + NAV_BAND);
+  band.sort((a, b) => a.offset - b.offset || a.index - b.index);
+  return band[0].index;
+}
+
+/**
+ * The path a new cell takes when inserted beside `refPath` along `wantAxis`.
+ *
+ * When the containing group already runs the right way the cell simply joins
+ * it; otherwise the reference cell is subdivided, and both cells move into the
+ * new group. Returns null when no subdivision is needed.
+ */
+export function subdividePath(
+  refPath: string[],
+  wantAxis: Axis,
+  id: string
+): string[] {
+  return axisAtDepth(refPath.length) === wantAxis ? refPath : [...refPath, id];
+}
+
+/**
+ * Turn normalised track weights into CSS `fr` factors.
+ *
+ * The weights from {@link solve} are fractions summing to one, which is wrong
+ * to hand to the grid directly. Per CSS Grid Layout 12.7.1, a track whose base
+ * size exceeds its share is frozen at that size and dropped from the flex sum,
+ * and if the remaining sum is below one the algorithm clamps it *to* one -- so
+ * the still-flexible tracks take only that fraction of the leftover space and
+ * the rest of the row shows as blank margin. Widening the container eventually
+ * unfreezes the track and the row snaps out to full width.
+ *
+ * Scaling so the smallest factor is one keeps the sum at or above one however
+ * many tracks freeze, so the flexible tracks always absorb all leftover space.
+ */
+export function flexFactors(weights: number[]): number[] {
+  const positive = weights.filter(w => w > 0);
+  if (positive.length === 0) {
+    return weights.map(() => 1);
+  }
+  const smallest = Math.min(...positive);
+  return weights.map(w => (w > 0 ? w / smallest : 1));
+}
+
+/** Squared distance from a point to a rectangle; zero when inside it. */
+export function distanceTo(x: number, y: number, r: IRect): number {
+  const dx = Math.max(r.x0 - x, 0, x - r.x1);
+  const dy = Math.max(r.y0 - y, 0, y - r.y1);
+  return dx * dx + dy * dy;
+}
+
+/**
+ * Which edge of a rectangle a point outside it lies past.
+ *
+ * Used when a drop lands beside a target rather than on it, where comparing
+ * distances to all four edges -- the right question inside the box -- answers
+ * an arbitrary one.
+ */
+export function sideFrom(
+  r: IRect,
+  x: number,
+  y: number
+): 'top' | 'bottom' | 'left' | 'right' {
+  const dx = Math.max(r.x0 - x, 0, x - r.x1);
+  const dy = Math.max(r.y0 - y, 0, y - r.y1);
+  if (dy >= dx) {
+    return y < r.y0 ? 'top' : 'bottom';
+  }
+  return x < r.x0 ? 'left' : 'right';
+}

@@ -1,0 +1,12 @@
+Mosaic:
+
+- Scrolls to random place way down in page when cell is executed or split
+- drops cell at bottom when dragging over empty space in group (cell not fully expanded)
+- expands cell in row way too tall after dragging out from column in row
+- group padding doesn't seem to register for dragging over / dropping on (try to add cell in line with column in row)
+
+
+Jupyter:
+
+- large image output de-renders when top is out of scroll range. Need to enable output scrolling then disable to get size to update.
+- scroll to next thing is jumpy (CSS: scroll-behavior: smooth should fix)

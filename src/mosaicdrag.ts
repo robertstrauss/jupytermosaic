@@ -1,338 +1,423 @@
-import { NotebookActions } from '@jupyterlab/notebook';
-// import { DROP_TARGET_CLASS } from '@jupyterlab/notebook/src/constants'
-import { Drag } from '@lumino/dragdrop'
-import { Cell, MarkdownCell } from '@jupyterlab/cells'
-import { ArrayExt, findIndex } from '@lumino/algorithm'
-import { Mosaic } from './MosaicGroup';
-import { MosaicNotebook } from './MosaicNotebookPanel';
+/**
+ * Drag-and-drop for the mosaic grid.
+ *
+ * A drop is now purely a metadata edit: work out the destination path, write it
+ * onto every moved cell, then let `Notebook.moveCell` reorder the linear list.
+ * The layout falls out of the next rebuild. Nothing here touches widgets, DOM
+ * parentage or any tree structure -- that is what makes it reliable.
+ */
 
-// import { MosaicNotebookViewModel } from './MosaicViewModel';
+import { Notebook, NotebookActions } from '@jupyterlab/notebook';
+import { Cell, MarkdownCell } from '@jupyterlab/cells';
+import { Drag } from '@lumino/dragdrop';
+import { ArrayExt, findIndex } from '@lumino/algorithm';
+
+import {
+  IGutter,
+  distanceTo,
+  divergeDepth,
+  groupKey,
+  newGroupId,
+  sideFrom
+} from './MosaicTree';
+import { PATH_KEY, mosaicOf } from './MosaicNotebook';
+
 const DROP_TARGET_CLASS = 'jp-mod-dropTarget';
 const JUPYTER_CELL_CLASS = 'jp-Cell';
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
+/** Distance from a group's edge, in px, that triggers drag auto-scroll. */
+const AUTOSCROLL_MARGIN = 24;
+/** How far outside a cell a drop still counts as aimed at that cell. */
+const CELL_HIT_MARGIN = 12;
+/**
+ * How far a drop may sit from any target and still reach it.
+ *
+ * Every target is bounded. An unbounded search always finds *something*, which
+ * is how a drop through a gap between targets used to teleport cells to
+ * whichever handle happened to win a distance comparison across the whole
+ * notebook. Finding nothing and putting the cells back is the better failure.
+ */
+const DROP_RANGE = 96;
 
-export function mosaicDrop(self: MosaicNotebook, event: Drag.Event) {
-    if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.proposedAction === 'none') {
-      event.dropAction = 'none';
-      return;
-    }
+export type DropSide = 'top' | 'bottom' | 'left' | 'right';
 
-    // let target = event.target as HTMLElement;
-    let target = elFromPoint(event.clientX, event.clientY) as HTMLElement;
-    while (target && target.parentElement) {
-      if (target.classList.contains(DROP_TARGET_CLASS)) {
-        target.classList.remove(DROP_TARGET_CLASS);
-        break;
-      }
-      target = target.parentElement;
-    }
+/**
+ * Where a drop will land: on one edge of a cell, or in the gutter between two
+ * adjacent groups. The gutter case is the only way to land *between* two whole
+ * groups rather than inside one of them.
+ */
+type DropTarget =
+  | { kind: 'cell'; index: number; side: DropSide }
+  | { kind: 'gutter'; gutter: IGutter };
 
-    // Model presence should be checked before calling event handlers
-    self.model!;
-
-    const source: MosaicNotebook = event.source;
-    if (source === self) {
-      // Handle the case where we are moving cells within
-      // the same notebook.
-      event.dropAction = 'move';
-      const toMove: Cell[] = event.mimeData.getData('internal:cells');
-
-      // For collapsed markdown headings with hidden "child" cells, move all
-      // child cells as well as the markdown heading.
-      const cell = toMove[toMove.length - 1];
-      if (cell instanceof MarkdownCell && cell.headingCollapsed) {
-        const nextParent = NotebookActions.findNextParentHeading(cell, source);
-        if (nextParent > 0) {
-          const index = findIndex(source.widgets, (possibleCell: Cell) => {
-            return cell.model.id === possibleCell.model.id;
-          });
-          toMove.push(...source.widgets.slice(index + 1, nextParent));
-        }
-      }
-
-      // Compute the to/from indices for the move.
-      let fromIndex = ArrayExt.firstIndexOf(self.widgets, toMove[0]);
-      let toIndex = (self as any)._findCell(target);
-
-
-      /** < MODIFIED: MOSAIC > **/
-      let mosaicPath: string[] = [];
-      let targetCell: Cell;
-      if (toIndex < 0) { // not dropped on a cell, likely on mosaicgroup border
-         while (target && target.parentElement) { // get nearest group
-          if (target.classList.contains(Mosaic.NODE_CLASS)) {
-            target.classList.remove(DROP_TARGET_CLASS);
-            break;
-            // mosaicPath = self.findGroup(target);
-            // if (mosaicPath !== null) break;
-          }
-          target = target.parentElement;
-        }
-        if (!target || !target.parentElement) { // found no group. dropping at end of notebook
-          toIndex = -1;
-          target = self.viewportNode;
-          source.viewportNode.classList.remove(DROP_TARGET_CLASS);
-        }
-      }
-
-      const side = target.dataset.mosaicDropSide || closestSide(event, target, 0.25);
-      const collike = (side == 'bottom' || side == 'top');
-      const rowlike = (side == 'left' || side == 'right');
-      const beforelike = side == 'top' || side == 'left';
-      const afterlike = side == 'bottom' || side == 'right' || side == 'tab';
-
-      if (toIndex < 0) { // on group or end space, not cell
-        if (target.classList.contains(Mosaic.NODE_CLASS)) { // selecting edge of group
-          const cells = target.getElementsByClassName(JUPYTER_CELL_CLASS);
-          toIndex = (self as any)._findCell(cells[beforelike ? 0 : cells.length-1]) // get first or last cell, if going before or after
-          if (toIndex < 0) return;
-          targetCell = self.widgets[toIndex];
-          mosaicPath = Mosaic.getPath(targetCell)!;
-          // dropping on a group, we want to be beside it not inside, so back out 1 from the contained cell's path
-          if (mosaicPath.length > 0) mosaicPath = mosaicPath.slice(0, mosaicPath.length-1)
-        } else {
-          targetCell = self.widgets[self.widgets.length-1];
-        }
-      } else { // found a cell to drop on
-        targetCell = self.widgets[toIndex];
-        mosaicPath = Mosaic.getPath(targetCell) || [];
-      }
-
-      // create a new group to subdivide depending on side of cells its dropped on
-      // const [targetGroup, ] = self.treeGetExisting(mosaicPath); // group to insert things in
-      const targetAxis = (mosaicPath.length % 2) === 0 ? 'col' : 'row';
-      if ( (targetAxis == 'row' && collike)
-        || (targetAxis == 'col' && rowlike)
-        || (side == 'tab' && !(targetCell as any).superMosaic?.tabbed)) {
-            // dropping off-axis (on top/bottom for row, or left/right for col)
-            // means we subdivide. Create a new group:
-            const newID = Mosaic.newUGID();
-            mosaicPath = [...mosaicPath, newID];
-            Mosaic.setPath(targetCell, mosaicPath); // destination cell is part of this new group
-            if (side == 'tab') {
-              Mosaic.saveMosaicState(self, 'mosaic:'+mosaicPath.join('/'), {tabbed: true});
-              console.log('saved tabbed!');
-              console.log('loaded:', Mosaic.loadMosaicState(self, 'mosaic:'+mosaicPath.join('/')));
-            }
-      }
-
-      // get the deepest common branch of all cells to move
-      let divergeDepth = 0;
-      let sharedPath = Mosaic.getPath(toMove[0]) || [];
-      for (let movecell of toMove) {
-        const path = Mosaic.getPath(movecell)!;
-        divergeDepth = Mosaic.divergeDepth(path, sharedPath);
-        sharedPath = path.slice(0, divergeDepth);
-      }
-
-      // grafting multiple cells may transpose rows and columns. give an extra wraper to preserve source structure
-      let transposeGroup;
-      // mod 2 of the path tells us whether its a row or column, since these must alternate
-      if (toMove.length > 1 && (divergeDepth % 2) !== (mosaicPath.length % 2)) {
-        transposeGroup = Mosaic.newUGID();
-      }
-
-      // assign the metadata to each cell to place it in the mosaic
-      for (const movecell of toMove) {
-        const prevpath = Mosaic.getPath(movecell)!;
-        if (transposeGroup) prevpath.splice(divergeDepth, 0, transposeGroup);
-        // graft moved cell onto tree, preserving any internal structure 
-        Mosaic.setPath(movecell, [...mosaicPath, ...prevpath.slice(divergeDepth)]);
-      }
-
-      if (toIndex === -1) {
-        // If the drop is within the notebook but not on any cell,
-        // most often self means it is past the cell areas, so
-        // set it to move the cells to the end of the notebook.
-        toIndex = self.widgets.length - 1;
-      }
-
-      let firstChangedIndex = toIndex; // include destination cell in those rearranged by mosaic, even if unmoved in index
-
-      if (afterlike) {
-        toIndex += 1; // drop on bottom or right of cell to go after it
-      }
-
-
-      // self check is needed for consistency with the view.
-      if (toIndex !== self.widgets.length - 1 && toIndex !== -1 && toIndex > fromIndex) {
-        toIndex -= 1;
-      } 
-      // Don't move if we are within the block of selected cells.
-      if (toIndex >= fromIndex && toIndex < fromIndex + toMove.length) {
-        firstChangedIndex = Math.min(fromIndex, firstChangedIndex);
-        console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
-        for (let i = 0; i < toMove.length+1; i++) {
-          if (firstChangedIndex+i >= self.widgets.length) break;
-          console.log('mos insert', 'Cell:'+ (self.widgets[firstChangedIndex+i] as any).prompt);
-          self.mosaicInsert(firstChangedIndex+i);
-        }
-        return;
-      }
-      else if (toIndex > fromIndex) firstChangedIndex -= toMove.length;
-
-      // Move the cells one by one
-      self.moveCell(fromIndex, toIndex, toMove.length);
-
-      // // if (afterlike) firstChangedIndex -= 1; // include target cell even if dropped after it
-      // // console.log('first changed cell', (self.widgets[firstChangedIndex] as any).prompt)
-      for (let i = 0; i < toMove.length+1; i++) { // go for toMove.length+1 : do the moved cells and target cell
-        if (firstChangedIndex+i >= self.widgets.length) break;
-        console.log('mos insert', 'Cell:'+(self.widgets[firstChangedIndex+i] as any).prompt);
-        self.mosaicInsert(firstChangedIndex+i);
-      }
-
-    } else {
-      // CROSS NOTEBOOK MOSAIC NOT YET IMPLEMENTED
-    }
+export function installMosaicDrag(notebook: Notebook): void {
+  const anyNb = notebook as any;
+  anyNb._evtDrop = (event: Drag.Event) => mosaicDrop(notebook, event);
+  anyNb._evtDragOver = (event: Drag.Event) => mosaicDragOver(notebook, event);
 }
 
+/** Path metadata for a cell, defaulting to the notebook root. */
+function pathOf(cell: Cell): string[] {
+  const raw = cell.model.getMetadata(PATH_KEY);
+  return Array.isArray(raw) ? (raw as string[]) : [];
+}
 
-export function mosaicDragOver(self: MosaicNotebook, event: Drag.Event): void {
+function setPath(cell: Cell, path: string[]): void {
+  cell.model.setMetadata(PATH_KEY, path);
+}
+
+export function mosaicDrop(notebook: Notebook, event: Drag.Event): void {
+  if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.proposedAction === 'none') {
+    event.dropAction = 'none';
+    return;
+  }
+  const mosaic = mosaicOf(notebook);
+  if (!notebook.model || !mosaic || event.source !== notebook) {
+    // Cross-notebook mosaic drops are not supported yet.
+    return;
+  }
+  clearDropTargets(notebook);
+
+  const toMove: Cell[] = event.mimeData.getData('internal:cells');
+  if (!toMove?.length) {
+    event.dropAction = 'none';
+    return;
+  }
+  event.dropAction = 'move';
+
+  // Collapsed markdown headings carry their hidden children along.
+  const last = toMove[toMove.length - 1];
+  if (last instanceof MarkdownCell && last.headingCollapsed) {
+    const nextParent = NotebookActions.findNextParentHeading(last, notebook);
+    if (nextParent > 0) {
+      const index = findIndex(
+        notebook.widgets,
+        (c: Cell) => last.model.id === c.model.id
+      );
+      toMove.push(...notebook.widgets.slice(index + 1, nextParent));
+    }
+  }
+
+  const hit = hitTest(notebook, event.clientX, event.clientY);
+  if (!hit) {
+    // Nothing within reach: leave the cells where they were.
+    event.dropAction = 'none';
+    return;
+  }
+
+  let destPath: string[];
+  let toIndex: number;
+  let after: boolean;
+
+  if (hit.kind === 'gutter') {
+    // Land on the seam: the cells become children of the group that owns it.
+    // A trailing gutter has nothing after it, so anchor to the cell before.
+    destPath = hit.gutter.path;
+    if (hit.gutter.cellAfter >= 0) {
+      toIndex = hit.gutter.cellAfter;
+      after = false;
+    } else if (hit.gutter.cellBefore >= 0) {
+      toIndex = hit.gutter.cellBefore;
+      after = true;
+    } else {
+      return;
+    }
+  } else {
+    const targetCell = notebook.widgets[hit.index];
+    if (!targetCell || toMove.includes(targetCell)) {
+      return;
+    }
+    toIndex = hit.index;
+    after = hit.side === 'bottom' || hit.side === 'right';
+    destPath = pathOf(targetCell);
+
+    // A drop on the off-axis edge subdivides: the target cell and the incoming
+    // cells become the two children of a brand new group.
+    const targetAxis = destPath.length % 2 === 0 ? 'col' : 'row';
+    const wantsRow = hit.side === 'left' || hit.side === 'right';
+    if ((targetAxis === 'col') === wantsRow) {
+      destPath = [...destPath, newGroupId()];
+      setPath(targetCell, destPath);
+    }
+  }
+
+  // Preserve any structure internal to the moved selection.
+  let sharedPath = pathOf(toMove[0]);
+  let diverge = sharedPath.length;
+  for (const cell of toMove) {
+    diverge = divergeDepth(pathOf(cell), sharedPath);
+    sharedPath = sharedPath.slice(0, diverge);
+  }
+
+  // Moving several cells across an axis flip would transpose their internal
+  // rows and columns; an extra wrapper group preserves the original shape.
+  const transpose =
+    toMove.length > 1 && diverge % 2 !== destPath.length % 2
+      ? newGroupId()
+      : null;
+
+  for (const cell of toMove) {
+    const prev = pathOf(cell);
+    const state = notebook.model.getMetadata(groupKey(prev));
+    if (transpose) {
+      prev.splice(diverge, 0, transpose);
+    }
+    const next = [...destPath, ...prev.slice(diverge)];
+    if (state) {
+      notebook.model.setMetadata(groupKey(next), state);
+    }
+    setPath(cell, next);
+  }
+
+  // Now place the selection in the linear list, next to the target.
+  //
+  // `moveCell`'s `to` means different things by direction: moving down it is
+  // the final index of the *last* cell of the block, moving up the index of the
+  // *first*. Getting this wrong shifts a multi-cell drag by n-1 positions.
+  const fromIndex = ArrayExt.firstIndexOf(notebook.widgets, toMove[0]);
+  if (toIndex > fromIndex) {
+    if (!after) {
+      toIndex -= 1;
+    }
+  } else if (after) {
+    toIndex += 1;
+  }
+  toIndex = Math.max(0, Math.min(toIndex, notebook.widgets.length - 1));
+
+  if (fromIndex !== toIndex) {
+    notebook.moveCell(fromIndex, toIndex, toMove.length);
+  }
+  mosaic.persistRepair();
+  mosaic.requestUpdate();
+}
+
+export function mosaicDragOver(notebook: Notebook, event: Drag.Event): void {
   if (!event.mimeData.hasData(JUPYTER_CELL_MIME)) {
     return;
   }
   event.preventDefault();
   event.stopPropagation();
   event.dropAction = event.proposedAction;
-  const elements = self.node.getElementsByClassName(DROP_TARGET_CLASS);
-  if (elements.length) {
-    (elements[0] as HTMLElement).classList.remove(DROP_TARGET_CLASS);
-  }
-  // let target = event.target as HTMLElement;
-  let target = elFromPoint(event.clientX, event.clientY) as HTMLElement;
-  let side: string = '';
-  while (target && target.parentElement) {
-    if (target.classList.contains(JUPYTER_CELL_CLASS)) {
-      break;
-    }
-    if (target.classList.contains(Mosaic.NODE_CLASS)) {
-      break;
-    }
-    if (target.classList.contains('jp-InputPrompt')) {
-      side = 'tab';
-    }
-    target = target.parentElement;
-  }
-  target.classList.add(DROP_TARGET_CLASS);
-  if (side == '') side = closestSide(event, target, 0.25);
 
-  let index = (self as any)._findCell(target);
+  clearDropTargets(notebook);
 
-  if (index === -1) {
-    if (!target || !target.parentElement) { // nothing found, probably dropping off end of notebook.
-      target = event.source.viewportNode;
-      target.classList.add(DROP_TARGET_CLASS);
-      target.dataset.mosaicDropSide = 'bottom';
-    }
+  const mosaic = mosaicOf(notebook);
+  const hit = hitTest(notebook, event.clientX, event.clientY);
+
+  if (hit?.kind === 'gutter') {
+    mosaic?.grid.highlightGutter(hit.gutter);
   } else {
-    const widget = (self as any).cellsArray[index];
-    widget.node.classList.add(DROP_TARGET_CLASS);
-
-    // mosaic: show line on side its going to insert on
-    widget.node.dataset.mosaicDropSide = side;
-
-    target = widget.node;
-  }
-
-  const toMove: Cell[] = event.mimeData.getData('internal:cells');
-
-  if (toMove.map(cell => cell.node).includes(target)) {
-    // event.dropAction = 'none';
-    target.dataset.mosaicDropSide = '';
-  }
-
-  // Auto-scroll if near edges
-  let group = event.target as HTMLElement;
-  while (group && group.parentElement) {
-    if (group.classList.contains(Mosaic.INNER_GROUP_CLASS)) {
-      if (group.dataset.mosaicDirection === 'row') {
-        if ( ((event.clientX < group.getBoundingClientRect().left + 20) && (group.scrollLeft > 0)) ) {
-          group.scrollBy({left: -20});
-          // trigger new drag check since content moved under it due to scroll
-          requestAnimationFrame(() => {mosaicDragOver(self, event)});
-          break;
-        } else if ((event.clientX > group.getBoundingClientRect().right - 20) && (group.scrollLeft + group.clientWidth < group.scrollWidth)) {
-          group.scrollBy({left: 20});
-          requestAnimationFrame(() => {mosaicDragOver(self, event)});
-          break;
-        }
-      } else {
-        if ( ((event.clientY < group.getBoundingClientRect().top + 20) && (group.scrollTop > 0)) ) {
-          group.scrollBy({top: -20});
-          requestAnimationFrame(() => {mosaicDragOver(self, event)});
-          break;
-        } else if ((event.clientY > group.getBoundingClientRect().bottom - 20) && (group.scrollTop + group.clientHeight < group.scrollHeight)) {
-          group.scrollBy({top: 20});
-          requestAnimationFrame(() => {mosaicDragOver(self, event)});
-          break;
-        }
+    mosaic?.grid.highlightGutter(null);
+    if (hit) {
+      const toMove: Cell[] = event.mimeData.getData('internal:cells') ?? [];
+      const cell = notebook.widgets[hit.index];
+      if (cell && !toMove.includes(cell)) {
+        cell.node.classList.add(DROP_TARGET_CLASS);
+        cell.node.dataset.mosaicDropSide = hit.side;
       }
     }
-    group = group.parentElement;
   }
+
+  autoScroll(notebook, event);
 }
 
+/** Scroll a managed group when the pointer nears its edge mid-drag. */
+function autoScroll(notebook: Notebook, event: Drag.Event): void {
+  const mosaic = mosaicOf(notebook);
+  if (!mosaic) {
+    return;
+  }
+  const outer = notebook.outerNode.getBoundingClientRect();
+  if (event.clientY < outer.top + AUTOSCROLL_MARGIN) {
+    notebook.outerNode.scrollBy({ top: -AUTOSCROLL_MARGIN });
+  } else if (event.clientY > outer.bottom - AUTOSCROLL_MARGIN) {
+    notebook.outerNode.scrollBy({ top: AUTOSCROLL_MARGIN });
+  }
+  // Groups get first refusal, so an inner scroller wins over the notebook.
+  mosaic.grid.nudgeScroll(event.clientX, event.clientY, AUTOSCROLL_MARGIN);
+}
 
-
-
+function clearDropTargets(notebook: Notebook): void {
+  for (const el of Array.from(
+    notebook.node.getElementsByClassName(DROP_TARGET_CLASS)
+  )) {
+    el.classList.remove(DROP_TARGET_CLASS);
+    delete (el as HTMLElement).dataset.mosaicDropSide;
+  }
+  mosaicOf(notebook)?.grid.highlightGutter(null);
+}
 
 /**
- * Calculate which side of the target element the mouse is closest to.
- * @param e The drag event from @lumino/dragdrop
- * @param target The target HTMLElement
- * @param balanceAspect Make drop zones more equal size for non-square elements (0.0 = strictly use closest side, 1.0 = make all zones equal area, 0.5 = in-betweeen)
- * @returns One of 'top', 'left', 'bottom', 'right'
+ * What lies under a client point: a gutter, or a cell and one of its edges.
+ *
+ * Returns null when nothing is close enough, and the drop is then abandoned.
+ * Every target has a bounded reach: a search with no limit always finds some
+ * target, so a drop into a gap between them landed wherever won a distance
+ * comparison taken across the whole notebook.
  */
-function closestSide(e: Drag.Event, target: HTMLElement, balanceAspect = 0): 'top' | 'left' | 'bottom' | 'right' {
-  const rect = target.getBoundingClientRect();
-  const x = e.clientX;
-  const y = e.clientY;
+function hitTest(
+  notebook: Notebook,
+  clientX: number,
+  clientY: number
+): DropTarget | null {
+  const target = hitTestGrid(notebook, clientX, clientY);
 
-  // Calculate distances to each side
-  let distTop = Math.abs(y - rect.top);
-  let distLeft = Math.abs(x - rect.left);
-  let distBottom = Math.abs(y - rect.bottom);
-  let distRight = Math.abs(x - rect.right);
-
-  if (balanceAspect > 0) {
-    const aspect = rect.width / rect.height;
-    distTop = (1-balanceAspect) * distTop + balanceAspect * distTop * aspect;
-    distBottom = (1-balanceAspect) * distBottom + balanceAspect * distBottom * aspect;
-    distLeft = (1-balanceAspect) * distLeft + balanceAspect * distLeft / aspect;
-    distRight = (1-balanceAspect) * distRight + balanceAspect * distRight / aspect;
+  // A collapsed notebook is one column, so a drop on a cell's left or right
+  // edge would subdivide into a row the very next layout pass folds away
+  // again. Resolve it onto the near horizontal edge instead, which is the
+  // reordering a single column can actually show.
+  if (target?.kind === 'cell' && mosaicOf(notebook)?.solution?.collapsed) {
+    const rect = notebook.widgets[target.index]?.node.getBoundingClientRect();
+    const side: DropSide =
+      rect && clientY > (rect.top + rect.bottom) / 2 ? 'bottom' : 'top';
+    return { ...target, side };
   }
-
-  // Find the minimum distance
-  const minDist = Math.min(distTop, distLeft, distBottom, distRight);
-
-  switch (minDist) {
-    case distTop:
-      return 'top';
-    case distLeft:
-      return 'left';
-    case distBottom:
-      return 'bottom';
-    case distRight:
-      return 'right';
-    default:
-      // Fallback, shouldn't happen
-      return 'top';
-  }
+  return target;
 }
 
-function elFromPoint(x: number, y: number): HTMLElement | null {
-  const overlays = document.querySelectorAll('.lm-cursor-backdrop, .lm-DragImage');
+function hitTestGrid(
+  notebook: Notebook,
+  clientX: number,
+  clientY: number
+): DropTarget | null {
+  const mosaic = mosaicOf(notebook);
+  const viewport = notebook.viewportNode.getBoundingClientRect();
+  const x = clientX - viewport.left;
+  const y = clientY - viewport.top;
 
-  overlays.forEach(o => (o as HTMLElement).style.visibility = 'hidden');
+  // 1. Inside a gutter. They are narrow, and the cells beside them stay
+  //    reachable by aiming a little further in.
+  const inGutter = mosaic?.grid.gutterAt(x, y);
+  if (inGutter) {
+    return { kind: 'gutter', gutter: inGutter };
+  }
 
-  const realTarget = document.elementFromPoint(x, y);
+  // 2. On a cell.
+  let target = elementFromPoint(clientX, clientY);
+  while (target && !target.classList.contains(JUPYTER_CELL_CLASS)) {
+    target = target.parentElement;
+  }
+  if (target) {
+    const index = notebook.widgets.findIndex(cell => cell.node === target);
+    if (index >= 0) {
+      return {
+        kind: 'cell',
+        index,
+        side: closestSide(clientX, clientY, target, 0.25)
+      };
+    }
+  }
 
-  overlays.forEach(o => (o as HTMLElement).style.visibility = '');
-  return realTarget as HTMLElement;
+  // 3. Below everything the grid laid out. This is the notebook's own trailing
+  //    seam, and it claims the blank space under the last row -- which is
+  //    bounded by the scroller, so it does not reach up into the notebook. A
+  //    nearest-target search cannot serve this: when the last tile is a plain
+  //    cell there is no trailing gutter at all, and the closest gutter is then
+  //    some row's side edge, which is how a drop down here ended up mid-row.
+  if (
+    mosaic &&
+    y > mosaic.grid.contentBottom &&
+    x >= 0 &&
+    x <= viewport.width
+  ) {
+    const trailing = mosaic.solution?.gutters.find(
+      gutter => gutter.path.length === 0 && gutter.cellAfter < 0
+    );
+    if (trailing) {
+      return { kind: 'gutter', gutter: trailing };
+    }
+    const last = notebook.widgets.length - 1;
+    if (last >= 0) {
+      // No trailing gutter means the last tile is a cell of the root column,
+      // so its bottom edge already means "a new row at the end".
+      return { kind: 'cell', index: last, side: 'bottom' };
+    }
+  }
+
+  // 4. Otherwise the nearest target, gutter or cell, within reach of the point.
+  let best: DropTarget | null = null;
+  let bestDistance = DROP_RANGE * DROP_RANGE;
+
+  for (const gutter of mosaic?.solution?.gutters ?? []) {
+    const distance = distanceTo(x, y, mosaic!.grid.gutterRect(gutter));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = { kind: 'gutter', gutter };
+    }
+  }
+
+  const cellRange = Math.min(DROP_RANGE, CELL_HIT_MARGIN) ** 2;
+  for (let index = 0; index < notebook.widgets.length; index++) {
+    const node = notebook.widgets[index].node;
+    if (node.dataset.mosaicHidden || !node.isConnected) {
+      continue;
+    }
+    const rect = mosaic?.grid.cellRect(index);
+    if (!rect) {
+      continue;
+    }
+    const distance = distanceTo(x, y, rect);
+    if (distance < Math.min(bestDistance, cellRange)) {
+      bestDistance = distance;
+      best = { kind: 'cell', index, side: sideFrom(rect, x, y) };
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Which side of an element a point is nearest.
+ *
+ * @param balanceAspect Evens out the drop zones of non-square elements
+ *   (0 = strictly nearest edge, 1 = four equal-area zones).
+ */
+export function closestSide(
+  x: number,
+  y: number,
+  target: HTMLElement,
+  balanceAspect = 0
+): DropSide {
+  const rect = target.getBoundingClientRect();
+
+  let top = Math.abs(y - rect.top);
+  let left = Math.abs(x - rect.left);
+  let bottom = Math.abs(y - rect.bottom);
+  let right = Math.abs(x - rect.right);
+
+  if (balanceAspect > 0 && rect.height > 0) {
+    const aspect = rect.width / rect.height;
+    top = (1 - balanceAspect) * top + balanceAspect * top * aspect;
+    bottom = (1 - balanceAspect) * bottom + balanceAspect * bottom * aspect;
+    left = (1 - balanceAspect) * left + (balanceAspect * left) / aspect;
+    right = (1 - balanceAspect) * right + (balanceAspect * right) / aspect;
+  }
+
+  const min = Math.min(top, left, bottom, right);
+  if (min === top) {
+    return 'top';
+  }
+  if (min === left) {
+    return 'left';
+  }
+  if (min === bottom) {
+    return 'bottom';
+  }
+  return 'right';
+}
+
+/** `elementFromPoint`, ignoring Lumino's drag overlays. */
+export function elementFromPoint(x: number, y: number): HTMLElement | null {
+  const overlays = document.querySelectorAll(
+    '.lm-cursor-backdrop, .lm-DragImage'
+  );
+  overlays.forEach(o => ((o as HTMLElement).style.visibility = 'hidden'));
+  const found = document.elementFromPoint(x, y);
+  overlays.forEach(o => ((o as HTMLElement).style.visibility = ''));
+  return found as HTMLElement | null;
 }
