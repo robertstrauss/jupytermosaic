@@ -122,6 +122,9 @@ const plugin: JupyterFrontEndPlugin<void> = {
     docmanager: DocumentManager,
     settings: ISettingRegistry
   ) => {
+    // The UI smoke test in ui-tests/ listens for exactly this line.
+    console.log('JupyterLab extension mosaic is activated!');
+
     const loaded = await settings.load(PLUGIN_ID);
     applySettings(loaded.composite, tracker);
     loaded.changed.connect(() => applySettings(loaded.composite, tracker));

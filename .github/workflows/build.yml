@@ -50,13 +50,13 @@ jobs:
 
         pip install build
         python -m build
-        pip uninstall -y "mosaic" jupyterlab
+        pip uninstall -y "jupyter-mosaic" jupyterlab
 
     - name: Upload extension packages
       uses: actions/upload-artifact@v4
       with:
         name: extension-artifacts
-        path: dist/mosaic*
+        path: dist/jupyter_mosaic*
         if-no-files-found: error
 
   test_isolated:
@@ -79,7 +79,7 @@ jobs:
         sudo rm -rf $(which node)
         sudo rm -rf $(which node)
 
-        pip install "jupyterlab>=4.0.0,<5" mosaic*.whl
+        pip install "jupyterlab>=4.0.0,<5" jupyter_mosaic*.whl
 
 
         jupyter labextension list
@@ -109,7 +109,7 @@ jobs:
     - name: Install the extension
       run: |
         set -eux
-        python -m pip install "jupyterlab>=4.0.0,<5" mosaic*.whl
+        python -m pip install "jupyterlab>=4.0.0,<5" jupyter_mosaic*.whl
 
     - name: Install dependencies
       working-directory: ui-tests
