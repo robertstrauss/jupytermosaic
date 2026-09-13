@@ -1,0 +1,67 @@
+name: Publish to PyPI
+
+# Builds the sdist and wheel and publishes them with PyPI trusted publishing:
+# no token to store, PyPI trusts this workflow's OIDC identity instead. On the
+# PyPI side the publisher is registered as
+#   owner robertstrauss, repository jupytermosaic,
+#   workflow publish-pypi.yml, environment pypi.
+#
+# Runs when a GitHub release is published. It can also be run by hand from the
+# Actions tab -- pick the release tag as the ref, so what is built is exactly
+# what was tagged.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The labextension bundle is committed, so the build hook normally skips
+      # the JavaScript build. Node is here so it still works if that changes.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
+
+      - name: Check the wheel carries the extension
+        run: |
+          python - <<'EOF'
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          assert "mosaic/__init__.py" in names, "no python package in wheel"
+          assert any("labextensions/mosaic/static/style.js" in n for n in names), "no labextension in wheel"
+          print("wheel ok:", len(names), "files")
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
