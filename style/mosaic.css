@@ -503,31 +503,38 @@ div .mosaic-Notebook .jp-WindowedPanel-viewport {
   padding: var(--mosaic-edge-padding);
 }
 
-/* * puts cell handles (In [*]:) and output labels (Out [*]:) on the left */
+/* Makes sure the output is clickable. Ahead of the top-handles rules below,
+   which are more specific and touch the same element. */
+.mosaic-Notebook .jp-OutputArea {
+  z-index: 2 !important;
+}
+
+/* -- cell handles above the code (the setting) ---------------------------- */
+
+/* Puts cell handles (In [*]:) and output labels (Out [*]:) on top rather than
+   beside, so a narrow tile spends none of its width on a prompt column. */
+.mosaic-top-cell-handles .mosaic-Notebook {
+  --mosaic-transpose-size: 2.8rem;
+}
+
+/* The prompt area is a band here, so the transpose square sits at its left
+   and the scroll overlay takes the rest of the row. */
 .mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-promptOverlay {
-  /* The prompt area is a band here, so the transpose square sits at its left
-     and the scroll overlay takes the rest of the row. */
   top: 0;
   left: var(--mosaic-transpose-size);
   width: calc(100% - var(--mosaic-transpose-size));
   height: 100% !important;
   max-height: 2.8rem !important;
-}
-
-.mosaic-top-cell-handles .mosaic-Notebook {
-  --mosaic-transpose-size: 2.8rem;
-}
-.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-promptOverlay {
   text-align: left;
 }
+
 .mosaic-top-cell-handles .mosaic-Notebook .jp-Cell .jp-InputArea,
 .mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea {
   flex-direction: column !important;
 }
-/** 
- * make the output view full width of the cell 
- * (it usually leaves room for the output prompt, but we are putting that on top instead)
- */
+
+/* Make the output view the full width of the cell: it usually leaves room for
+   the output prompt, which is on top instead. */
 .mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-child {
   max-width: 100% !important;
 
@@ -542,55 +549,17 @@ div .mosaic-Notebook .jp-WindowedPanel-viewport {
   flex: 0 0 auto;
   text-align: left;
 }
-.mosaic-top-cell-handles .mosaic-Notebook .prompt_container > .jp-InputPrompt {
-  text-align: left;
-  position: relative;
-  height: 2.8rem;
-  width: 100%;
-}
+
 .mosaic-top-cell-handles .mosaic-Notebook .jp-InputPrompt {
   width: 100%;
-  /* height: 100%; */
   text-align: left;
   flex: 0 0 auto;
   z-index: 2;
 }
 
-/* The heading collapse caret lives inside the input prompt, anchored to its
-   right edge and clipped to it. With handles above, that prompt is a band the
-   full width of the cell and about ten pixels tall, so `right: 0` threw the
-   caret out to the far edge and `overflow: hidden` cut off what was left of it.
-   Anchor it to the left of the band instead and let it out of the box -- half a
-   rem in, to clear the run button now sitting on the group's corner. */
-.mosaic-top-cell-handles .mosaic-Notebook .jp-MarkdownCell .jp-InputPrompt,
-.mosaic-top-cell-handles .mosaic-Notebook .jp-MarkdownCell .jp-InputArea {
-  overflow: visible;
-
-  /* The band has to be as tall as the caret it now holds. */
-  min-height: 25px;
-}
-
-.mosaic-top-cell-handles .mosaic-Notebook .jp-collapseHeadingButton {
-  right: auto;
-  bottom: auto;
-  left: 0;
-  /* Tall enough for the caret at the size a plain notebook draws it. */
-  height: 25px;
-  margin-left: 0.5rem;
-
-  /* Upstream stretches this button down the full-height prompt column and then
-     pushes the caret 0.3 heading-widths down it, to sit level with the heading
-     text. Here the prompt is a short band above the heading, so that offset put
-     all but a sliver of the caret below the box: centre it instead. */
-  background-position-y: center;
-  background-size: 25px;
-}
-
-.mosaic-top-cell-handles .mosaic-Notebook .jp-InputArea-editor {
-  margin-left: 5px; /* spacing between collapser and editor */
-}
-
-/** makes sure the output is clickable */
-.mosaic-Notebook .jp-OutputArea {
-  z-index: 2 !important;
+.mosaic-top-cell-handles .mosaic-Notebook .prompt_container > .jp-InputPrompt {
+  position: relative;
+  width: 100%;
+  height: 2.8rem;
+  text-align: left;
 }

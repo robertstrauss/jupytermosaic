@@ -4,3 +4,7 @@ node_modules
 **/package.json
 !/package.json
 mosaic
+test-results
+LICENSE.md
+LEGACY_MOSAIC_NOTEBOOK
+dockpanel

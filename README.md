@@ -2,7 +2,6 @@
 
 A Jupyter Lab extension to make notebooks more visual and usable.
 
-
 [Installation](#installation)
 
 [New Features](#new-features---v20)
@@ -14,7 +13,8 @@ A Jupyter Lab extension to make notebooks more visual and usable.
 # About
 
 Jupyter Mosaic is now on PyPI as `jupyter-mosaic`!
-Install on the machine running the jupyter server with 
+Install on the machine running the jupyter server with
+
 ```sh
 pip install jupyter-mosaic
 ```
@@ -27,7 +27,6 @@ Drag-and-drop cells or use `a`, `s`, `f`, and `b` in command mode to subdivide, 
 
 # Uses of the Interface
 
-
 ## Parallel experiments in two columns.
 
 Align your similarly structured experiment sequences and see the corresponding steps in line with each other.
@@ -36,12 +35,9 @@ Align your similarly structured experiment sequences and see the corresponding s
 
 ## Structured, intuitive notebooks.
 
-A really good notebook uses markdown documentation and latex to give an exact breakdown of what the code does, rather than leaving it up to a reader to decipher your esoteric functions. Plus, 
+A really good notebook uses markdown documentation and latex to give an exact breakdown of what the code does, rather than leaving it up to a reader to decipher your esoteric functions. Plus,
 
 <img alt="Example LaTeX+Code Layout" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/tiled_markdown_corner.png"/>
-
-
-
 
 ## Easy visual plot comparison.
 
@@ -49,15 +45,11 @@ Drag and drop plots together rather than use `plt.subplots`. Faster, more intuit
 
 ![Mosaic row of plots](https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/plot_row.png)
 
-
 ## Create self-documenting research or tutorial notebooks.
 
 Tile theoretical explanations in line with code, walking through concepts while implementing them right there.
 
-
 <img alt="Monte Carlo Theory+Code Example" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/markdown_col_plots.png"/>
-
-
 
 ## Dashboard interface
 
@@ -65,14 +57,11 @@ Use notebooks as interactive tools rather than scripts, now with a real layout i
 
 <img alt="Example Layout" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/example-front.png"/>
 
-
 ## Present your results compactly in video confrences.
 
 Show relevant tables and plots together alongside generating code, without fussing with graphics tools or losing your audience by scrolling back and forth.
 
 <img alt="Example Table+Plot Layout" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/tiled_dataframes.png"/>
-
-
 
 ## Output beside code
 
@@ -81,12 +70,12 @@ Mosaic also adds a button to move cell output to the right of code, a popular fo
 <img alt="Plot below code" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/output_below_plot.png" width="45%"/>
  --> <img alt="Plot beside code" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/output_beside_plot.png" width="45%"/>
 
------
+---
+
 <img alt="Table below code" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/output_below_table.png" width="45%"/>
  --> <img alt="Table beside code" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/output_besides_table.png" width="45%"/>
 
 <!-- <img alt="Two plots beside code cells" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/two_output_beside_plot.png"/> -->
-
 
 # No Whitespace, No Waste.
 
@@ -104,6 +93,7 @@ You can double-check how non-Mosaic users will see your notebook by right-clicin
 <img alt="Side-by-side mosaic and normal notebooks" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/mosaic_vs_normal_together.png"/>
 
 ## Grid Structure and Execution Order (how is it linearized?)
+
 The mosaic notebook is divided into rows, each of which may contain multiple cells and columns, which may be again divided into rows recursively, and so on and so on.
 
 Each row is executed left-to-right. Each column is executed top-to-bottom.
@@ -111,22 +101,21 @@ When a column is inside a row, the column is executed entirely before continuing
 
 This execution order is also how the cells are linearized when the notebook is opened without the Jupyter Mosaic extension.
 
-
 # New Features - v2.0
 
-* Side-by-side output
+- Side-by-side output
 
 A button moves cell output to the right of code, or puts it back below.
 
-* Synchronous mosaic/normal-notebook editing works
+- Synchronous mosaic/normal-notebook editing works
 
-* Markdown exand/collapse sections
+- Markdown exand/collapse sections
 
 Built-in jupyter expand/collapse functionality showing/hiding cells under markdown headers now works.
 
-* Collapse grid to normal column if too small
+- Collapse grid to normal column if too small
 
-* Grid navigation and division keybinds.
+- Grid navigation and division keybinds.
 
 In command mode:
 
@@ -148,18 +137,19 @@ To create new cells in the grid layout:
 
 `f` - create cell to the right (divide vertically)
 
-
 # Installation
 
-
 Jupyter Mosaic is now on PyPI as `jupyter-mosaic`!
-Install on the machine running the jupyter server with 
+Install on the machine running the jupyter server with
+
 ```sh
 pip install jupyter-mosaic
 ```
+
 And you're done! Restart jupyterlab, and check its enabled in the extensions menu (left sidebar puzzle piece).
 
 ## Manual/Development Install
+
 Or, you can manually clone and install it.
 Clone it (or download and unpack the archive from the repository's Code
 button), then install in editable mode from inside the directory:
@@ -169,7 +159,8 @@ git clone https://github.com/robertstrauss/jupytermosaic.git
 cd jupytermosaic
 pip install -e .
 ```
-<!-- 
+
+<!--
 The equivalent without git:
 
 ```sh
@@ -198,7 +189,6 @@ pip uninstall jupyter-mosaic
 
 DEPRECATED
 
-
-
 # Please Cite
+
 Robert Strauss, "Jupyter Mosaic" 2020, https://github.com/robertstrauss/jupytermosaic

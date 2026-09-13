@@ -168,19 +168,29 @@ describe('solve', () => {
   it('holds a vertical scrolling group open at its stored size', () => {
     // 'a' is a row, so its child column 'a/b' is what scrolls vertically.
     const s = solve(
-      tree([['a', 'b'], ['a', 'b']], p =>
-        p.join('/') === 'a/b' ? { mode: 'scroll', size: 240 } : {}
+      tree(
+        [
+          ['a', 'b'],
+          ['a', 'b']
+        ],
+        p => (p.join('/') === 'a/b' ? { mode: 'scroll', size: 240 } : {})
       )
     );
     expect(Math.max(...s.rowMinPx)).toBeCloseTo(240, 6);
   });
 
-  it('spreads a scrolling group\'s size across the bands it spans', () => {
+  it("spreads a scrolling group's size across the bands it spans", () => {
     // The scrolling column sits beside a cell that splits the band in two, so
     // its stored height is shared between both row tracks.
     const s = solve(
-      tree([['a', 'b'], ['a', 'b'], ['a', 'c'], ['a', 'c']], p =>
-        p.join('/') === 'a/b' ? { mode: 'scroll', size: 200 } : {}
+      tree(
+        [
+          ['a', 'b'],
+          ['a', 'b'],
+          ['a', 'c'],
+          ['a', 'c']
+        ],
+        p => (p.join('/') === 'a/b' ? { mode: 'scroll', size: 200 } : {})
       )
     );
     const spanned = s.rowMinPx.filter(v => v > 0);
@@ -204,7 +214,15 @@ describe('solve', () => {
   it('nests managed groups innermost-owner-first', () => {
     const state = (path: string[]): IGroupState =>
       path.length > 0 ? { mode: 'scroll' } : {};
-    const s = solve(tree([['a', 'b'], ['a', 'b']], state));
+    const s = solve(
+      tree(
+        [
+          ['a', 'b'],
+          ['a', 'b']
+        ],
+        state
+      )
+    );
     expect(s.managed.map(m => m.node.path.length)).toEqual([1, 2]);
     // The innermost group owns the cell.
     expect(s.managedOwner.get(0)!.node.path).toEqual(['a', 'b']);
@@ -231,7 +249,7 @@ describe('rowFloors', () => {
     expect(floors).toEqual([100, 200, 50]);
   });
 
-  it('keeps a detached cell\'s band open at its last measured height', () => {
+  it("keeps a detached cell's band open at its last measured height", () => {
     const s = solve(tree([[], []]));
     // Cell 1 is culled and reports nothing new; its floor is still reserved.
     const floors = rowFloors(s, i => (i === 1 ? 180 : 60));
@@ -255,10 +273,14 @@ describe('rowFloors', () => {
     expect(floors.reduce((a, b) => a + b, 0)).toBe(300);
   });
 
-  it('leaves managed cells to their group\'s reserved size', () => {
+  it("leaves managed cells to their group's reserved size", () => {
     const s = solve(
-      tree([['a', 'b'], ['a', 'b']], p =>
-        p.join('/') === 'a/b' ? { mode: 'scroll', size: 150 } : {}
+      tree(
+        [
+          ['a', 'b'],
+          ['a', 'b']
+        ],
+        p => (p.join('/') === 'a/b' ? { mode: 'scroll', size: 150 } : {})
       )
     );
     // A tall cell inside the scrolling group must not stretch the outer band.
@@ -481,7 +503,14 @@ describe('gutters', () => {
 
   it('runs vertical gutters between the columns of a row', () => {
     // A row whose two children are both columns.
-    const s = solve(tree([['r', 'a'], ['r', 'a'], ['r', 'b'], ['r', 'b']]));
+    const s = solve(
+      tree([
+        ['r', 'a'],
+        ['r', 'a'],
+        ['r', 'b'],
+        ['r', 'b']
+      ])
+    );
     const vertical = s.gutters.filter(g => g.axis === 'row');
     // One between the columns, plus the row's own two ends.
     expect(vertical).toHaveLength(3);
@@ -531,11 +560,7 @@ describe('collapse', () => {
   it('preserves direction when a wrapped group has real siblings', () => {
     // 'a' holds a column 'a/b' and a cell. Nothing is redundant, so the column
     // must survive -- collapsing it would flatten a row of two into three.
-    const paths = [
-      ['a', 'b'],
-      ['a', 'b'],
-      ['a']
-    ];
+    const paths = [['a', 'b'], ['a', 'b'], ['a']];
     expect(repair(paths)).toEqual(paths);
   });
 
@@ -550,7 +575,11 @@ describe('collapse', () => {
   });
 
   it('removes the fictitious gutters it was drawing', () => {
-    const corrupt = tree([['x', 'y'], ['x', 'y'], ['x', 'y']]);
+    const corrupt = tree([
+      ['x', 'y'],
+      ['x', 'y'],
+      ['x', 'y']
+    ]);
     // Four rules around a plain run of cells: the root's own two ends, plus
     // the singleton row's.
     expect(solve(corrupt).gutters).toHaveLength(4);
@@ -742,7 +771,7 @@ describe('gutter rules', () => {
     expect(between[0].cellAfter).toBe(2);
   });
 
-  it('does not mark a group\'s leading or trailing edge', () => {
+  it("does not mark a group's leading or trailing edge", () => {
     const s = solve(tree([['a'], ['a'], []]));
     expect(s.gutters.length).toBeGreaterThan(0);
     expect(s.gutters.every(g => !g.between)).toBe(true);

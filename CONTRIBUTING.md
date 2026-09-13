@@ -1,5 +1,5 @@
-
 Set up
+
 ```sh
 git clone git@github.com:/robertstrauss/jupytermosaic.git
 cd jupytermosaic
@@ -9,6 +9,7 @@ pip install -e .
 ```
 
 To automatically move build files to the jupyter environment, to skip having to un+reinstall with pip every time you make a change:
+
 ```sh
 jupyter-builder develop --overwrite .
 ```
@@ -23,9 +24,9 @@ using full --dev-mode requires building from source
 # jlpm build:core
 # jupyter lab build # uses local dev_mode/ folder
 -->
-```sh
-jupyter lab --expose-app-in-browser 
-```
 
+```sh
+jupyter lab --expose-app-in-browser
+```
 
 The official jupyter lab extension guide can be useful for understanding the structure and build/install process, as well as other tips: https://jupyterlab.readthedocs.io/en/latest/extension/extension_tutorial.html

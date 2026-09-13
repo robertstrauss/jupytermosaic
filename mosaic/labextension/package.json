@@ -100,7 +100,7 @@
     "outputDir": "mosaic/labextension",
     "schemaDir": "schema",
     "_build": {
-      "load": "static/remoteEntry.61eb87ad4b91277c2f89.js",
+      "load": "static/remoteEntry.db55693a6eb251610a8d.js",
       "extension": "./extension",
       "style": "./style"
     }
@@ -112,7 +112,11 @@
     "**/*.d.ts",
     "tests",
     "**/__tests__",
-    "ui-tests"
+    "ui-tests",
+    "dockpanel",
+    "LEGACY_MOSAIC_NOTEBOOK",
+    "playwright.config.ts",
+    "test-results"
   ],
   "eslintConfig": {
     "extends": [

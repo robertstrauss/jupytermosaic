@@ -65,185 +65,133 @@
   "jupyter.lab.shortcuts": [
     {
       "command": "mosaic:move-cursor-left",
-      "keys": [
-        "H"
-      ],
+      "keys": ["H"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:move-cursor-left",
-      "keys": [
-        "H"
-      ],
+      "keys": ["H"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:extend-selection-left",
-      "keys": [
-        "Shift H"
-      ],
+      "keys": ["Shift H"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:extend-selection-left",
-      "keys": [
-        "Shift H"
-      ],
+      "keys": ["Shift H"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:move-cursor-right",
-      "keys": [
-        "L"
-      ],
+      "keys": ["L"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:move-cursor-right",
-      "keys": [
-        "L"
-      ],
+      "keys": ["L"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:extend-selection-right",
-      "keys": [
-        "Shift L"
-      ],
+      "keys": ["Shift L"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:extend-selection-right",
-      "keys": [
-        "Shift L"
-      ],
+      "keys": ["Shift L"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:move-cursor-down",
-      "keys": [
-        "J"
-      ],
+      "keys": ["J"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:move-cursor-down",
-      "keys": [
-        "J"
-      ],
+      "keys": ["J"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:extend-selection-down",
-      "keys": [
-        "Shift J"
-      ],
+      "keys": ["Shift J"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:extend-selection-down",
-      "keys": [
-        "Shift J"
-      ],
+      "keys": ["Shift J"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:move-cursor-up",
-      "keys": [
-        "K"
-      ],
+      "keys": ["K"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:move-cursor-up",
-      "keys": [
-        "K"
-      ],
+      "keys": ["K"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:extend-selection-up",
-      "keys": [
-        "Shift K"
-      ],
+      "keys": ["Shift K"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:extend-selection-up",
-      "keys": [
-        "Shift K"
-      ],
+      "keys": ["Shift K"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:insert-cell-left",
-      "keys": [
-        "S"
-      ],
+      "keys": ["S"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:insert-cell-left",
-      "keys": [
-        "S"
-      ],
+      "keys": ["S"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:insert-cell-right",
-      "keys": [
-        "F"
-      ],
+      "keys": ["F"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:insert-cell-right",
-      "keys": [
-        "F"
-      ],
+      "keys": ["F"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:insert-cell-above",
-      "keys": [
-        "A"
-      ],
+      "keys": ["A"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:insert-cell-above",
-      "keys": [
-        "A"
-      ],
+      "keys": ["A"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "mosaic:insert-cell-below",
-      "keys": [
-        "B"
-      ],
+      "keys": ["B"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     },
     {
       "command": "mosaic:insert-cell-below",
-      "keys": [
-        "B"
-      ],
+      "keys": ["B"],
       "selector": ".jp-Notebook.mosaic-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite):focus"
     },
     {
       "command": "viewmenu:line-numbering",
-      "keys": [
-        "Shift L"
-      ],
+      "keys": ["Shift L"],
       "selector": ".jp-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus",
       "disabled": true
     },
     {
       "command": "viewmenu:line-numbering",
-      "keys": [
-        "Shift N"
-      ],
+      "keys": ["Shift N"],
       "selector": ".jp-Notebook.jp-mod-commandMode:not(.jp-mod-readWrite) :focus"
     }
   ]

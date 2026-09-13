@@ -29,5 +29,5 @@ module.exports = {
   // reads computed styles, so the suite needs a DOM.
   testEnvironment: 'jsdom',
   // Ignore the built labextension: its package.json collides with ours in haste.
-  modulePathIgnorePatterns: ['<rootDir>/mosaic/labextension'],
+  modulePathIgnorePatterns: ['<rootDir>/mosaic/labextension']
 };

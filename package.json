@@ -107,7 +107,11 @@
         "**/*.d.ts",
         "tests",
         "**/__tests__",
-        "ui-tests"
+        "ui-tests",
+        "dockpanel",
+        "LEGACY_MOSAIC_NOTEBOOK",
+        "playwright.config.ts",
+        "test-results"
     ],
     "eslintConfig": {
         "extends": [

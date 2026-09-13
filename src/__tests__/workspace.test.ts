@@ -1,12 +1,8 @@
-
 import { expect, galata, test } from '@jupyterlab/galata'; // expect test
 import { Page } from '@playwright/test';
 import * as path from 'path';
 
-
 const nbFile = 'simple_notebook.ipynb';
-
-
 
 // import { DocumentManager } from '@jupyterlab/docmanager';
 // /** patch DocumnetManager to not open default editor when no widgetName is specified if a different editor exists
@@ -55,7 +51,7 @@ test.describe('Restore non-default-type editor', () => {
     mockState: {
       'layout-restorer:data': {
         main: {
-          current: "editor:workspace-test/simple_notebook.ipynb",
+          current: 'editor:workspace-test/simple_notebook.ipynb',
           dock: {
             type: 'tab-area',
             currentIndex: 0,
@@ -108,7 +104,8 @@ test.describe('Restore non-default-type editor', () => {
       'file-browser-filebrowser:cwd': {
         path: 'workspace-test'
       },
-      'editor:workspace-test/simple_notebook.ipynb': { // File Editor, not Notebook
+      'editor:workspace-test/simple_notebook.ipynb': {
+        // File Editor, not Notebook
         data: {
           path: 'workspace-test/simple_notebook.ipynb',
           factory: 'Editor'
@@ -121,31 +118,34 @@ test.describe('Restore non-default-type editor', () => {
     baseURL,
     page,
     tmpPath,
-    waitForApplication,
-    
+    waitForApplication
   }) => {
     // load in lab mode and trigger restorer
-    page.goto(`${baseURL}/lab/workspaces/default?path=${tmpPath}/${nbFile}`, {waitUntil: 'domcontentloaded'});
+    page.goto(`${baseURL}/lab/workspaces/default?path=${tmpPath}/${nbFile}`, {
+      waitUntil: 'domcontentloaded'
+    });
     await Promise.all([
       // waitForApplication(page, page),
       // prom,
       // waitForApplication(page, helpers),
       // wait for the workspace to be saved
-      page.waitForResponse(
-        response => {
-          // console.log('RESP', response, response.request().method(), response.request().url(), response.request().postDataJSON()?.data);
-          // console.log('out', response.request().method() === 'PUT', /api\/workspaces/.test(response.request().url()), response.request().postDataJSON()?.data[`editor:workspace-test/simple_notebook.ipynb`]);
-        
-          const ret = response.request().method() === 'PUT' &&
-          /api\/workspaces/.test(response.request().url()) &&
-          response.request().postDataJSON().data[`editor:workspace-test/simple_notebook.ipynb`];
-          if (ret) console.log('RET', ret);
-          return ret;
-        }),
-        waitForApplication(page, page),
-      ]);
+      page.waitForResponse(response => {
+        // console.log('RESP', response, response.request().method(), response.request().url(), response.request().postDataJSON()?.data);
+        // console.log('out', response.request().method() === 'PUT', /api\/workspaces/.test(response.request().url()), response.request().postDataJSON()?.data[`editor:workspace-test/simple_notebook.ipynb`]);
 
-    console.log("AWAITTED");
+        const ret =
+          response.request().method() === 'PUT' &&
+          /api\/workspaces/.test(response.request().url()) &&
+          response.request().postDataJSON().data[
+            `editor:workspace-test/simple_notebook.ipynb`
+          ];
+        if (ret) console.log('RET', ret);
+        return ret;
+      }),
+      waitForApplication(page, page)
+    ]);
+
+    console.log('AWAITTED');
 
     // Ensure that there is only the document opened, no matter the workspace content.
     await expect(
@@ -165,26 +165,39 @@ test.describe('Restore non-default-type editor', () => {
     // Reload, which should restore the loaded workspace.
     // page.reload();
     await Promise.all([
-      page.filebrowser.open('simple_notebook.ipynb'),
+      page.filebrowser.open('simple_notebook.ipynb')
       // page.reload(),
       // waitForApplication(page, page),
       // page.goto(`${baseURL}/lab`),
       // page.url() === `${baseURL}/lab`,
     ]);
-    console.warn("AFTER RELOAD");
+    console.warn('AFTER RELOAD');
 
     // Ensure that there is STILL only the file editor document opened, and no new Notebook
-    console.log('file editors', await page.locator('#jp-main-dock-panel .jp-MainAreaWidget .jp-FileEditor').count());
+    console.log(
+      'file editors',
+      await page
+        .locator('#jp-main-dock-panel .jp-MainAreaWidget .jp-FileEditor')
+        .count()
+    );
     await expect(
       page.locator('#jp-main-dock-panel .jp-MainAreaWidget .jp-FileEditor')
     ).toHaveCount(1);
 
-    console.log('notebook editors', await page.locator('#jp-main-dock-panel .jp-MainAreaWidget .jp-Notebook').count());
+    console.log(
+      'notebook editors',
+      await page
+        .locator('#jp-main-dock-panel .jp-MainAreaWidget .jp-Notebook')
+        .count()
+    );
     await expect(
       page.locator('#jp-main-dock-panel .jp-MainAreaWidget .jp-Notebook')
     ).toHaveCount(0); // opened as a File, not a Notebook
 
-    console.log('main area widgets', await page.locator('#jp-main-dock-panel .jp-MainAreaWidget').count());
+    console.log(
+      'main area widgets',
+      await page.locator('#jp-main-dock-panel .jp-MainAreaWidget').count()
+    );
     await expect(
       page.locator('#jp-main-dock-panel .jp-MainAreaWidget')
     ).toHaveCount(1);
