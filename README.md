@@ -9,12 +9,15 @@ A Jupyter Lab extension to make notebooks more visual and usable.
 
 [Please Cite](#please-cite)
 
-[Demo Videos]()
-
-<!-- [Grid Explanation](#grid-structure-and-execution-order) -->
-
+<!-- [Demo Videos]() -->
 
 # About
+
+Jupyter Mosaic is now on PyPI as `jupyter-mosaic`!
+Install on the machine running the jupyter server with 
+```sh
+pip install jupyter-mosaic
+```
 
 Jupyter Mosaic is an extension for Jupyter Lab that gives Jupyter Notebooks two-dimensional subdividable tiling grid layouts.
 
@@ -25,26 +28,34 @@ Drag-and-drop cells or use `a`, `s`, `f`, and `b` in command mode to subdivide, 
 # Heads-up Visual Interface
 
 
-## Evaluate experiments side-by-side.
+## Parallel experiments in two columns.
+
+Align your similarly structured experiment sequences and see the corresponding steps in line with each other.
+
+![Two-column experiment layout](gallery/experiment_2_columns.png)
+
+## Structured, intuitive notebooks.
+
+A really good notebook uses markdown documentation and latex to give an exact breakdown of what the code does, rather than leaving it up to a reader to decipher your esoteric functions. Plus, 
+
+<img alt="Example LaTeX+Code Layout" src="gallery/tiled_markdown_corner.png"/>
 
 
 
-## Easier, intuitive plot comparison
+
+## Easy visual plot comparison.
 
 Drag and drop plots together rather than use `plt.subplots`. Faster, more intuitive, easily rearrangable, and self-documenting by showinge exactly what commands make which mosaic 'subplot'.
 
 ![Mosaic row of plots](gallery/plot_row.png)
 
 
-## Tile theoretical explanations in line with code.
+## Create self-documenting research or tutorial notebooks.
 
-Create self-documenting research or tutorial notebooks.
+Tile theoretical explanations in line with code, walking through concepts while implementing them right there.
+
 
 <img alt="Monte Carlo Theory+Code Example" src="gallery/markdown_col_plots.png"/>
-
-A really good notebook uses markdown documentation and latex to give an exact breakdown of what the code does, rather than leaving it up to a reader to decipher your esoteric functions.
-
-<img alt="Example LaTeX+Code Layout" src="gallery/tiled_markdown_corner.png"/>
 
 
 
@@ -140,23 +151,28 @@ To create new cells in the grid layout:
 
 # Installation
 
-## Jupyter Lab and Jupyter Notebook version 7+
 
-Jupyter Mosaic is not on PyPI yet, so install it from a local copy of the
-repository.
+Jupyter Mosaic is now on PyPI as `jupyter-mosaic`!
+Install on the machine running the jupyter server with 
+```sh
+pip install jupyter-mosaic
+```
+And you're done! Restart jupyterlab, and check its enabled in the extensions menu (left sidebar puzzle piece).
 
+## Manual/Development Install
+Or, you can manually clone and install it.
 Clone it (or download and unpack the archive from the repository's Code
 button), then install in editable mode from inside the directory:
 
-```bash
+```sh
 git clone https://github.com/robertstrauss/jupytermosaic.git
 cd jupytermosaic
 pip install -e .
 ```
-
+<!-- 
 The equivalent without git:
 
-```bash
+```sh
 wget https://github.com/robertstrauss/jupytermosaic/archive/refs/heads/main.zip
 unzip main.zip
 cd jupytermosaic-main
@@ -168,14 +184,14 @@ entry in the launcher alongside the usual Notebook one.
 
 Installing straight from the repository, without a local copy, also works:
 
-```bash
+```sh
 pip install git+https://github.com/robertstrauss/jupytermosaic.git
-```
+``` -->
 
-### Uninstall
+## Uninstall
 
 ```bash
-pip uninstall mosaic
+pip uninstall jupyter-mosaic
 ```
 
 ## NbClassic (Jupyter Notebook Version < 7)
