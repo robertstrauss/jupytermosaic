@@ -13,6 +13,8 @@ import {
   NotebookViewModel
 } from '@jupyterlab/notebook';
 import { Cell, CodeCell, ICellModel, MarkdownCell } from '@jupyterlab/cells';
+import { MessageLoop } from '@lumino/messaging';
+import { Widget } from '@lumino/widgets';
 import { WindowedList } from '@jupyterlab/ui-components';
 
 import { NotebookActions } from '@jupyterlab/notebook';
@@ -35,6 +37,7 @@ import {
   subdividePath
 } from './MosaicTree';
 import { installMosaicDrag } from './mosaicdrag';
+import { TRANSPOSE_KEY, applyTranspose } from './transpose';
 
 export type { Direction };
 
@@ -259,10 +262,55 @@ export class MosaicNotebook implements IGridHost {
       this.setPath(inserted.model, destination);
     }
     this.persistRepair();
-    this.requestUpdate();
+
+    // Lay the new cell out and attach it *now* rather than on the next frame.
+    // Until its node is in the document, focusing it does nothing, which leaves
+    // `activeCellIndex` naming a cell that DOM focus is not on -- and the
+    // notebook then spends the next keypress reconciling the two instead of
+    // acting on it. See `settle` below for why that costs the press.
+    this.rebuild();
+    MessageLoop.sendMessage(this.notebook, Widget.Msg.UpdateRequest);
+
     // Keep focus on the cell we just made, for the same reason navigation does:
     // the notebook reads the active cell back off whatever holds DOM focus.
-    notebook.activate();
+    // This has to happen *after* the layout pass -- windowing detaches and
+    // reattaches cells as the tracks move, which drops focus on the floor, and
+    // the next press then spends itself putting focus back instead of
+    // inserting again.
+    const target = before ? index : index + 1;
+    const settle = (): void => {
+      const cell = notebook.widgets[target];
+      if (this._disposed || !cell) {
+        return;
+      }
+      notebook.activeCellIndex = target;
+      notebook.mode = 'command';
+      // The *cell's* node, not the notebook's. `Notebook.activate` focuses the
+      // notebook node, which looks right but is not what the shortcuts are
+      // bound to.
+      //
+      // Getting this exactly right is what fixes the double tap. While the
+      // index and DOM focus disagree, the notebook's own keydown handler
+      // reconciles them -- and it sits between the cell and `document`, so it
+      // runs *during* the press, before Lumino's. `:focus` is live, so the
+      // event's target stops matching the binding's selector halfway through
+      // its own propagation: Lumino then finds no binding, and the press is
+      // spent moving focus rather than inserting.
+      cell.node.focus({ preventScroll: true });
+      void notebook.scrollToItem(target);
+    };
+    // Straight away -- the cell is attached by now, so this lands -- and again
+    // after the frame settles, in case anything later disturbs it. The repeat
+    // stands down if the cursor has since moved on, so it can never drag it
+    // back.
+    settle();
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (notebook.activeCellIndex === target) {
+          settle();
+        }
+      })
+    );
   }
 
   /**
@@ -382,6 +430,14 @@ export class MosaicNotebook implements IGridHost {
     this._inferMissingPaths();
 
     const cells = this.notebook.widgets;
+
+    // Windowing rebuilds a cell's contents whenever it comes back into view,
+    // so the button and the transposed state are reapplied every pass rather
+    // than installed once.
+    for (const cell of cells) {
+      applyTranspose(cell);
+    }
+
     const weight = (index: number) =>
       Number(cells[index]?.model.getMetadata(WEIGHT_KEY)) || 1;
     const state = (path: string[]) => this.groupState(path);
@@ -417,7 +473,11 @@ export class MosaicNotebook implements IGridHost {
     // spill off the right and be reached only by scrolling sideways. Falling
     // back to one column is purely a rendering choice: no metadata is touched,
     // so the mosaic comes back intact as soon as there is room for it.
-    const solution = solve(root);
+    // Measure first: the solve places its row cuts from these heights, so a
+    // pass that measured afterwards would lay the notebook out from whatever
+    // the cells were before this one changed them.
+    this.grid.measure();
+    const solution = solve(root, index => this.grid.cellHeight(index));
     this._solution =
       mosaicOptions.collapseWhenNarrow && this.grid.overflowsWidth(solution)
         ? linearSolution(cells.length)
@@ -612,7 +672,11 @@ export class MosaicNotebook implements IGridHost {
   }
 
   private _onCellMetadataChanged(_: unknown, args: { key: string }): void {
-    if (args.key === PATH_KEY || args.key === WEIGHT_KEY) {
+    if (
+      args.key === PATH_KEY ||
+      args.key === WEIGHT_KEY ||
+      args.key === TRANSPOSE_KEY
+    ) {
       this.requestUpdate();
     }
   }

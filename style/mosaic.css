@@ -16,10 +16,17 @@
   /* The rule drawn in the gap between two adjacent groups. */
   --mosaic-gutter-rule: rgb(0 0 0 / 20%);
 
-  /* Sampled once by WindowedList on attach and folded into the document
-     height, so this must not vary with the layout-style setting. */
-  --mosaic-edge-padding: 8px;
+  /* The notebook's own margin. Matching the gap makes the outer edge read the
+     same as every seam inside. Sampled once by WindowedList on attach and
+     folded into the document height, so this must not vary with the
+     layout-style setting -- a constant that happens to equal another constant
+     is fine. */
+  --mosaic-edge-padding: var(--mosaic-gap);
   --mosaic-frame-color: rgb(128 128 128 / 35%);
+
+  /* Side of the square transpose button, which shares the output's prompt
+     column with JupyterLab's own scroll overlay. */
+  --mosaic-transpose-size: var(--jp-cell-prompt-width);
   --cell-margin: 0;
 }
 
@@ -73,39 +80,90 @@
   position: absolute;
   top: 0;
   left: 0;
-  box-sizing: border-box;
+
+  /* The grid hands over the box the content occupies; the padding carries the
+     border half a gap outward on every side, so it is drawn down the middle of
+     the gutter rather than tight against the cells. */
+  box-sizing: content-box;
+  margin: calc(var(--mosaic-gap) / -2);
+  padding: calc(var(--mosaic-gap) / 2);
   border: 1px solid transparent;
   border-radius: 6px;
   pointer-events: none;
   transition: border-color 0.15s;
 }
 
-.mosaic-frame:hover,
 .mosaic-frame[data-mosaic-mode='scroll'],
 .mosaic-frame[data-mosaic-mode='tabs'] {
   border-color: var(--mosaic-frame-color);
 }
 
+/* Reached for, not merely present: the frame you are about to act on says so
+   in the brand colour, at full strength. */
+.mosaic-frame:hover {
+  border-color: var(--jp-brand-color1);
+}
+
 .mosaic-frame-run {
+  --mosaic-run-size: 22px;
+
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
+
+  /* Half outside its own frame, so it sits astride the border it belongs to
+     instead of inside the group's content. */
+  top: calc(var(--mosaic-run-size) / -2);
+  left: calc(var(--mosaic-run-size) / -2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--mosaic-run-size);
+  height: var(--mosaic-run-size);
   padding: 0;
   border: none;
-  border-radius: 3px;
-  background-color: rgb(128 128 128 / 30%);
+  border-radius: 50%;
+  background-color: var(--jp-layout-color1);
+  box-shadow: 0 0 0 1px var(--jp-brand-color1);
   color: var(--jp-ui-font-color0);
-  font-size: 10px;
-  line-height: 20px;
   cursor: pointer;
   opacity: 0;
   pointer-events: auto;
   transition: opacity 0.2s;
 }
 
+.mosaic-frame-run svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mosaic-frame-run svg [fill] {
+  fill: var(--jp-brand-color1);
+}
+
 .mosaic-frame:hover .mosaic-frame-run {
+  opacity: 1;
+}
+
+/* The label, drawn from the button's own attribute: it appears the moment the
+   button does, where a `title` would wait for the browser's pause. */
+.mosaic-frame-run::after {
+  content: attr(data-mosaic-tip);
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background-color: var(--jp-inverse-layout-color1);
+  color: var(--jp-ui-inverse-font-color1);
+  font-size: var(--jp-ui-font-size0);
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.mosaic-frame-run:hover::after {
   opacity: 1;
 }
 
@@ -325,6 +383,98 @@ svg[data-icon='mosaic:add-right'] {
   width: 3px;
 }
 
+/* -- transpose: output beside code ---------------------------------------- */
+
+/*
+ * A control modelled on `jp-OutputArea-promptOverlay`: invisible until hovered,
+ * living in the output's prompt area. It takes a square at the start of that
+ * area and the stock scroll overlay keeps the rest, so the two read as one
+ * square button followed by one long one.
+ *
+ * With handles beside the code the prompt area is a column, so the square goes
+ * on top; with handles above it is a band, so the square goes at the left. The
+ * top-handles case is further down, with the rest of that mode's rules.
+ *
+ * JupyterLab sets the overlay's height inline from a resize observer, so
+ * shortening it has to win over that.
+ */
+.mosaic-Notebook .jp-OutputArea-promptOverlay {
+  top: var(--mosaic-transpose-size);
+  height: calc(100% - var(--mosaic-transpose-size)) !important;
+}
+
+.mosaic-transposeOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--mosaic-transpose-size);
+  height: var(--mosaic-transpose-size);
+  padding: 0;
+  border: none;
+  background: none;
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.mosaic-transposeOverlay:hover {
+  background: var(--jp-layout-color2);
+  box-shadow: inset 0 0 1px var(--jp-inverse-layout-color0);
+}
+
+/* Silent until reached for, exactly as the stock overlay hides its own icon. */
+.mosaic-transposeOverlay span {
+  display: none;
+}
+
+.mosaic-transposeOverlay:hover span {
+  display: flex;
+}
+
+/* The move-cell-up and move-cell-down arrows, a quarter turn short of
+   horizontal: the direction the output is about to go. */
+.mosaic-transposeOverlay svg {
+  width: calc(var(--mosaic-transpose-size) * 0.55);
+  height: calc(var(--mosaic-transpose-size) * 0.55);
+  transform: rotate(45deg);
+}
+
+.mosaic-transposeOverlay svg [fill] {
+  fill: var(--jp-inverse-layout-color3);
+}
+
+/* With no output there is nothing to move, and the output area has no height:
+   the button would hang below the cell as a dead square over its neighbour. */
+.mosaic-Notebook .jp-Cell.jp-mod-noOutputs .mosaic-transposeOverlay {
+  display: none;
+}
+
+/* The transposed cell itself: input half and output half side by side, both
+   starting at the top so the two prompts sit level. */
+.mosaic-Notebook .jp-Cell.mosaic-transposed {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.mosaic-Notebook .jp-Cell.mosaic-transposed > .jp-Cell-inputWrapper,
+.mosaic-Notebook .jp-Cell.mosaic-transposed > .jp-Cell-outputWrapper {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+
+/* A cell's header, footer and resize handle are siblings of the two halves and
+   carry `width: 100%`, which as flex items made them claim a share of the row
+   -- half the cell went to two things that draw nothing. */
+.mosaic-Notebook
+  .jp-Cell.mosaic-transposed
+  > :not(.jp-Cell-inputWrapper, .jp-Cell-outputWrapper) {
+  flex: 0 0 0;
+  width: 0;
+}
+
 /* -- flat vs floating presentation (the style dropdown) ------------------- */
 
 .mosaic-skeuomorphic .mosaic-Notebook {
@@ -355,9 +505,17 @@ div .mosaic-Notebook .jp-WindowedPanel-viewport {
 
 /* * puts cell handles (In [*]:) and output labels (Out [*]:) on the left */
 .mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-promptOverlay {
-  width: 100%;
-  height: 100%;
+  /* The prompt area is a band here, so the transpose square sits at its left
+     and the scroll overlay takes the rest of the row. */
+  top: 0;
+  left: var(--mosaic-transpose-size);
+  width: calc(100% - var(--mosaic-transpose-size));
+  height: 100% !important;
   max-height: 2.8rem !important;
+}
+
+.mosaic-top-cell-handles .mosaic-Notebook {
+  --mosaic-transpose-size: 2.8rem;
 }
 .mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-promptOverlay {
   text-align: left;
@@ -372,6 +530,17 @@ div .mosaic-Notebook .jp-WindowedPanel-viewport {
  */
 .mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-child {
   max-width: 100% !important;
+
+  /* The output prompt sits above its output, as the input prompt sits above
+     the code. */
+  flex-direction: column;
+}
+
+/* And is styled the same way as the input prompt is in this mode: no fixed
+   column width, text starting at the left. */
+.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputPrompt {
+  flex: 0 0 auto;
+  text-align: left;
 }
 .mosaic-top-cell-handles .mosaic-Notebook .prompt_container > .jp-InputPrompt {
   text-align: left;
@@ -386,6 +555,37 @@ div .mosaic-Notebook .jp-WindowedPanel-viewport {
   flex: 0 0 auto;
   z-index: 2;
 }
+
+/* The heading collapse caret lives inside the input prompt, anchored to its
+   right edge and clipped to it. With handles above, that prompt is a band the
+   full width of the cell and about ten pixels tall, so `right: 0` threw the
+   caret out to the far edge and `overflow: hidden` cut off what was left of it.
+   Anchor it to the left of the band instead and let it out of the box -- half a
+   rem in, to clear the run button now sitting on the group's corner. */
+.mosaic-top-cell-handles .mosaic-Notebook .jp-MarkdownCell .jp-InputPrompt,
+.mosaic-top-cell-handles .mosaic-Notebook .jp-MarkdownCell .jp-InputArea {
+  overflow: visible;
+
+  /* The band has to be as tall as the caret it now holds. */
+  min-height: 25px;
+}
+
+.mosaic-top-cell-handles .mosaic-Notebook .jp-collapseHeadingButton {
+  right: auto;
+  bottom: auto;
+  left: 0;
+  /* Tall enough for the caret at the size a plain notebook draws it. */
+  height: 25px;
+  margin-left: 0.5rem;
+
+  /* Upstream stretches this button down the full-height prompt column and then
+     pushes the caret 0.3 heading-widths down it, to sit level with the heading
+     text. Here the prompt is a short band above the heading, so that offset put
+     all but a sliver of the caret below the box: centre it instead. */
+  background-position-y: center;
+  background-size: 25px;
+}
+
 .mosaic-top-cell-handles .mosaic-Notebook .jp-InputArea-editor {
   margin-left: 5px; /* spacing between collapser and editor */
 }

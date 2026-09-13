@@ -139,6 +139,12 @@ export interface ISolution {
   /** Seams between adjacent sibling groups. */
   gutters: IGutter[];
   /**
+   * Total height the notebook's content wants, in px, when {@link solve} was
+   * given cell heights. The row cuts are placed in proportion to those heights,
+   * so each track's share of this is exactly the height it needs.
+   */
+  contentHeight?: number;
+  /**
    * True for the degenerate single-column layout produced by
    * {@link linearSolution}, which the grid falls back to when the panel is too
    * narrow to hold the real one. Consumers use it to drop two-dimensional
@@ -178,6 +184,11 @@ export function linearSolution(count: number): ISolution {
     gutters: [],
     collapsed: true
   };
+}
+
+/** Cut positions are rounded here, so jitter cannot multiply the track list. */
+function round(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
 }
 
 /** The axis a group at the given depth divides along. Root (depth 0) is a column. */
@@ -336,7 +347,34 @@ function totalWeight(children: MosaicNode[]): number {
  * contributes no cuts, so the group always collapses to a single track on each
  * axis and its interior is positioned by {@link MosaicGrid} instead.
  */
-export function solve(root: IGroupNode): ISolution {
+export function solve(
+  root: IGroupNode,
+  cellHeight?: (index: number) => number
+): ISolution {
+  /**
+   * The height a node wants, in px, from the heights its cells measured.
+   *
+   * Used to place the *cuts* of a column, not to size tracks afterwards. Two
+   * columns side by side each cut their own share of the band, so a column of
+   * 100 + 20 cuts at 5/6 while its neighbour's 20 + 100 cuts at 1/6: three
+   * distinct lines, three tracks of 20 / 80 / 20, and each cell spanning
+   * exactly what it needs. Cutting both at the half -- which is what equal
+   * weights do -- collapses them onto one line, and the band is then forced to
+   * twice the taller cell whatever the track sizer does afterwards.
+   */
+  const naturalHeight = (node: MosaicNode): number => {
+    if (node.kind === 'cell') {
+      return Math.max(cellHeight!(node.index), 1);
+    }
+    if (node.mode !== 'flow') {
+      return Math.max(node.size, 1);
+    }
+    if (node.axis === 'col') {
+      return node.children.reduce((sum, c) => sum + naturalHeight(c), 0);
+    }
+    return node.children.reduce((max, c) => Math.max(max, naturalHeight(c)), 0);
+  };
+
   const xs = new Set<number>([0, 1]);
   const ys = new Set<number>([0, 1]);
 
@@ -411,13 +449,34 @@ export function solve(root: IGroupNode): ISolution {
       });
     }
 
-    const total = totalWeight(node.children);
+    // Down a column the children divide by the height their content needs;
+    // across a row they divide by weight. Heights are only available once
+    // something has measured them, so the first pass -- and the pure-model
+    // tests -- fall back to weights.
+    const heights =
+      cellHeight && node.axis === 'col'
+        ? node.children.map(naturalHeight)
+        : null;
+    const total = heights
+      ? heights.reduce((sum, h) => sum + h, 0) || 1
+      : totalWeight(node.children);
+
     let offset = 0;
     for (let i = 0; i < node.children.length; i++) {
       const child = node.children[i];
-      const share = (child.weight > 0 ? child.weight : 1) / total;
+      const share = heights
+        ? heights[i] / total
+        : (child.weight > 0 ? child.weight : 1) / total;
       const from = offset;
-      const to = offset + share;
+      // A height-driven cut is rounded, so a pixel of measurement jitter cannot
+      // split one line into two and churn the track list on every pass; the
+      // last lands exactly on the parent's edge. Weight-driven cuts keep their
+      // original arithmetic, so edges shared with a sibling stay bit-identical.
+      const to = heights
+        ? i === node.children.length - 1
+          ? 1
+          : round(offset + share)
+        : offset + share;
       offset = to;
 
       if (node.axis === 'col') {
@@ -551,6 +610,7 @@ export function solve(root: IGroupNode): ISolution {
   return {
     colTracks: columns.tracks,
     rowTracks: rows.tracks,
+    contentHeight: cellHeight ? naturalHeight(root) : undefined,
     rowMinPx,
     placements,
     managed,
@@ -681,6 +741,18 @@ export function rowFloors(
 ): number[] {
   const gap = metrics.gap ?? 0;
   const floors = solution.rowMinPx.slice();
+
+  // When the cuts were placed from measured heights, each track's share of the
+  // document is already the height it needs -- read it straight off rather than
+  // reconstructing it from the cells. The reconstruction below has to follow
+  // CSS Grid's rule of spreading a spanning cell's shortfall equally, which
+  // cannot see that a track is already pinned by a shorter neighbour: a row of
+  // [100, 20] beside [20, 100] comes out 160 tall that way, and 120 this way.
+  if (solution.contentHeight !== undefined) {
+    return solution.rowTracks.map((track, t) =>
+      Math.max(floors[t] ?? 0, track.weight * solution.contentHeight!)
+    );
+  }
 
   const items: { height: number; placement: IPlacement; spanned: number[] }[] =
     [];

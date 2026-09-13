@@ -15,6 +15,8 @@
  * that straddle each edge.
  */
 
+import { fastForwardIcon } from '@jupyterlab/ui-components';
+
 import {
   IGroupNode,
   IGutter,
@@ -358,6 +360,34 @@ export class MosaicGrid {
   >();
 
   /**
+   * Re-measure every cell's content height, and subscribe to any cell that has
+   * appeared since the last pass.
+   *
+   * Separate from {@link update}, and called *before* the tree is solved, since
+   * the solve places its row cuts from these heights: measuring afterwards left
+   * the cuts a pass behind whatever had just changed shape. The visible symptom
+   * was blank space under a cell whose output had just moved beside its code,
+   * which only closed up when some later event -- scrolling far enough to move
+   * the render window -- forced another pass.
+   *
+   * @returns whether any height moved.
+   */
+  measure(): boolean {
+    let changed = false;
+    const count = this.host.cellCount();
+    for (let index = 0; index < count; index++) {
+      const node = this.host.cellNode(index);
+      if (node) {
+        this._observe(node);
+        if (this._refreshHeight(node)) {
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  }
+
+  /**
    * Lay the notebook out. Runs in two phases because the interior of a managed
    * group needs the group's resolved pixel box, which only exists once the grid
    * has been sized.
@@ -367,17 +397,6 @@ export class MosaicGrid {
     this._version++;
 
     const count = this.host.cellCount();
-
-    // -- phase 0: measure ---------------------------------------------------
-    // Content heights first, so this pass's track floors are computed from
-    // current measurements rather than the previous pass's.
-    for (let index = 0; index < count; index++) {
-      const node = this.host.cellNode(index);
-      if (node) {
-        this._observe(node);
-        this._refreshHeight(node);
-      }
-    }
 
     // -- phase 1: tracks and flow placement --------------------------------
     // Every track shares the space by weight; seams take none of their own.
@@ -534,6 +553,13 @@ export class MosaicGrid {
    * stretched the cell box. Returns 0 for a placeholder with no children yet.
    */
   private _measureContent(el: HTMLElement): number {
+    const style = getComputedStyle(el);
+    // A transposed cell lays its halves out in a row, where the height it needs
+    // is the taller of the two, not their sum. Summing left a transposed cell
+    // reserving the height of both halves, with the difference blank below it.
+    const side =
+      style.display.endsWith('flex') && style.flexDirection.startsWith('row');
+
     let total = 0;
     for (const child of Array.from(el.children) as HTMLElement[]) {
       // Only in-flow children contribute: an absolutely positioned overlay is
@@ -542,12 +568,13 @@ export class MosaicGrid {
       if (position === 'absolute' || position === 'fixed') {
         continue;
       }
-      total += child.offsetHeight;
+      total = side
+        ? Math.max(total, child.offsetHeight)
+        : total + child.offsetHeight;
     }
     if (total === 0) {
       return 0;
     }
-    const style = getComputedStyle(el);
     return (
       total +
       (parseFloat(style.paddingTop) || 0) +
@@ -566,15 +593,30 @@ export class MosaicGrid {
     ) {
       return false; // keep the last good measurement while culled
     }
-    const height = this._measureContent(el);
-    if (height <= 0) {
-      return false;
+    // A collapsed heading folds the cells beneath it away with Lumino's hidden
+    // class. That is a real height of zero, not a measurement we failed to
+    // take, so it has to be recorded -- keeping the last good one left the row
+    // as tall as content nobody can see any more.
+    const folded = el.classList.contains('lm-mod-hidden');
+    const height = folded ? 0 : this._measureContent(el);
+    if (!folded && height <= 0) {
+      return false; // a placeholder with nothing in it yet
     }
     if (Math.abs((this._heights.get(el) ?? -1) - height) <= 0.5) {
       return false;
     }
     this._heights.set(el, height);
     return true;
+  }
+
+  /**
+   * Last measured content height of a cell, else the notebook's estimate.
+   *
+   * Public because {@link solve} needs it too: a column's cuts are placed from
+   * the heights its cells actually want.
+   */
+  cellHeight(index: number): number {
+    return this._cellHeight(index);
   }
 
   /** Last measured content height of a cell, else the notebook's estimate. */
@@ -1062,8 +1104,12 @@ export class MosaicGrid {
 
     const run = document.createElement('button');
     run.className = 'mosaic-frame-run';
-    run.title = 'Run all cells in this group';
-    run.textContent = '▶';
+    // Not `title`: the native tooltip only appears after a pause, and this
+    // button is only visible while the pointer is already on the frame. The
+    // stylesheet draws the label from this attribute instead, with no delay and
+    // no element of its own.
+    run.dataset.mosaicTip = 'Execute Entire Subdivision';
+    run.appendChild(fastForwardIcon.element({ tag: 'span' }));
     run.onclick = () => this.host.runGroup(node);
     frame.appendChild(run);
 
