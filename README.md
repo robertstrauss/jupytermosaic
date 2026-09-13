@@ -25,20 +25,20 @@ Drag-and-drop cells or use `a`, `s`, `f`, and `b` in command mode to subdivide, 
 
 [Backwards Compatable](#backwards-compatable-still-just-a-notebook)! Notebooks still use the same file type and are completely usable without Mosaic; opened with vanilla Jupyter, the layout will be linear but execution will still flow the same way.
 
-# Heads-up Visual Interface
+# Uses of the Interface
 
 
 ## Parallel experiments in two columns.
 
 Align your similarly structured experiment sequences and see the corresponding steps in line with each other.
 
-![Two-column experiment layout](gallery/experiment_2_columns.png)
+![Two-column experiment layout](https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/experiment_2_columns.png)
 
 ## Structured, intuitive notebooks.
 
 A really good notebook uses markdown documentation and latex to give an exact breakdown of what the code does, rather than leaving it up to a reader to decipher your esoteric functions. Plus, 
 
-<img alt="Example LaTeX+Code Layout" src="gallery/tiled_markdown_corner.png"/>
+<img alt="Example LaTeX+Code Layout" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/tiled_markdown_corner.png"/>
 
 
 
@@ -47,7 +47,7 @@ A really good notebook uses markdown documentation and latex to give an exact br
 
 Drag and drop plots together rather than use `plt.subplots`. Faster, more intuitive, easily rearrangable, and self-documenting by showinge exactly what commands make which mosaic 'subplot'.
 
-![Mosaic row of plots](gallery/plot_row.png)
+![Mosaic row of plots](https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/plot_row.png)
 
 
 ## Create self-documenting research or tutorial notebooks.
@@ -55,7 +55,7 @@ Drag and drop plots together rather than use `plt.subplots`. Faster, more intuit
 Tile theoretical explanations in line with code, walking through concepts while implementing them right there.
 
 
-<img alt="Monte Carlo Theory+Code Example" src="gallery/markdown_col_plots.png"/>
+<img alt="Monte Carlo Theory+Code Example" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/markdown_col_plots.png"/>
 
 
 
@@ -63,14 +63,14 @@ Tile theoretical explanations in line with code, walking through concepts while 
 
 Use notebooks as interactive tools rather than scripts, now with a real layout instead of a long linear document.
 
-<img alt="Example Layout" src="gallery/example-front.png"/>
+<img alt="Example Layout" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/example-front.png"/>
 
 
 ## Present your results compactly in video confrences.
 
 Show relevant tables and plots together alongside generating code, without fussing with graphics tools or losing your audience by scrolling back and forth.
 
-<img alt="Example Table+Plot Layout" src="gallery/tiled_dataframes.png"/>
+<img alt="Example Table+Plot Layout" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/tiled_dataframes.png"/>
 
 
 
@@ -78,14 +78,14 @@ Show relevant tables and plots together alongside generating code, without fussi
 
 Mosaic also adds a button to move cell output to the right of code, a popular format for interactive development.
 
-<img alt="Plot below code" src="gallery/output_below_plot.png" width="45%"/>
- --> <img alt="Plot beside code" src="gallery/output_beside_plot.png" width="45%"/>
+<img alt="Plot below code" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/output_below_plot.png" width="45%"/>
+ --> <img alt="Plot beside code" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/output_beside_plot.png" width="45%"/>
 
 -----
-<img alt="Table below code" src="gallery/output_below_table.png" width="45%"/>
- --> <img alt="Table beside code" src="gallery/output_besides_table.png" width="45%"/>
+<img alt="Table below code" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/output_below_table.png" width="45%"/>
+ --> <img alt="Table beside code" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/output_besides_table.png" width="45%"/>
 
-<!-- <img alt="Two plots beside code cells" src="gallery/two_output_beside_plot.png"/> -->
+<!-- <img alt="Two plots beside code cells" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/two_output_beside_plot.png"/> -->
 
 
 # No Whitespace, No Waste.
@@ -100,8 +100,8 @@ You can even synchronously collaborate with non-Mosaic users and edit the same n
 
 You can double-check how non-Mosaic users will see your notebook by right-clicing the file and selecting `Open With` > `Notebook`
 
-<img alt="Open With context menu" src="gallery/open_with_notebook.png"/>
-<img alt="Side-by-side mosaic and normal notebooks" src="gallery/mosaic_vs_normal_together.png"/>
+<img alt="Open With context menu" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/open_with_notebook.png"/>
+<img alt="Side-by-side mosaic and normal notebooks" src="https://raw.githubusercontent.com/robertstrauss/jupytermosaic/main/gallery/mosaic_vs_normal_together.png"/>
 
 ## Grid Structure and Execution Order (how is it linearized?)
 The mosaic notebook is divided into rows, each of which may contain multiple cells and columns, which may be again divided into rows recursively, and so on and so on.

@@ -34,7 +34,28 @@ fields = ["description", "authors", "urls", "keywords"]
 
 [tool.hatch.build.targets.sdist]
 artifacts = ["mosaic/labextension"]
-exclude = [".github", "binder"]
+# Screenshots and demo notebooks are for the repository, not the package: they
+# were 12 of a 14 MB sdist. The README's images point at GitHub directly.
+exclude = [
+    ".github",
+    "binder",
+    "gallery",
+    "screenshots",
+    "*.ipynb",
+    ".ipynb_checkpoints",
+    "test-results",
+    "ui-tests",
+    "coverage",
+    "dockpanel",
+    "LEGACY_MOSAIC_NOTEBOOK",
+    "junit.xml",
+]
+
+# The distribution is `jupyter-mosaic` but the import package is still
+# `mosaic`. Hatch infers the package from the distribution name, so after the
+# rename it found nothing and built a wheel with no code in it.
+[tool.hatch.build.targets.wheel]
+packages = ["mosaic"]
 
 [tool.hatch.build.targets.wheel.shared-data]
 "mosaic/labextension" = "share/jupyter/labextensions/mosaic"
