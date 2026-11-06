@@ -27,6 +27,10 @@
   /* Side of the square transpose button, which shares the output's prompt
      column with JupyterLab's own scroll overlay. */
   --mosaic-transpose-size: var(--jp-cell-prompt-width);
+
+  /* Its height: a full square where the output has room, and half the column
+     where it does not, so a one-line output still has both controls. */
+  --mosaic-transpose-height: min(var(--mosaic-transpose-size), 50%);
   --cell-margin: 0;
 }
 
@@ -395,24 +399,38 @@ svg[data-icon='mosaic:add-right'] {
  * on top; with handles above it is a band, so the square goes at the left. The
  * top-handles case is further down, with the rest of that mode's rules.
  *
+ * Both are children of the output area, which is the scroller once output
+ * scrolling is on, and a positioned scroller would carry them away with its
+ * content -- leaving nothing to click to turn scrolling off. With the area left
+ * static they resolve against the output wrapper, which does not scroll. Their
+ * offsets therefore start from the wrapper's edge, past the collapser; that
+ * also lands them where JupyterLab's own -5px does against the scrolled area's
+ * 5px margin, so they do not shift when scrolling toggles.
+ *
  * JupyterLab sets the overlay's height inline from a resize observer, so
  * shortening it has to win over that.
  */
-.mosaic-Notebook .jp-OutputArea-promptOverlay {
-  top: var(--mosaic-transpose-size);
-  height: calc(100% - var(--mosaic-transpose-size)) !important;
+.mosaic-Notebook .jp-Cell-outputArea {
+  position: static;
+}
+
+/* Makes sure the output is clickable. On the wrapper because the output area
+   is static, where a z-index does nothing. */
+.mosaic-Notebook .jp-Cell-outputWrapper {
+  z-index: 2;
 }
 
 .mosaic-transposeOverlay {
   position: absolute;
   top: 0;
-  left: 0;
+  left: var(--jp-cell-collapser-width);
   display: flex;
   align-items: center;
   justify-content: center;
   width: var(--mosaic-transpose-size);
-  height: var(--mosaic-transpose-size);
+  height: var(--mosaic-transpose-height);
   padding: 0;
+  overflow: hidden;
   border: none;
   background: none;
   opacity: 0.5;
@@ -431,6 +449,8 @@ svg[data-icon='mosaic:add-right'] {
 
 .mosaic-transposeOverlay:hover span {
   display: flex;
+  align-items: center;
+  height: 100%;
 }
 
 /* The move-cell-up and move-cell-down arrows, a quarter turn short of
@@ -438,11 +458,25 @@ svg[data-icon='mosaic:add-right'] {
 .mosaic-transposeOverlay svg {
   width: calc(var(--mosaic-transpose-size) * 0.55);
   height: calc(var(--mosaic-transpose-size) * 0.55);
+  max-height: 100%;
   transform: rotate(45deg);
 }
 
 .mosaic-transposeOverlay svg [fill] {
   fill: var(--jp-inverse-layout-color3);
+}
+
+/* A press that began elsewhere is a text selection on its way somewhere, and
+   must pass through the controls rather than end on them. See transpose.ts. */
+.mosaic-press-outside .mosaic-Notebook .jp-OutputArea-promptOverlay,
+.mosaic-press-outside .mosaic-Notebook .mosaic-transposeOverlay {
+  pointer-events: none;
+}
+
+.mosaic-Notebook .jp-Cell.jp-CodeCell .jp-OutputArea-promptOverlay {
+  top: var(--mosaic-transpose-height);
+  left: var(--jp-cell-collapser-width);
+  height: calc(100% - var(--mosaic-transpose-height)) !important;
 }
 
 /* With no output there is nothing to move, and the output area has no height:
@@ -503,29 +537,42 @@ div .mosaic-Notebook .jp-WindowedPanel-viewport {
   padding: var(--mosaic-edge-padding);
 }
 
-/* Makes sure the output is clickable. Ahead of the top-handles rules below,
-   which are more specific and touch the same element. */
-.mosaic-Notebook .jp-OutputArea {
-  z-index: 2 !important;
-}
-
 /* -- cell handles above the code (the setting) ---------------------------- */
 
 /* Puts cell handles (In [*]:) and output labels (Out [*]:) on top rather than
    beside, so a narrow tile spends none of its width on a prompt column. */
 .mosaic-top-cell-handles .mosaic-Notebook {
   --mosaic-transpose-size: 2.8rem;
+
+  /* A band has the room across it, so the square need not give way to the
+     overlay -- only stay inside a short output. */
+  --mosaic-transpose-height: min(var(--mosaic-transpose-size), 100%);
 }
 
 /* The prompt area is a band here, so the transpose square sits at its left
    and the scroll overlay takes the rest of the row. */
-.mosaic-top-cell-handles .mosaic-Notebook .jp-OutputArea-promptOverlay {
+.mosaic-top-cell-handles
+  .mosaic-Notebook
+  .jp-Cell.jp-CodeCell
+  .jp-OutputArea-promptOverlay {
   top: 0;
-  left: var(--mosaic-transpose-size);
-  width: calc(100% - var(--mosaic-transpose-size));
+  left: calc(var(--jp-cell-collapser-width) + var(--mosaic-transpose-size));
+  width: calc(
+    100% - var(--jp-cell-collapser-width) - var(--mosaic-transpose-size)
+  );
   height: 100% !important;
   max-height: 2.8rem !important;
   text-align: left;
+}
+
+/* The band no longer scrolls, so it would sit on the scrollbar's top end. */
+.mosaic-top-cell-handles
+  .mosaic-Notebook
+  .jp-Cell.jp-CodeCell.jp-mod-outputsScrolled
+  .jp-OutputArea-promptOverlay {
+  width: calc(
+    100% - var(--jp-cell-collapser-width) - var(--mosaic-transpose-size) - 16px
+  );
 }
 
 .mosaic-top-cell-handles .mosaic-Notebook .jp-Cell .jp-InputArea,

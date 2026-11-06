@@ -22,6 +22,8 @@ export const TRANSPOSE_KEY = 'mosaic_transposed';
 
 const BUTTON_CLASS = 'mosaic-transposeOverlay';
 const CELL_CLASS = 'mosaic-transposed';
+const PRESS_OUTSIDE_CLASS = 'mosaic-press-outside';
+const OUTPUT_CONTROLS = `.jp-OutputArea-promptOverlay, .${BUTTON_CLASS}`;
 
 export function isTransposed(cell: Cell): boolean {
   return cell.model.getMetadata(TRANSPOSE_KEY) === true;
@@ -70,4 +72,32 @@ export function applyTranspose(cell: Cell): void {
     button.dataset.mosaicIcon = icon.name;
     button.replaceChildren(icon.element({ tag: 'span' }));
   }
+}
+
+/**
+ * Let a press that began off the output's controls pass through them.
+ *
+ * They overlie the output, and a text selection dragged onto one ends there
+ * with nothing selected. So they only answer a press that started on them: from
+ * any other press until its release, a body class turns their pointer events
+ * off. Call once.
+ */
+export function letSelectionsPassOutputControls(): void {
+  const release = () => document.body.classList.remove(PRESS_OUTSIDE_CLASS);
+
+  window.addEventListener(
+    'pointerdown',
+    event => {
+      const onControl =
+        event.target instanceof Element &&
+        event.target.closest(OUTPUT_CONTROLS) !== null;
+      document.body.classList.toggle(PRESS_OUTSIDE_CLASS, !onControl);
+    },
+    // Capturing, so that nothing in the page can stop these from arriving.
+    true
+  );
+  window.addEventListener('pointerup', release, true);
+  window.addEventListener('pointercancel', release, true);
+  // A release outside the window may never be reported.
+  window.addEventListener('blur', release);
 }

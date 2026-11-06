@@ -24,6 +24,7 @@ import {
   mosaicOf,
   mosaicOptions
 } from './MosaicNotebook';
+import { letSelectionsPassOutputControls } from './transpose';
 import {
   Notebook as NotebookWidget,
   NotebookActions
@@ -124,6 +125,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
   ) => {
     // The UI smoke test in ui-tests/ listens for exactly this line.
     console.log('JupyterLab extension mosaic is activated!');
+    letSelectionsPassOutputControls();
 
     const loaded = await settings.load(PLUGIN_ID);
     applySettings(loaded.composite, tracker);

@@ -1,6 +1,6 @@
 {
   "name": "mosaic",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A tiling window manager like subdividable layout for jupyter labs and notebooks. Create dashboards, side-by-side comparisons, presentable code, and user interfaces as a 2d jupyter notebook.",
   "keywords": [
     "jupyter",
@@ -100,7 +100,7 @@
     "outputDir": "mosaic/labextension",
     "schemaDir": "schema",
     "_build": {
-      "load": "static/remoteEntry.0bd74be73b9ffb0a35e3.js",
+      "load": "static/remoteEntry.42dffddb3cc3da1ed57e.js",
       "extension": "./extension",
       "style": "./style"
     }
