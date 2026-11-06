@@ -61,7 +61,9 @@ jobs:
 
   test_isolated:
     needs: build
-    runs-on: ubuntu-latest
+    # Pinned: this job tests the oldest Python the package supports, and
+    # setup-python has no 3.9 build for the Ubuntu that ubuntu-latest now means.
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Install Python
@@ -154,3 +156,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
       - uses: jupyterlab/maintainer-tools/.github/actions/check-links@v1
+        with:
+          # The license is standard text, and its links are not ours to fix.
+          ignore_glob: LICENSE.md
+          # Answers automated requests with a 403 whether or not the page exists.
+          ignore_links: https://medium\.com/.*
