@@ -575,6 +575,13 @@ export class MosaicNotebook implements IGridHost {
    */
   private _installScrollReroute(): void {
     const notebook = this.notebook as any;
+    // The most recently run cell, so the scroll that follows a run-and-advance
+    // knows what it is advancing from. Run-and-advance schedules the cell, then
+    // moves the active cell on and scrolls to it.
+    NotebookActions.executionScheduled.connect(
+      this._onExecutionScheduled,
+      this
+    );
     notebook.scrollToItem = async (index: number): Promise<void> => {
       // Wait for the layout to catch up first. Running a cell grows its output
       // and so its row, and scrolling against the pre-execution geometry aimed
@@ -587,7 +594,7 @@ export class MosaicNotebook implements IGridHost {
       }
 
       const outer = this.notebook.outerNode;
-      const target = this.grid.revealCell(
+      let target = this.grid.revealCell(
         index,
         outer.scrollTop,
         outer.clientHeight
@@ -595,6 +602,27 @@ export class MosaicNotebook implements IGridHost {
       if (target === null) {
         return;
       }
+
+      // Moving on from a cell that was just run: show its output from the top
+      // rather than scroll the output off the page to reach the next cell.
+      // Kept until the next run, not consumed here: changing the active cell
+      // and the run itself each ask for a scroll, and both must agree.
+      const ran = this._lastRun;
+      const previous = this.notebook.widgets[index - 1];
+      if (ran && previous === ran && target > outer.scrollTop) {
+        const output = ran.node.querySelector('.jp-Cell-outputWrapper');
+        if (output && ran.node.isConnected) {
+          const outputTop =
+            outer.scrollTop +
+            output.getBoundingClientRect().top -
+            outer.getBoundingClientRect().top;
+          // Unless the reader has already scrolled past it.
+          if (outputTop >= outer.scrollTop) {
+            target = Math.min(target, outputTop);
+          }
+        }
+      }
+
       const furthest = Math.max(0, outer.scrollHeight - outer.clientHeight);
       outer.scrollTo({
         top: Math.min(Math.max(0, target), furthest),
@@ -681,11 +709,26 @@ export class MosaicNotebook implements IGridHost {
     }
   }
 
+  private _lastRun: Cell | null = null;
+
+  private _onExecutionScheduled(
+    _: unknown,
+    args: { notebook: Notebook; cell: Cell }
+  ): void {
+    if (args.notebook === this.notebook) {
+      this._lastRun = args.cell;
+    }
+  }
+
   dispose(): void {
     if (this._disposed) {
       return;
     }
     this._disposed = true;
+    NotebookActions.executionScheduled.disconnect(
+      this._onExecutionScheduled,
+      this
+    );
     if (this._frame !== null) {
       cancelAnimationFrame(this._frame);
     }

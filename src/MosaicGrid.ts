@@ -348,7 +348,9 @@ export class MosaicGrid {
       return top;
     }
     if (bottom > viewTop + viewHeight) {
-      return Math.max(0, bottom - viewHeight);
+      // Bring the bottom into view, but never past the top: a cell taller than
+      // the viewport is shown from its start.
+      return Math.max(0, Math.min(bottom - viewHeight, top));
     }
     return null;
   }
