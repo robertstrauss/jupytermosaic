@@ -15,7 +15,12 @@
  */
 
 import { Cell } from '@jupyterlab/cells';
-import { moveDownIcon, moveUpIcon } from '@jupyterlab/ui-components';
+import {
+  collapseIcon,
+  expandIcon,
+  moveDownIcon,
+  moveUpIcon
+} from '@jupyterlab/ui-components';
 
 /** Cell metadata key: true when the output sits beside the code. */
 export const TRANSPOSE_KEY = 'mosaic_transposed';
@@ -100,4 +105,44 @@ export function letSelectionsPassOutputControls(): void {
   window.addEventListener('pointercancel', release, true);
   // A release outside the window may never be reported.
   window.addEventListener('blur', release);
+}
+
+/**
+ * Draw the stock overlay's expand/collapse icon when the overlay is hovered,
+ * if JupyterLab has not drawn it.
+ *
+ * JupyterLab draws that icon only when scrolling is toggled or the output first
+ * renders, and leaves it out if the overlay is no taller than the icon at that
+ * moment. In a notebook opened with its outputs already in place the overlay has
+ * no height yet, so the icon never appeared until the first click. JupyterLab's
+ * CSS shows the icon only on hover, so drawing it then is never late. It is the
+ * same icon JupyterLab would draw, which its own later updates recognise and
+ * replace. Call once.
+ */
+export function drawOverlayIconsOnHover(): void {
+  // JupyterLab's own threshold: a 16px icon plus 4px padding each side.
+  const ICON_HEIGHT = 24;
+
+  document.addEventListener(
+    'pointerover',
+    event => {
+      const overlay =
+        event.target instanceof Element &&
+        event.target.closest('.jp-OutputArea-promptOverlay');
+      if (
+        !(overlay instanceof HTMLElement) ||
+        overlay.firstElementChild ||
+        overlay.clientHeight <= ICON_HEIGHT
+      ) {
+        return;
+      }
+      const scrolled =
+        overlay
+          .closest('.jp-CodeCell')
+          ?.classList.contains('jp-mod-outputsScrolled') ?? false;
+      (scrolled ? expandIcon : collapseIcon).element({ container: overlay });
+      overlay.title = scrolled ? 'Expand Output' : 'Collapse Output';
+    },
+    true
+  );
 }

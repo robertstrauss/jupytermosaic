@@ -473,7 +473,12 @@ svg[data-icon='mosaic:add-right'] {
   pointer-events: none;
 }
 
+/* Absolute against the output wrapper, which does not scroll. JupyterLab 4.6
+   makes a scrolled cell's overlay `fixed` and anchors it to the output area;
+   that is undone here, since Mosaic places it itself. */
 .mosaic-Notebook .jp-Cell.jp-CodeCell .jp-OutputArea-promptOverlay {
+  position: absolute;
+  bottom: auto;
   top: var(--mosaic-transpose-height);
   left: var(--jp-cell-collapser-width);
   height: calc(100% - var(--mosaic-transpose-height)) !important;
