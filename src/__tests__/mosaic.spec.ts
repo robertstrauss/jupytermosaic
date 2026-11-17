@@ -130,6 +130,17 @@ describe('solve', () => {
     expect(s.gutters.some(g => g.between)).toBe(true);
   });
 
+  it('gives cells folded under a collapsed heading no row', () => {
+    // Cells 1-3 and the last are folded away (height 0). Each used to keep a
+    // 1px track, and with it a row gap: blank space as long as the section.
+    const heights = [50, 0, 0, 0, 80, 0];
+    const s = solve(tree([[], [], [], [], [], []]), i => heights[i]);
+    expect(s.rowTracks).toHaveLength(2);
+    expect([...s.placements.keys()]).toEqual([0, 4]);
+    expect(s.placements.get(0)).toMatchObject({ rowStart: 1, rowEnd: 2 });
+    expect(s.placements.get(4)).toMatchObject({ rowStart: 2, rowEnd: 3 });
+  });
+
   it('gives column weights that sum to one', () => {
     const s = solve(tree([['a'], ['a'], ['a']]));
     const total = weightsOf(s).reduce((a, b) => a + b, 0);

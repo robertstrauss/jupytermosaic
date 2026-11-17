@@ -364,7 +364,10 @@ export function solve(
    */
   const naturalHeight = (node: MosaicNode): number => {
     if (node.kind === 'cell') {
-      return Math.max(cellHeight!(node.index), 1);
+      // Zero only for a cell folded under a collapsed heading, which must take
+      // no share of the column at all -- see the cut loop below.
+      const height = cellHeight!(node.index);
+      return height <= 0 ? 0 : Math.max(height, 1);
     }
     if (node.mode !== 'flow') {
       return Math.max(node.size, 1);
@@ -461,6 +464,18 @@ export function solve(
       ? heights.reduce((sum, h) => sum + h, 0) || 1
       : totalWeight(node.children);
 
+    // Children folded under a collapsed heading measure zero. They get no
+    // extent -- both edges on the line their neighbour already ends at -- so
+    // they add no track, and no row gap either: a 1px track each still cost a
+    // gap apiece, opening a blank as long as the folded section under the
+    // heading. The last child with any height is the one that meets the edge.
+    let lastSized = node.children.length - 1;
+    if (heights) {
+      while (lastSized > 0 && heights[lastSized] <= 0) {
+        lastSized--;
+      }
+    }
+
     let offset = 0;
     for (let i = 0; i < node.children.length; i++) {
       const child = node.children[i];
@@ -473,9 +488,11 @@ export function solve(
       // last lands exactly on the parent's edge. Weight-driven cuts keep their
       // original arithmetic, so edges shared with a sibling stay bit-identical.
       const to = heights
-        ? i === node.children.length - 1
-          ? 1
-          : round(offset + share)
+        ? heights[i] <= 0
+          ? offset
+          : i === lastSized
+            ? 1
+            : round(offset + share)
         : offset + share;
       offset = to;
 
@@ -563,7 +580,9 @@ export function solve(
   }
 
   for (const rect of rects) {
-    if (rect.node.kind === 'cell') {
+    // A folded cell has no extent and so no grid area: it is left unplaced,
+    // which parks it, and as it is hidden it occupies nothing.
+    if (rect.node.kind === 'cell' && rect.y1 > rect.y0) {
       placements.set(rect.node.index, place(rect));
     }
   }

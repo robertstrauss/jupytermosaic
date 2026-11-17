@@ -229,7 +229,23 @@ export class MosaicGrid {
         }
       }
     }
-    return start < 0 ? null : [start, stop];
+    if (start < 0) {
+      return null;
+    }
+    // Cells folded under a collapsed heading have no placement, so no band ever
+    // reaches them. Take in those next to the range as well: left unrendered,
+    // a folded run at the end of the notebook would have nothing to show when
+    // its heading is expanded again.
+    const count = this.host.cellCount();
+    const folded = (i: number) =>
+      !solution.placements.has(i) && !solution.managedOwner.has(i);
+    while (start > 0 && folded(start - 1)) {
+      start--;
+    }
+    while (stop < count - 1 && folded(stop + 1)) {
+      stop++;
+    }
+    return [start, stop];
   }
 
   /**

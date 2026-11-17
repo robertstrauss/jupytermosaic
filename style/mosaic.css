@@ -609,6 +609,28 @@ div .mosaic-Notebook .jp-WindowedPanel-viewport {
   z-index: 2;
 }
 
+/* A heading's collapse arrow hangs at the right of the prompt. The prompt is a
+   band across the whole cell here, which put the arrow at the far right, under
+   the cell toolbar. Keep it at the left instead, in the gap above the heading,
+   with the caret centred in a box no taller than that gap needs. */
+.mosaic-top-cell-handles
+  .mosaic-Notebook
+  .jp-MarkdownCell
+  .jp-collapseHeadingButton {
+  left: 0;
+  right: auto;
+  min-height: 0;
+  height: 20px;
+  background-size: 24px;
+  background-position-y: center;
+}
+
+/* The arrow is taller than a markdown cell's band, which would clip it. The
+   band has no text of its own to spill. */
+.mosaic-top-cell-handles .mosaic-Notebook .jp-MarkdownCell .jp-InputPrompt {
+  overflow: visible;
+}
+
 .mosaic-top-cell-handles .mosaic-Notebook .prompt_container > .jp-InputPrompt {
   position: relative;
   width: 100%;
