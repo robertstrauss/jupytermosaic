@@ -1,80 +1,87 @@
-# Making a new release of mosaic
+# Making a new release of jupyter-mosaic
 
-The extension can be published to `PyPI` and `npm` manually or using the [Jupyter Releaser](https://github.com/jupyter-server/jupyter_releaser).
+A release is a tag push. Pushing `vX.Y.Z` runs
+[`publish-pypi.yml`](.github/workflows/publish-pypi.yml), which builds the
+package from that tag, publishes it to [PyPI](https://pypi.org/project/jupyter-mosaic/)
+and creates the GitHub release. `scripts/release.sh` prepares and pushes the tag.
 
-## Manual release
+## Steps
 
-### Python package
+1. Add a section for the new version to [`CHANGELOG.md`](CHANGELOG.md), below
+   the `END NEW CHANGELOG ENTRY` marker and above the previous release:
 
-This extension can be distributed as Python packages. All of the Python
-packaging instructions are in the `pyproject.toml` file to wrap your extension in a
-Python package. Before generating a package, you first need to install some tools:
+   ```markdown
+   ## 2.0.4 (2026-12-01)
+
+   One line on what the release is about.
+
+   **Fixed**
+
+   - ...
+   ```
+
+   Its text becomes the GitHub release notes, with an install line added.
+
+2. On an up-to-date `main`, in the development environment (where `jlpm` is on
+   `PATH`), run:
+
+   ```bash
+   scripts/release.sh 2.0.4
+   ```
+
+   It stops before changing anything unless: you're on `main` and level with
+   `origin/main`, there are no uncommitted changes to the package's files, the
+   tag is new, and `CHANGELOG.md` has the section. Then it
+
+   - sets the version in `package.json`,
+   - rebuilds the committed labextension (`jlpm build:prod`),
+   - runs `jlpm lint:check` and the unit tests,
+   - commits `Release 2.0.4` and tags `v2.0.4`,
+   - asks, then pushes `main` and the tag together (`--yes` skips the question).
+
+   Answering no leaves the commit and tag local; the script prints how to push
+   them later or undo them.
+
+3. Watch the [Publish to PyPI](https://github.com/robertstrauss/jupytermosaic/actions/workflows/publish-pypi.yml)
+   run. It checks that the tag, `package.json` and the committed labextension
+   agree on the version, builds and checks the wheel, publishes to PyPI, then
+   creates the GitHub release with the wheel and sdist attached.
+
+## If something fails
+
+- **The workflow failed before publishing** (version mismatch, missing
+  changelog section, build error): delete the tag with
+  `git push origin :refs/tags/vX.Y.Z` and `git tag -d vX.Y.Z`, fix the problem
+  on `main`, and release again.
+- **It failed after publishing, or the release step failed**: re-run it from the
+  Actions tab, choosing the tag (not a branch) under "Use workflow from". Files
+  already on PyPI are skipped and an existing GitHub release is kept.
+- A version can never be uploaded to PyPI twice, even after deleting it there.
+  If a broken version was published, release the next patch version.
+
+## How publishing is authorised
+
+PyPI [trusted publishing](https://docs.pypi.org/trusted-publishers/): there is
+no API token. PyPI accepts uploads from this repository's `publish-pypi.yml`
+workflow running in the `pypi` environment. Renaming the workflow file or the
+environment breaks publishing until the publisher in the PyPI project settings
+is changed to match.
+
+## Building locally
+
+To build the sdist and wheel without publishing:
 
 ```bash
-pip install build twine hatch
-```
-
-Bump the version using `hatch`. By default this will create a tag.
-See the docs on [hatch-nodejs-version](https://github.com/agoose77/hatch-nodejs-version#semver) for details.
-
-```bash
-hatch version <new-version>
-```
-
-Make sure to clean up all the development files before building the package:
-
-```bash
-jlpm clean:all
-```
-
-You could also clean up the local git repository:
-
-```bash
-git clean -dfX
-```
-
-To create a Python source package (`.tar.gz`) and the binary package (`.whl`) in the `dist/` directory, do:
-
-```bash
+pip install build
 python -m build
 ```
 
-> `python setup.py sdist bdist_wheel` is deprecated and will not work for this package.
+The labextension bundle in `mosaic/labextension` is committed, so this does not
+need Node; run `jlpm build:prod` first if the TypeScript or CSS changed.
 
-Then to upload the package to PyPI, do:
+## Unused template workflows
 
-```bash
-twine upload dist/*
-```
-
-### NPM package
-
-To publish the frontend part of the extension as a NPM package, do:
-
-```bash
-npm login
-npm publish --access public
-```
-
-## Automated releases with the Jupyter Releaser
-
-The extension repository should already be compatible with the Jupyter Releaser. But
-the GitHub repository and the package managers need to be properly set up. Please
-follow the instructions of the Jupyter Releaser [checklist](https://jupyter-releaser.readthedocs.io/en/latest/how_to_guides/convert_repo_from_repo.html).
-
-Here is a summary of the steps to cut a new release:
-
-- Go to the Actions panel
-- Run the "Step 1: Prep Release" workflow
-- Check the draft changelog
-- Run the "Step 2: Publish Release" workflow
-
-> [!NOTE]
-> Check out the [workflow documentation](https://jupyter-releaser.readthedocs.io/en/latest/get_started/making_release_from_repo.html)
-> for more information.
-
-## Publishing to `conda-forge`
-
-If the package is not on conda forge yet, check the documentation to learn how to add it: https://conda-forge.org/docs/maintainer/adding_pkgs.html
-
-Otherwise a bot should pick up the new version publish to PyPI, and open a new PR on the feedstock repository automatically.
+`prep-release.yml` and `publish-release.yml` come from the extension template's
+[Jupyter Releaser](https://github.com/jupyter-server/jupyter_releaser) setup and
+are not used for releases. `check-release.yml` still runs on every push as a
+packaging check.

@@ -1,19 +1,28 @@
 name: Publish to PyPI
 
-# Builds the sdist and wheel and publishes them with PyPI trusted publishing:
-# no token to store, PyPI trusts this workflow's OIDC identity instead. On the
-# PyPI side the publisher is registered as
+# A release is one tag push. `scripts/release.sh X.Y.Z` bumps the version,
+# rebuilds, commits, tags vX.Y.Z and pushes; this workflow then builds the
+# sdist and wheel from that tag, publishes them to PyPI, and creates the GitHub
+# release with the version's CHANGELOG.md section as its notes. See RELEASE.md.
+#
+# Publishing uses PyPI trusted publishing: no token to store, PyPI trusts this
+# workflow's OIDC identity instead. On the PyPI side the publisher is
+# registered as
 #   owner robertstrauss, repository jupytermosaic,
 #   workflow publish-pypi.yml, environment pypi.
+# Renaming this file or the environment breaks publishing until the publisher
+# on PyPI is changed to match.
 #
-# Runs when a GitHub release is published. It can also be run by hand from the
-# Actions tab -- pick the release tag as the ref, so what is built is exactly
-# what was tagged.
+# It can also be run by hand from the Actions tab, to retry a failed release:
+# under "Use workflow from" pick the tag (Tags -> vX.Y.Z), not a branch.
+# Files already on PyPI are skipped, and an existing GitHub release is kept.
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
+
+concurrency: publish-${{ github.ref }}
 
 jobs:
   build:
@@ -30,6 +39,44 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      # The tag, package.json and the committed bundle must all agree, or the
+      # wheel would carry a different version, or a stale build, than its tag.
+      - name: Check the tag matches the version
+        run: |
+          if [[ "$GITHUB_REF_TYPE" != tag ]]; then
+            echo "::error::Run this from a release tag (vX.Y.Z), not a branch."
+            exit 1
+          fi
+          version=$(node -p "require('./package.json').version")
+          built=$(node -p "require('./mosaic/labextension/package.json').version")
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version."
+            exit 1
+          fi
+          if [[ "$built" != "$version" ]]; then
+            echo "::error::The committed labextension is $built, not $version. Rebuild it with jlpm build:prod."
+            exit 1
+          fi
+
+      # The notes are the lines under "## X.Y.Z" up to the next "## " heading.
+      - name: Take the release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir notes
+          awk -v v="$version" '
+            /^## / { if (found) exit; found = ($2 == v); next }
+            found
+          ' CHANGELOG.md > notes/body.md
+          if ! grep -q '[^[:space:]]' notes/body.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section."
+            exit 1
+          fi
+          {
+            cat notes/body.md
+            printf '\n```\npip install --upgrade jupyter-mosaic==%s\n```\n' "$version"
+          } > notes/release-notes.md
+          cat notes/release-notes.md
 
       - name: Build
         run: |
@@ -52,6 +99,12 @@ jobs:
           name: dist
           path: dist/
 
+      # Kept apart from dist/: the publish step uploads everything in dist/.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: notes/release-notes.md
+
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -65,3 +118,38 @@ jobs:
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run after a partial failure should go on to the release step.
+          skip-existing: true
+
+  # Created with the workflow's own token, which does not trigger other
+  # workflows, so this cannot set off a second publish.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: notes/
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; leaving it as it is."
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes/release-notes.md \
+            --verify-tag
