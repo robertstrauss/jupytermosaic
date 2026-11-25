@@ -53,4 +53,4 @@ Jupyter Mosaic 2.0: the layout engine rewritten on a single flat CSS grid.
 **Notes**
 
 - The PyPI distribution is `jupyter-mosaic` (`mosaic` was taken). The labextension id, the import package, and the uninstall command's target are all unchanged in function: `pip uninstall jupyter-mosaic`.
-- The pre-2.0 `main` is preserved on the [`legacy`](https://github.com/robertstrauss/jupytermosaic/tree/legacy) branch.
+- The pre-2.0 `main` is preserved on the `legacy` branch.

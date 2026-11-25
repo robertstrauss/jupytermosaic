@@ -32,7 +32,6 @@ and creates the GitHub release. `scripts/release.sh` prepares and pushes the tag
    It stops before changing anything unless: you're on `main` and level with
    `origin/main`, there are no uncommitted changes to the package's files, the
    tag is new, and `CHANGELOG.md` has the section. Then it
-
    - sets the version in `package.json`,
    - rebuilds the committed labextension (`jlpm build:prod`),
    - runs `jlpm lint:check` and the unit tests,
